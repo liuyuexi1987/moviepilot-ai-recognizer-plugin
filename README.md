@@ -44,6 +44,19 @@ http://moviepilot-ai-recognizer-gateway:9000/webhook
 http://<host-ip>:9000/webhook
 ```
 
+但不建议把这类跨主机方式作为默认部署方案。
+
+原因是：
+
+- 容器网络、宿主机地址、端口映射更容易混淆
+- 超时和回调链路更难排查
+- 不同 NAS / Docker 环境下网络策略差异更大
+
+更推荐：
+
+- MoviePilot 和 Gateway 在同一台 Docker 主机
+- 或至少在同一 Docker 网络中互通
+
 ## 识别增强模式
 
 插件内置两种模式：

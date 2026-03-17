@@ -374,7 +374,7 @@ class AIRecoginzerForwarder(_PluginBase):
                                             {'component': 'div', 'text': '💡 配置说明：'},
                                             {'component': 'div', 'text': '1. 推荐保持 MoviePilot【插件优先模式】关闭，本插件只在原生 TMDB 失败后兜底。'},
                                             {'component': 'div', 'text': '2. 同机 Docker 场景：Webhook 地址直接填网关容器名，例如 http://moviepilot-ai-recognizer-gateway:9000/webhook。'},
-                                            {'component': 'div', 'text': '3. 跨主机场景：Webhook 地址填对端机器可访问地址，例如 http://<对端IP>:9000/webhook。'},
+                                            {'component': 'div', 'text': '3. 跨主机场景：Webhook 地址可填写对端机器地址，例如 http://<对端IP>:9000/webhook，但不建议作为默认方案。'},
                                             {'component': 'div', 'text': '4. Webhook 服务需要立即返回 accepted，在后台调用 AI 后端识别，再异步回调 MoviePilot。'},
                                             {'component': 'div', 'text': '5. Webhook 回调端点固定为 POST /api/v1/plugin/AIRecoginzerForwarder/ai_recognize_callback，无需在插件里额外填写。'},
                                             {'component': 'div', 'text': '6. 识别增强模式建议默认使用【标准模式】；只有在网盘规避命名、拼音标题较多时再切换到【增强模式】。'},
@@ -436,7 +436,8 @@ class AIRecoginzerForwarder(_PluginBase):
 
                                                     {'component': 'h3', 'text': '✅ 推荐搭建方式'},
                                                     {'component': 'p', 'text': '场景 1：MoviePilot 和 Gateway 在同一台 Docker 主机。插件中直接填写容器可达地址，例如 http://moviepilot-ai-recognizer-gateway:9000/webhook。'},
-                                                    {'component': 'p', 'text': '场景 2：MoviePilot 和 Gateway 不在同一台机器。插件地址填写为对端机器可访问的 Gateway 地址，例如 http://<对端IP>:9000/webhook。'},
+                                                    {'component': 'p', 'text': '场景 2：MoviePilot 和 Gateway 不在同一台机器。插件地址可以填写对端机器可访问的 Gateway 地址，例如 http://<对端IP>:9000/webhook，但不建议作为默认推荐方案。'},
+                                                    {'component': 'p', 'text': '原因：跨主机场景更容易出现容器网络、宿主机地址、双向回调、端口映射和超时排查问题。更推荐 MoviePilot 与 Gateway 同机部署，并在同一 Docker 网络内互通。'},
                                                     {'component': 'p', 'text': '场景 3：如果用户已有 OpenClaw 或其他外部识别端，也可以由 Gateway 转发过去；插件本身不绑定具体 AI 后端。'},
                                                     {'component': 'br'},
 
