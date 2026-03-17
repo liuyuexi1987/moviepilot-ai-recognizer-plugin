@@ -66,6 +66,19 @@ http://<host-ip>:9000/webhook
 
 这些由网关仓库或用户自建环境负责。
 
+## 插件目录结构
+
+为了兼容 MoviePilot 本地 ZIP 安装与插件仓库安装，插件目录内保留完整安装文件：
+
+- `AIRecoginzerForwarder/__init__.py`
+- `AIRecoginzerForwarder/README.md`
+- `AIRecoginzerForwarder/requirements.txt`
+
+其中：
+
+- 仓库根目录 `README.md` 用于 GitHub 首页说明
+- 插件目录内 `README.md` 用于插件包说明
+
 ## 文档入口
 
 - [插件安装说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/PLUGIN_INSTALL.md)
