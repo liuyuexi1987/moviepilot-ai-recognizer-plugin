@@ -82,8 +82,17 @@ http://<host-ip>:9000/webhook
 ## 文档入口
 
 - [插件安装说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/PLUGIN_INSTALL.md)
+- [插件 ZIP 打包说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/PACKAGING.md)
 - [GitHub 发布说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/GITHUB_PUBLISH.md)
 - [v2.0.0-alpha.1 发布文案](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/RELEASE_v2.0.0-alpha.1.md)
+
+## 本地打包
+
+如果需要生成可上传到 MoviePilot 的本地安装 ZIP：
+
+```bash
+bash scripts/package-plugin.sh
+```
 
 ## 后续方向
 
