@@ -25,7 +25,14 @@ liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
 
 插件本体不跑 Docker，但推荐你先把 Gateway 用 Docker 跑起来。
 
-最常用的 `docker compose` 示例：
+### 方案 1：direct_llm
+
+适合：
+
+- 直接接千问 / OpenAI 兼容接口
+- 不想单独部署 OpenClaw
+
+`docker-compose.direct-llm.yml`
 
 ```yaml
 services:
@@ -36,14 +43,13 @@ services:
       PORT: "9000"
       MP_BASE_URL: "http://moviepilot-v2:3001" # 推荐优先用方案A；方案A=同网络容器名，方案B=宿主机内网地址；不要写 127.0.0.1
       MP_API_KEY: "replace_with_moviepilot_api_key" # 改成你的 MoviePilot API Key
-      RECOGNIZER_MODE: "direct_llm" # 默认推荐 direct_llm；如果接 OpenClaw 就改成 external_recognizer
+      RECOGNIZER_MODE: "direct_llm"
       LLM_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1" # 改成你的 OpenAI 兼容接口根路径
       LLM_API_KEY: "replace_with_llm_api_key" # 改成你的大模型 API Key
       LLM_MODEL: "qwen-plus" # 推荐先用 qwen-plus
       LLM_TEMPERATURE: "0.1" # 结构化识别建议保持低温度
       LLM_ENABLE_THINKING: "false" # 推荐保持 false，稳定输出 JSON
       TMDB_API_KEY: "replace_with_tmdb_api_key" # 改成你的 TMDB API Key
-      OPENCLAW_RECOGNIZE_URL: "http://openclaw-recognizer:19000/recognize" # 仅 external_recognizer 模式使用，可改成你的 OpenClaw 地址
       RECOGNIZER_TIMEOUT_MS: "60000"
     ports:
       - "9000:9000"
@@ -60,10 +66,50 @@ networks:
 启动命令：
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.direct-llm.yml up -d
 ```
 
-Gateway 启动后，在插件里一般填写：
+### 方案 2：OpenClaw / external_recognizer
+
+适合：
+
+- 你已经有 OpenClaw
+- 或你有自己的外部识别端
+
+`docker-compose.openclaw.yml`
+
+```yaml
+services:
+  moviepilot-ai-recognizer-gateway:
+    image: liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+    container_name: moviepilot-ai-recognizer-gateway
+    environment:
+      PORT: "9000"
+      MP_BASE_URL: "http://moviepilot-v2:3001" # 推荐优先用方案A；方案A=同网络容器名，方案B=宿主机内网地址；不要写 127.0.0.1
+      MP_API_KEY: "replace_with_moviepilot_api_key" # 改成你的 MoviePilot API Key
+      RECOGNIZER_MODE: "external_recognizer"
+      OPENCLAW_RECOGNIZE_URL: "http://openclaw-recognizer:19000/recognize" # 改成你的 OpenClaw / 外部识别端地址
+      TMDB_API_KEY: "replace_with_tmdb_api_key" # 推荐保留，用于最终 TMDB 复核
+      RECOGNIZER_TIMEOUT_MS: "60000"
+    ports:
+      - "9000:9000"
+    restart: unless-stopped
+    networks:
+      - moviepilot
+
+networks:
+  moviepilot:
+    external: true
+    name: moviepilot
+```
+
+启动命令：
+
+```bash
+docker compose -f docker-compose.openclaw.yml up -d
+```
+
+两种方案启动后，在插件里一般都填写：
 
 ```text
 http://moviepilot-ai-recognizer-gateway:9000/webhook
@@ -124,4 +170,6 @@ OPENCLAW_RECOGNIZE_URL: "http://你的-openclaw-识别端/recognize"
 - [插件 ZIP 打包说明](./docs/PACKAGING.md)
 - [GitHub 发布说明](./docs/GITHUB_PUBLISH.md)
 - [v2.0.0-alpha.1 发布文案](./docs/RELEASE_v2.0.0-alpha.1.md)
+- [网关 direct_llm compose](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.direct-llm.yml)
+- [网关 OpenClaw compose](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.openclaw.yml)
 - [Releases 页面](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-plugin/releases)
