@@ -21,6 +21,8 @@ AIRecoginzerForwarder/
 bash scripts/package-plugin.sh
 ```
 
+脚本会自动先同步一次官方仓库布局，再生成 ZIP。
+
 ## 输出位置
 
 打包结果输出到：

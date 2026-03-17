@@ -20,6 +20,20 @@ AIRecoginzerForwarder
 
 放入 MoviePilot 的插件目录中，然后重启 MoviePilot。
 
+## 仓库安装兼容
+
+为了兼容 MoviePilot 自定义插件仓库安装，本仓库同时保留：
+
+```text
+package.v2.json
+plugins.v2/airecoginzerforwarder/__init__.py
+```
+
+其中：
+
+- `AIRecoginzerForwarder/` 用于本地 ZIP 安装
+- `plugins.v2/airecoginzerforwarder/` 用于 MP 仓库识别结构
+
 ## 核心配置
 
 在插件设置中重点填写：

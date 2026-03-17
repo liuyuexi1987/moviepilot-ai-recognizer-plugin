@@ -5,6 +5,10 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGIN_DIR="$ROOT_DIR/AIRecoginzerForwarder"
 DIST_DIR="$ROOT_DIR/dist"
 
+if [ -x "$ROOT_DIR/scripts/sync-repo-layout.sh" ]; then
+  "$ROOT_DIR/scripts/sync-repo-layout.sh" >/dev/null
+fi
+
 if [ ! -d "$PLUGIN_DIR" ]; then
   echo "插件目录不存在: $PLUGIN_DIR" >&2
   exit 1

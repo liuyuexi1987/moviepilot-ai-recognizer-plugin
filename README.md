@@ -12,6 +12,7 @@
 - 插件和镜像分开发布
 - NAS 用户分别升级插件与网关
 - 同时兼容 `direct_llm` 和 `external_recognizer`
+- 同时兼容 MoviePilot 仓库安装与本地 ZIP 安装
 
 ## 当前定位
 
@@ -79,6 +80,11 @@ http://<host-ip>:9000/webhook
 - 仓库根目录 `README.md` 用于 GitHub 首页说明
 - 插件目录内 `README.md` 用于插件包说明
 
+另外，仓库根目录还提供官方插件仓库所需结构：
+
+- `package.v2.json`
+- `plugins.v2/airecoginzerforwarder/__init__.py`
+
 ## 文档入口
 
 - [插件安装说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/PLUGIN_INSTALL.md)
@@ -91,6 +97,7 @@ http://<host-ip>:9000/webhook
 如果需要生成可上传到 MoviePilot 的本地安装 ZIP：
 
 ```bash
+bash scripts/sync-repo-layout.sh
 bash scripts/package-plugin.sh
 ```
 
