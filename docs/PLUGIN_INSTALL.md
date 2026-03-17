@@ -1,110 +1,120 @@
 # 插件安装说明
 
-## 适用范围
-
 这个仓库只包含 MoviePilot 插件本体，不包含 Gateway 镜像。
 
-在使用前，请先准备：
+使用顺序建议：
 
-- 已安装 MoviePilot
-- 已部署 `moviepilot-ai-recognizer-gateway`
-- 已确认 Gateway 地址可从 MoviePilot 访问
+1. 先启动 Gateway
+2. 再安装插件
+3. 最后在插件里填写 Webhook 地址
 
-推荐直接使用 DockerHub 镜像：
+---
 
-- [liuyuexi/moviepilot-ai-recognizer-gateway](https://hub.docker.com/repository/docker/liuyuexi/moviepilot-ai-recognizer-gateway)
+## 第一步：先启动 Gateway
 
-推荐 tag：
+推荐配套镜像：
 
 ```text
 liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
 ```
 
-拉取命令：
+### 方案 1：direct_llm
+
+适合：
+
+- 直接接千问 / OpenAI 兼容接口
+- 不想单独部署 OpenClaw
+
+直接使用：
+
+- [docker-compose.direct-llm.yml](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.direct-llm.yml)
+
+启动命令：
 
 ```bash
-docker pull liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+docker compose -f docker-compose.direct-llm.yml up -d
 ```
 
-如果想直接使用 `docker compose`，推荐使用网关仓库提供的示例文件：
+### 方案 2：OpenClaw / external_recognizer
 
-- [gateway docker-compose.example.yml](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.example.yml)
+适合：
 
-典型启动流程：
+- 你已经有 OpenClaw
+- 或你有自己的外部识别端
+
+直接使用：
+
+- [docker-compose.openclaw.yml](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.openclaw.yml)
+
+启动命令：
 
 ```bash
-cp .env.example .env
-docker compose -f docker-compose.example.yml up -d
+docker compose -f docker-compose.openclaw.yml up -d
 ```
 
-## 安装方式
+---
 
-将目录：
+## 第二步：安装插件
 
-```text
-AIRecoginzerForwarder
-```
+支持两种方式：
 
-放入 MoviePilot 的插件目录中，然后重启 MoviePilot。
+- MoviePilot 自定义插件仓库安装
+- 本地 ZIP 安装
 
-## 仓库安装兼容
+### 方式 1：插件仓库安装
 
-为了兼容 MoviePilot 自定义插件仓库安装，本仓库同时保留：
+将本仓库添加到 MoviePilot 自定义插件仓库后安装。
 
-```text
-package.v2.json
-plugins.v2/airecoginzerforwarder/__init__.py
-```
+### 方式 2：本地 ZIP 安装
 
-其中：
+到仓库 Releases 页面下载 ZIP：
 
-- `AIRecoginzerForwarder/` 用于本地 ZIP 安装
-- `plugins.v2/airecoginzerforwarder/` 用于 MP 仓库识别结构
+- [Releases 页面](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-plugin/releases)
 
-## 核心配置
+然后在 MoviePilot 里本地上传安装。
 
-在插件设置中重点填写：
+---
 
-- `AI Gateway Webhook 地址`
-- `AI Gateway Webhook Headers（JSON）`
-- `AI Gateway Webhook 超时（秒）`
-- `识别增强模式`
+## 第三步：填写插件 Webhook 地址
 
-## Webhook 地址示例
+Gateway 启动后，在插件中一般填写：
 
-### 同机 Docker
+### 方案 A（推荐）
+
+同一 Docker 网络内，填写容器名：
 
 ```text
 http://moviepilot-ai-recognizer-gateway:9000/webhook
 ```
 
-### 跨主机
+### 方案 B
+
+没有自定义 Docker 网络名时，填写宿主机内网地址：
 
 ```text
-http://<host-ip>:9000/webhook
+http://192.168.x.x:9000/webhook
 ```
 
-## 关于跨主机 / 跨 NAS
+不推荐：
 
-跨主机方案不是不能做，但不建议作为默认推荐方案。
+```text
+http://127.0.0.1:9000/webhook
+```
 
-在我们实际开发和联调过程中，跨主机场景更容易遇到这些问题：
+---
 
-- 容器内 `127.0.0.1` 与宿主机 `127.0.0.1` 语义不同
-- 容器名只在同一 Docker 网络内可解析，跨主机不可直接使用
-- 回调链路涉及双向可达，超时更难定位
-- NAS 厂商对 Docker 网络、桥接、端口暴露的细节差异较大
-
-因此更推荐：
-
-- MoviePilot 与 Gateway 同机部署
-- 同一 Docker 网络内通过容器名互通
-
-只有在确有必要时，再考虑跨主机部署。
-
-## 推荐设置
+## 插件设置建议
 
 - 保持 MoviePilot 原生识别优先
-- 插件只在原生识别失败时兜底
 - 默认使用 `standard`
-- 只有在网盘拼音、漏词、规避命名较多时，再切换到 `enhanced`
+- 网盘拼音、漏词、规避命名较多时再切 `enhanced`
+
+---
+
+## 补充说明
+
+- 本仓库只包含插件，不包含 Gateway 镜像
+- Gateway 默认推荐 `direct_llm`
+- 如果你已经有 OpenClaw，可以改用 `external_recognizer`
+- 默认推荐 MoviePilot 与 Gateway 同机部署
+- 不建议把跨主机 / 跨 NAS 作为默认方案
