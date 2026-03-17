@@ -34,16 +34,16 @@ services:
     container_name: moviepilot-ai-recognizer-gateway
     environment:
       PORT: "9000"
-      MP_BASE_URL: "http://moviepilot-v2:3001" # 方案A：同一 Docker 网络写容器名；方案B：改成宿主机内网地址；不要写 127.0.0.1
+      MP_BASE_URL: "http://moviepilot-v2:3001" # 推荐优先用方案A；方案A=同网络容器名，方案B=宿主机内网地址；不要写 127.0.0.1
       MP_API_KEY: "replace_with_moviepilot_api_key" # 改成你的 MoviePilot API Key
-      RECOGNIZER_MODE: "direct_llm"
+      RECOGNIZER_MODE: "direct_llm" # 默认推荐 direct_llm；如果接 OpenClaw 就改成 external_recognizer
       LLM_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1" # 改成你的 OpenAI 兼容接口根路径
       LLM_API_KEY: "replace_with_llm_api_key" # 改成你的大模型 API Key
-      LLM_MODEL: "qwen-plus"
-      LLM_TEMPERATURE: "0.1"
-      LLM_ENABLE_THINKING: "false"
+      LLM_MODEL: "qwen-plus" # 推荐先用 qwen-plus
+      LLM_TEMPERATURE: "0.1" # 结构化识别建议保持低温度
+      LLM_ENABLE_THINKING: "false" # 推荐保持 false，稳定输出 JSON
       TMDB_API_KEY: "replace_with_tmdb_api_key" # 改成你的 TMDB API Key
-      OPENCLAW_RECOGNIZE_URL: "http://openclaw-recognizer:19000/recognize" # 仅 external_recognizer 模式使用
+      OPENCLAW_RECOGNIZE_URL: "http://openclaw-recognizer:19000/recognize" # 仅 external_recognizer 模式使用，可改成你的 OpenClaw 地址
       RECOGNIZER_TIMEOUT_MS: "60000"
     ports:
       - "9000:9000"
@@ -77,9 +77,16 @@ http://192.168.x.x:9000/webhook
 
 补充说明：
 
-- 方案 A：同一 Docker 网络，优先写容器名，例如 `http://moviepilot-v2:3001`
+- 方案 A（推荐）：同一 Docker 网络，优先写容器名，例如 `http://moviepilot-v2:3001`
 - 方案 B：没有自定义网络名时，直接改成 MoviePilot 宿主机内网地址
 - 不建议写 `http://127.0.0.1:3001`
+
+如果你想接 OpenClaw，也可以这样改：
+
+```yaml
+RECOGNIZER_MODE: "external_recognizer"
+OPENCLAW_RECOGNIZE_URL: "http://你的-openclaw-识别端/recognize"
+```
 
 ---
 
