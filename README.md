@@ -108,6 +108,16 @@ docker pull liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
 - `linux/amd64`
 - `linux/arm64`
 
+如果用户希望直接用 `docker compose` 启动 Gateway，也可以直接使用网关仓库中的示例：
+
+- [gateway docker-compose.example.yml](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.example.yml)
+
+推荐完成 Gateway 启动后，再在插件里填写：
+
+```text
+http://moviepilot-ai-recognizer-gateway:9000/webhook
+```
+
 ## 插件目录结构
 
 为了兼容 MoviePilot 本地 ZIP 安装与插件仓库安装，插件目录内保留完整安装文件：

@@ -26,6 +26,17 @@ liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
 docker pull liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
 ```
 
+如果想直接使用 `docker compose`，推荐使用网关仓库提供的示例文件：
+
+- [gateway docker-compose.example.yml](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.example.yml)
+
+典型启动流程：
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.example.yml up -d
+```
+
 ## 安装方式
 
 将目录：
