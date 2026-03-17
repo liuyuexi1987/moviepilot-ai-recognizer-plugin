@@ -6,6 +6,7 @@
 
 - 插件仓库：负责事件接管、异步回调、二次整理
 - Gateway 仓库：负责识别请求、TMDB 复核、回调插件
+- DockerHub 镜像：提供可直接拉取的 Gateway 运行镜像
 
 这样更适合：
 
@@ -79,6 +80,33 @@ http://<host-ip>:9000/webhook
 - 大模型 API 服务
 
 这些由网关仓库或用户自建环境负责。
+
+## 配套 Gateway 与 DockerHub
+
+配套网关仓库：
+
+- [moviepilot-ai-recognizer-gateway](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway)
+
+DockerHub 镜像：
+
+- [liuyuexi/moviepilot-ai-recognizer-gateway](https://hub.docker.com/repository/docker/liuyuexi/moviepilot-ai-recognizer-gateway)
+
+当前推荐 tag：
+
+```text
+liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+```
+
+拉取命令：
+
+```bash
+docker pull liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+```
+
+当前镜像已支持：
+
+- `linux/amd64`
+- `linux/arm64`
 
 ## 插件目录结构
 

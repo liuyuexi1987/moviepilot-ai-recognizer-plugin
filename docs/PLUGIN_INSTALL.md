@@ -10,6 +10,22 @@
 - 已部署 `moviepilot-ai-recognizer-gateway`
 - 已确认 Gateway 地址可从 MoviePilot 访问
 
+推荐直接使用 DockerHub 镜像：
+
+- [liuyuexi/moviepilot-ai-recognizer-gateway](https://hub.docker.com/repository/docker/liuyuexi/moviepilot-ai-recognizer-gateway)
+
+推荐 tag：
+
+```text
+liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+```
+
+拉取命令：
+
+```bash
+docker pull liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+```
+
 ## 安装方式
 
 将目录：

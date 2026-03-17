@@ -31,6 +31,11 @@ AI Gateway 在后台完成识别后，会回调本插件接口，然后由插件
 
 - `moviepilot-ai-recognizer-gateway`
 
+DockerHub 镜像：
+
+- `liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1`
+- 页面地址：[https://hub.docker.com/repository/docker/liuyuexi/moviepilot-ai-recognizer-gateway](https://hub.docker.com/repository/docker/liuyuexi/moviepilot-ai-recognizer-gateway)
+
 同机 Docker 场景下，Webhook 地址一般填写：
 
 ```text
@@ -69,3 +74,4 @@ http://moviepilot-ai-recognizer-gateway:9000/webhook
 - 建议保持 MoviePilot 原生识别优先
 - 插件只在原生识别失败时兜底
 - AI 最终 `tmdb_id` 以 Gateway 的 TMDB 复核结果为准
+- Gateway 镜像当前同时支持 `linux/amd64` 与 `linux/arm64`
