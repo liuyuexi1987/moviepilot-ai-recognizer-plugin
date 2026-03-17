@@ -1,5 +1,43 @@
 # v2.0.0-alpha.1 发布文案
 
+## GitHub Release 页面填写
+
+### Tag version
+
+```text
+v2.0.0-alpha.1
+```
+
+### Release title
+
+```text
+v2.0.0-alpha.1 首个拆分仓库版本
+```
+
+### 是否勾选 Pre-release
+
+建议：
+
+- 勾选
+
+因为当前版本仍属于 `alpha` 阶段。
+
+### 是否勾选 latest
+
+建议：
+
+- 不要手动强调为稳定版
+
+## 建议上传的附件
+
+建议在 GitHub Release 页面上传这个 ZIP：
+
+```text
+dist/AIRecoginzerForwarder-v2.0.0-alpha.1.zip
+```
+
+这个 ZIP 已经是可用于 MoviePilot 本地安装的插件包。
+
 ## Tag
 
 ```text
@@ -41,4 +79,11 @@ v2.0.0-alpha.1 首个拆分仓库版本
 - PT 资源标准命名识别
 - 网盘拼音、漏词、规避命名识别
 - 本地文件与云盘挂载回调后二次整理
+
+## 首发建议
+
+- Release 页面上传插件 ZIP
+- 仓库安装与本地 ZIP 安装都保留
+- 插件默认推荐与 `moviepilot-ai-recognizer-gateway` 配套使用
+- 默认更推荐同机 Docker / 同网络部署，不建议默认走跨主机方案
 ```
