@@ -115,6 +115,14 @@ bash scripts/sync-repo-layout.sh
 bash scripts/package-plugin.sh
 ```
 
+## 发布前检查
+
+发布前建议执行：
+
+```bash
+bash scripts/pre-release-check.sh
+```
+
 ## 后续方向
 
 - 与 `moviepilot-ai-recognizer-gateway` 配套发布
