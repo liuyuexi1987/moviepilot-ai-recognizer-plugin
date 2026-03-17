@@ -34,7 +34,7 @@ services:
     container_name: moviepilot-ai-recognizer-gateway
     environment:
       PORT: "9000"
-      MP_BASE_URL: "http://moviepilot-v2:3001" # 推荐写 MoviePilot 容器名；不在同一网络时可改成宿主机内网地址；不要写 127.0.0.1
+      MP_BASE_URL: "http://moviepilot-v2:3001" # 方案A：同一 Docker 网络写容器名；方案B：改成宿主机内网地址；不要写 127.0.0.1
       MP_API_KEY: "replace_with_moviepilot_api_key" # 改成你的 MoviePilot API Key
       RECOGNIZER_MODE: "direct_llm"
       LLM_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1" # 改成你的 OpenAI 兼容接口根路径
@@ -69,10 +69,16 @@ Gateway 启动后，在插件里一般填写：
 http://moviepilot-ai-recognizer-gateway:9000/webhook
 ```
 
+如果你没有自定义 Docker 网络名，也可以直接填宿主机内网地址：
+
+```text
+http://192.168.x.x:9000/webhook
+```
+
 补充说明：
 
-- `MP_BASE_URL` 推荐优先写 MoviePilot 容器名，例如 `http://moviepilot-v2:3001`
-- 如果不在同一 Docker 网络，可改成 MoviePilot 宿主机内网地址
+- 方案 A：同一 Docker 网络，优先写容器名，例如 `http://moviepilot-v2:3001`
+- 方案 B：没有自定义网络名时，直接改成 MoviePilot 宿主机内网地址
 - 不建议写 `http://127.0.0.1:3001`
 
 ---
