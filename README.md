@@ -138,11 +138,11 @@ http://moviepilot-ai-recognizer-gateway:9000/webhook
 
 ## 文档入口
 
-- [插件安装说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/PLUGIN_INSTALL.md)
-- [插件 ZIP 打包说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/PACKAGING.md)
-- [GitHub 发布说明](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/GITHUB_PUBLISH.md)
-- [v2.0.0-alpha.1 发布文案](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/docs/RELEASE_v2.0.0-alpha.1.md)
-- [首发时要上传的 ZIP](/Volumes/acasis/Downloads/moviepilot-openclaw-forwarder-v2/plugin-repo/dist/AIRecoginzerForwarder-v2.0.0-alpha.1.zip)
+- [插件安装说明](./docs/PLUGIN_INSTALL.md)
+- [插件 ZIP 打包说明](./docs/PACKAGING.md)
+- [GitHub 发布说明](./docs/GITHUB_PUBLISH.md)
+- [v2.0.0-alpha.1 发布文案](./docs/RELEASE_v2.0.0-alpha.1.md)
+- [Releases 页面](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-plugin/releases)
 
 ## 本地打包
 
