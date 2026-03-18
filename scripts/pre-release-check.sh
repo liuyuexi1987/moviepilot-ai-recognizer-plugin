@@ -13,6 +13,7 @@ fi
 
 echo "[2/5] 检查插件语法..."
 python3 -m py_compile AIRecoginzerForwarder/__init__.py
+python3 -m py_compile plugins/airecoginzerforwarder/__init__.py
 python3 -m py_compile plugins.v2/airecoginzerforwarder/__init__.py
 
 echo "[3/5] 同步官方仓库布局..."
@@ -34,6 +35,9 @@ ZIP_PATH="dist/AIRecoginzerForwarder-${VERSION}.zip"
 
 echo "[5/5] 检查关键文件..."
 test -f package.v2.json
+test -f package.json
+test -f plugins/airecoginzerforwarder/__init__.py
+test -f plugins/airecoginzerforwarder/requirements.txt
 test -f plugins.v2/airecoginzerforwarder/__init__.py
 test -f AIRecoginzerForwarder/README.md
 test -f AIRecoginzerForwarder/requirements.txt

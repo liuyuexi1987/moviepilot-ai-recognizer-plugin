@@ -145,6 +145,13 @@ OPENCLAW_RECOGNIZE_URL: "http://你的-openclaw-识别端/recognize"
 
 当前 Release 附件中的 ZIP 可直接用于本地安装。
 
+仓库根目录也已补齐 MoviePilot 自定义仓库常用结构：
+
+- `package.json`
+- `package.v2.json`
+- `plugins/airecoginzerforwarder`
+- `plugins.v2/airecoginzerforwarder`
+
 ---
 
 ## 插件设置建议
