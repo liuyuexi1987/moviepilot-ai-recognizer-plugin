@@ -16,8 +16,27 @@
 配套 DockerHub 镜像：
 
 ```text
-liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.2
 ```
+
+---
+
+## 和官方插件的区别
+
+MoviePilot 官方已经有“直接填 OpenAI / 千问兼容接口”的插件，适合轻量用户直接做 AI 辅助识别。
+
+这个项目的重点不在于替代那个轻量玩法，而在于：
+
+- 原生失败后再走一条补救链路
+- Gateway 做 TMDB 二次复核
+- 识别完成后异步回调
+- 插件继续触发二次整理
+- 兼容 OpenClaw / 外部识别端
+
+简单理解：
+
+- 官方插件更偏“轻量 AI 辅助识别”
+- 这个项目更偏“识别失败后的增强闭环”
 
 ---
 
@@ -37,17 +56,17 @@ liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
 ```yaml
 services:
   moviepilot-ai-recognizer-gateway:
-    image: liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+    image: liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.2
     container_name: moviepilot-ai-recognizer-gateway
     environment:
       PORT: "9000"
-      MP_BASE_URL: "http://moviepilot-v2:3001" # 推荐优先用方案A；方案A=同网络容器名，方案B=宿主机内网地址；不要写 127.0.0.1
+      MP_BASE_URL: "http://192.168.x.x:3000" # 小白推荐直接写 MoviePilot 的宿主机内网地址和外部端口；熟悉 Docker 网络后也可改成 http://moviepilot-v2:3001；不要写 127.0.0.1
       MP_API_KEY: "replace_with_moviepilot_api_key" # 改成你的 MoviePilot API Key
       RECOGNIZER_MODE: "direct_llm"
       LLM_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1" # 改成你的 OpenAI 兼容接口根路径
       LLM_API_KEY: "replace_with_llm_api_key" # 改成你的大模型 API Key
       LLM_MODEL: "qwen-plus" # 推荐先用 qwen-plus
-      LLM_TEMPERATURE: "0.1" # 结构化识别建议保持低温度
+      LLM_TEMPERATURE: "0.1" # 温度越低越保守，越容易稳定输出 JSON；不懂就保持 0.1
       LLM_ENABLE_THINKING: "false" # 推荐保持 false，稳定输出 JSON
       TMDB_API_KEY: "replace_with_tmdb_api_key" # 改成你的 TMDB API Key
       RECOGNIZER_TIMEOUT_MS: "60000"
@@ -81,14 +100,14 @@ docker compose -f docker-compose.direct-llm.yml up -d
 ```yaml
 services:
   moviepilot-ai-recognizer-gateway:
-    image: liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+    image: liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.2
     container_name: moviepilot-ai-recognizer-gateway
     environment:
       PORT: "9000"
-      MP_BASE_URL: "http://moviepilot-v2:3001" # 推荐优先用方案A；方案A=同网络容器名，方案B=宿主机内网地址；不要写 127.0.0.1
+      MP_BASE_URL: "http://192.168.x.x:3000" # 小白推荐直接写 MoviePilot 的宿主机内网地址和外部端口；熟悉 Docker 网络后也可改成 http://moviepilot-v2:3001；不要写 127.0.0.1
       MP_API_KEY: "replace_with_moviepilot_api_key" # 改成你的 MoviePilot API Key
       RECOGNIZER_MODE: "external_recognizer"
-      OPENCLAW_RECOGNIZE_URL: "http://openclaw-recognizer:19000/recognize" # 改成你的 OpenClaw / 外部识别端地址
+      OPENCLAW_RECOGNIZE_URL: "http://192.168.x.x:19000/recognize" # 这里不是固定可用地址，必须改成你自己已经部署好并能访问的 OpenClaw / 外部识别端 HTTP 接口
       TMDB_API_KEY: "replace_with_tmdb_api_key" # 推荐保留，用于最终 TMDB 复核
       RECOGNIZER_TIMEOUT_MS: "60000"
     ports:
@@ -112,19 +131,19 @@ docker compose -f docker-compose.openclaw.yml up -d
 两种方案启动后，在插件里一般都填写：
 
 ```text
-http://moviepilot-ai-recognizer-gateway:9000/webhook
+http://192.168.x.x:9000/webhook
 ```
 
-如果你没有自定义 Docker 网络名，也可以直接填宿主机内网地址：
+如果你熟悉 Docker 网络，并且 MoviePilot 与 Gateway 在同一网络中，也可以填：
 
 ```text
-http://192.168.x.x:9000/webhook
+http://moviepilot-ai-recognizer-gateway:9000/webhook
 ```
 
 补充说明：
 
-- 方案 A（推荐）：同一 Docker 网络，优先写容器名，例如 `http://moviepilot-v2:3001`
-- 方案 B：没有自定义网络名时，直接改成 MoviePilot 宿主机内网地址
+- 方案 A：同一 Docker 网络，写容器名，例如 `http://moviepilot-v2:3001`
+- 方案 B（小白推荐）：直接改成 MoviePilot 宿主机内网地址，例如 `http://192.168.x.x:3000`
 - 不建议写 `http://127.0.0.1:3001`
 
 如果你想接 OpenClaw，也可以这样改：
@@ -133,6 +152,13 @@ http://192.168.x.x:9000/webhook
 RECOGNIZER_MODE: "external_recognizer"
 OPENCLAW_RECOGNIZE_URL: "http://你的-openclaw-识别端/recognize"
 ```
+
+注意：
+
+- OpenClaw 不是必须
+- 不是把这行地址原样抄进去就能用
+- 你必须先自己部署好 OpenClaw 或其他外部识别端，并确认这个 HTTP 地址真的能返回识别 JSON
+- 如果你没有现成的 OpenClaw，直接走 `direct_llm` 更省事
 
 ---
 
