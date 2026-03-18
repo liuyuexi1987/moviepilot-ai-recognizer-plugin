@@ -3,7 +3,7 @@
 ## 推荐仓库名
 
 ```text
-moviepilot-ai-recognizer-plugin
+MoviePilot-Plugins
 ```
 
 ## 推荐描述

@@ -69,7 +69,7 @@ docker compose -f docker-compose.openclaw.yml up -d
 
 到仓库 Releases 页面下载 ZIP：
 
-- [Releases 页面](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-plugin/releases)
+- [Releases 页面](https://github.com/liuyuexi1987/MoviePilot-Plugins/releases)
 
 然后在 MoviePilot 里本地上传安装。
 

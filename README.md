@@ -1,4 +1,4 @@
-# moviepilot-ai-recognizer-plugin
+# MoviePilot-Plugins
 
 一个给 MoviePilot 用的 AI 识别转发插件。
 
@@ -179,4 +179,4 @@ OPENCLAW_RECOGNIZE_URL: "http://你的-openclaw-识别端/recognize"
 - [v2.0.0-alpha.1 发布文案](./docs/RELEASE_v2.0.0-alpha.1.md)
 - [网关 direct_llm compose](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.direct-llm.yml)
 - [网关 OpenClaw compose](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.openclaw.yml)
-- [Releases 页面](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-plugin/releases)
+- [Releases 页面](https://github.com/liuyuexi1987/MoviePilot-Plugins/releases)

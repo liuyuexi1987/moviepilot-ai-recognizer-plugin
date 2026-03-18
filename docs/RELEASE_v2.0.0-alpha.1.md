@@ -55,7 +55,7 @@ v2.0.0-alpha.1 首个拆分仓库版本
 ```md
 ## v2.0.0-alpha.1 首个拆分仓库版本
 
-这是 `moviepilot-ai-recognizer-plugin` 的首个 `v2.0` alpha 版本。
+这是 `MoviePilot-Plugins` 仓库的首个 `v2.0` alpha 版本。
 
 本版本的目标，是将 MoviePilot 插件本体从运行时网关中拆分出来，形成更适合 GitHub 和 NAS 用户使用的双仓库发布结构。
 
