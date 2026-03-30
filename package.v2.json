@@ -10,5 +10,17 @@
     "history": {
       "v2.0.0-alpha.1": "首个 v2 拆分仓库版本，支持 AI Gateway 对接与识别增强模式。"
     }
+  },
+  "FeishuCommandBridgeLong": {
+    "name": "飞书命令桥接",
+    "description": "使用飞书长连接接收消息，并桥接 115 整理、STRM 生成和 MoviePilot 命令执行。",
+    "labels": "飞书,长连接,115,STRM,命令",
+    "version": "0.2.2",
+    "icon": "feishucommandbridgelong.png",
+    "author": "liuyuexi1987",
+    "level": 1,
+    "history": {
+      "0.2.2": "支持飞书长连接、事件去重、115 手动整理回执、增量与全量 STRM 命令桥接。"
+    }
   }
 }

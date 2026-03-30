@@ -7,7 +7,7 @@
 打包内容会保留以下标准结构：
 
 ```text
-AIRecoginzerForwarder/
+<PluginName>/
   __init__.py
   README.md
   requirements.txt
@@ -19,6 +19,14 @@ AIRecoginzerForwarder/
 
 ```bash
 bash scripts/package-plugin.sh
+```
+
+默认打包 `AIRecoginzerForwarder`。
+
+如需打包其他插件，例如飞书桥接插件：
+
+```bash
+bash scripts/package-plugin.sh FeishuCommandBridgeLong
 ```
 
 脚本会自动先同步一次官方仓库布局，再生成 ZIP。
@@ -34,7 +42,7 @@ dist/
 文件名格式：
 
 ```text
-AIRecoginzerForwarder-<plugin_version>.zip
+<PluginName>-<plugin_version>.zip
 ```
 
 例如：
@@ -52,6 +60,6 @@ AIRecoginzerForwarder-v2.0.0-alpha.1.zip
 
 ## 注意事项
 
-- `plugin_version` 取自 `AIRecoginzerForwarder/__init__.py`
+- `plugin_version` 取自目标插件目录下的 `__init__.py`
 - 如果改了版本号，重新运行脚本即可生成对应文件名
 - `dist/` 目录默认不纳入 Git 版本管理
