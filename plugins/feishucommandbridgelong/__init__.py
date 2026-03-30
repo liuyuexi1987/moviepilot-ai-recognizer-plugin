@@ -654,6 +654,14 @@ class FeishuCommandBridge(_PluginBase):
             )
             return
 
+        if self._is_menu_request(raw_text):
+            self._reply_if_needed(
+                receive_chat_id=chat_id,
+                receive_open_id=sender_open_id,
+                text=self._build_menu_text(),
+            )
+            return
+
         command_text = self._map_text_to_command(raw_text)
         if not command_text:
             return
@@ -1021,6 +1029,10 @@ class FeishuCommandBridge(_PluginBase):
         text = self._sanitize_text(text)
         return text in {"帮助", "/help", "help"}
 
+    def _is_menu_request(self, text: str) -> bool:
+        text = self._sanitize_text(text)
+        return text in {"菜单", "/menu", "menu", "面板", "控制面板"}
+
     def _parse_aliases(self) -> Dict[str, str]:
         result: Dict[str, str] = {}
         for line in self._command_aliases.splitlines():
@@ -1042,7 +1054,18 @@ class FeishuCommandBridge(_PluginBase):
             "可用命令：\n"
             f"{', '.join(self._command_whitelist)}\n\n"
             "别名：\n"
-            f"{alias_text}"
+            f"{alias_text}\n\n"
+            "快捷入口：发送“菜单”可查看可复制的快捷命令。"
+        )
+
+    def _build_menu_text(self) -> str:
+        return (
+            "快捷菜单\n"
+            "1. 刮削\n\n"
+            "2. 生成STRM\n\n"
+            "3. 全量STRM\n\n"
+            "4. 刷新极空间\n\n"
+            "5. 版本"
         )
 
     def _extract_text(self, content: Any) -> str:
