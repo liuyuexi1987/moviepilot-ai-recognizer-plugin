@@ -123,8 +123,8 @@ class FeishuCommandBridge(_PluginBase):
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
     plugin_version = "0.2.2"
-    plugin_author = "OpenAI"
-    author_url = "https://github.com/openai"
+    plugin_author = "liuyuexi1987"
+    author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridge_"
     plugin_order = 29
     auth_level = 1
