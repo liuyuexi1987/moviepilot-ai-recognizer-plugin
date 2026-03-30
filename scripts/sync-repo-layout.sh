@@ -2,17 +2,29 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SRC_DIR="$ROOT_DIR/AIRecoginzerForwarder"
-TARGET_DIR_V2="$ROOT_DIR/plugins.v2/airecoginzerforwarder"
-TARGET_DIR_V1="$ROOT_DIR/plugins/airecoginzerforwarder"
 
-mkdir -p "$TARGET_DIR_V2" "$TARGET_DIR_V1"
+sync_plugin() {
+  local src_dir="$1"
+  local target_name="$2"
 
-cp "$SRC_DIR/__init__.py" "$TARGET_DIR_V2/__init__.py"
-cp "$SRC_DIR/__init__.py" "$TARGET_DIR_V1/__init__.py"
-cp "$SRC_DIR/requirements.txt" "$TARGET_DIR_V1/requirements.txt"
+  local target_dir_v2="$ROOT_DIR/plugins.v2/$target_name"
+  local target_dir_v1="$ROOT_DIR/plugins/$target_name"
+
+  mkdir -p "$target_dir_v2" "$target_dir_v1"
+
+  cp "$src_dir/__init__.py" "$target_dir_v2/__init__.py"
+  cp "$src_dir/__init__.py" "$target_dir_v1/__init__.py"
+  if [[ -f "$src_dir/requirements.txt" ]]; then
+    cp "$src_dir/requirements.txt" "$target_dir_v1/requirements.txt"
+  fi
+
+  echo "$target_dir_v2/__init__.py"
+  echo "$target_dir_v1/__init__.py"
+  if [[ -f "$src_dir/requirements.txt" ]]; then
+    echo "$target_dir_v1/requirements.txt"
+  fi
+}
 
 echo "已同步官方插件仓库目录："
-echo "$TARGET_DIR_V2/__init__.py"
-echo "$TARGET_DIR_V1/__init__.py"
-echo "$TARGET_DIR_V1/requirements.txt"
+sync_plugin "$ROOT_DIR/AIRecoginzerForwarder" "airecoginzerforwarder"
+sync_plugin "$ROOT_DIR/FeishuCommandBridgeLong" "feishucommandbridgelong"

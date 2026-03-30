@@ -1,6 +1,12 @@
 # MoviePilot-Plugins
 
-一个给 MoviePilot 用的 AI 识别转发插件。
+这个仓库现在主要放两个 MoviePilot 插件，给新手直接这么理解就行：
+
+## 1. AI 识别增强插件
+
+插件名：
+
+- `AIRecoginzerForwarder`
 
 作用很简单：
 
@@ -8,6 +14,34 @@
 - 插件把标题和文件信息转发给 Gateway
 - Gateway 识别完成后异步回调
 - 插件继续触发二次整理
+
+适合：
+
+- PT / 网盘资源名字很乱
+- 原生识别经常失败
+- 想在 MoviePilot 原生识别后面再补一层 AI 识别
+
+## 2. 飞书命令桥接插件
+
+插件名：
+
+- `FeishuCommandBridgeLong`
+
+作用很简单：
+
+- 用飞书长连接接收消息
+- 直接在飞书里发命令
+- 桥接到 MoviePilot 和 115 整理 / STRM 流程
+
+适合：
+
+- 想在飞书里直接操作 MoviePilot
+- 想发 `刮削`、`生成STRM`、`全量STRM`、`版本`
+- 不想折腾公网 webhook 和 HTTPS 回调地址
+
+---
+
+下面这一大段主要是 **AI 识别增强插件** 的说明。
 
 配套网关仓库：
 

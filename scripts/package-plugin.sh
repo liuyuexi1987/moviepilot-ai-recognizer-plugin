@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PLUGIN_DIR="$ROOT_DIR/AIRecoginzerForwarder"
 DIST_DIR="$ROOT_DIR/dist"
+PLUGIN_NAME="${1:-AIRecoginzerForwarder}"
+PLUGIN_DIR="$ROOT_DIR/$PLUGIN_NAME"
 
 if [ -x "$ROOT_DIR/scripts/sync-repo-layout.sh" ]; then
   "$ROOT_DIR/scripts/sync-repo-layout.sh" >/dev/null
@@ -19,10 +20,12 @@ if ! command -v zip >/dev/null 2>&1; then
   exit 1
 fi
 
-VERSION="$(python3 - <<'PY'
+VERSION="$(PLUGIN_NAME="$PLUGIN_NAME" python3 - <<'PY'
 from pathlib import Path
 import re
-text = Path("AIRecoginzerForwarder/__init__.py").read_text(encoding="utf-8")
+import os
+plugin_name = os.environ["PLUGIN_NAME"]
+text = Path(plugin_name, "__init__.py").read_text(encoding="utf-8")
 match = re.search(r'plugin_version\s*=\s*"([^"]+)"', text)
 print(match.group(1) if match else "unknown")
 PY
@@ -30,13 +33,13 @@ PY
 
 mkdir -p "$DIST_DIR"
 
-ZIP_NAME="AIRecoginzerForwarder-${VERSION}.zip"
+ZIP_NAME="${PLUGIN_NAME}-${VERSION}.zip"
 ZIP_PATH="$DIST_DIR/$ZIP_NAME"
 
 rm -f "$ZIP_PATH"
 
 cd "$ROOT_DIR"
-zip -r "$ZIP_PATH" "AIRecoginzerForwarder" \
+PLUGIN_NAME="$PLUGIN_NAME" zip -r "$ZIP_PATH" "$PLUGIN_NAME" \
   -x "*/__pycache__/*" \
   -x "*.pyc" \
   -x "*.pyo" \
