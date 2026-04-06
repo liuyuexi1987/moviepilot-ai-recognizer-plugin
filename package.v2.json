@@ -22,5 +22,18 @@
     "history": {
       "0.2.2": "支持飞书长连接、事件去重、115 手动整理回执、增量与全量 STRM 命令桥接。"
     }
+  },
+  "HdhiveSign": {
+    "name": "影巢签到",
+    "description": "自动完成影巢(HDHive)每日签到，兼容当前 Next Server Action 签到接口，并增强历史记录展示兜底。",
+    "labels": "影巢,HDHive,签到,PT",
+    "version": "1.4.4",
+    "icon": "hdhive.ico",
+    "author": "madrays",
+    "level": 2,
+    "history": {
+      "1.4.4": "修复新版签到响应解析，兼容动态 Action ID，并增强签到历史展示与本地兜底。",
+      "1.4.3": "签到历史与用户信息增加本地 JSON 兜底，避免数据库异常影响结果展示。"
+    }
   }
 }
