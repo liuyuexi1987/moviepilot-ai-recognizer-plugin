@@ -94,6 +94,10 @@ class HDHiveDailySign(_PluginBase):
         "/api/customer/auth/login",
     ]
     _login_page = "/login"
+    _login_action_name = "login"
+    _login_action_id = None
+    _login_action_router_state = '%5B%22%22%2C%7B%22children%22%3A%5B%22(auth)%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2C%22%2Flogin%22%2C%22refresh%22%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D%7D%2Cnull%2Cnull%2Ctrue%5D'
+    _login_action_fallback = "602b5a3af7ab2e93be6a14001ca83c1be491ccecea"
 
     def init_plugin(self, config: dict = None):
         # 停止现有任务
@@ -1709,6 +1713,77 @@ class HDHiveDailySign(_PluginBase):
         except Exception:
             return None
 
+    def _discover_login_action_id(self, warm_text: str, scraper) -> Optional[str]:
+        if self._login_action_id:
+            return self._login_action_id
+        try:
+            patterns = [
+                r'next-action"\s*:\s*"([a-fA-F0-9]{16,64})"',
+                r'name="next-action"\s+value="([a-fA-F0-9]{16,64})"',
+                r'createServerReference\("([a-f0-9]{40,})"[^\\n]+?"login"\)',
+            ]
+            for pattern in patterns:
+                m = re.search(pattern, warm_text or "")
+                if m:
+                    self._login_action_id = m.group(1)
+                    return self._login_action_id
+
+            script_paths = re.findall(
+                r'<script[^>]+src="([^"]+/app/\(auth\)/login/page-[^"]+\.js)"',
+                warm_text or "",
+            )
+            for script_path in script_paths:
+                script_url = script_path if script_path.startswith("http") else f"{self._base_url}{script_path}"
+                try:
+                    resp = scraper.get(
+                        script_url,
+                        headers={
+                            "User-Agent": settings.USER_AGENT,
+                            "Referer": f"{self._base_url}{self._login_page}",
+                            "Accept": "*/*",
+                        },
+                        timeout=30,
+                        proxies=settings.PROXY,
+                    )
+                    js_text = getattr(resp, "text", "") or ""
+                    m = re.search(
+                        r'createServerReference\("([a-f0-9]{40,})"[^\\n]+?"login"\)',
+                        js_text,
+                    )
+                    if m:
+                        self._login_action_id = m.group(1)
+                        logger.info(f"自动登录: 从登录页 bundle 解析到 action={self._login_action_id}")
+                        return self._login_action_id
+                except Exception as e:
+                    logger.debug(f"自动登录: 拉取登录页 bundle 失败 {script_url} -> {e}")
+        except Exception as e:
+            logger.debug(f"自动登录: 解析登录 action 失败 -> {e}")
+
+        self._login_action_id = self._login_action_fallback
+        logger.info(f"自动登录: 使用登录 action 兜底值 {self._login_action_id}")
+        return self._login_action_id
+
+    def _parse_server_action_error(self, response_text: str) -> Optional[str]:
+        if not response_text:
+            return None
+        try:
+            for line in response_text.splitlines():
+                line = line.strip()
+                if not line.startswith("1:"):
+                    continue
+                payload = json.loads(line[2:])
+                error = payload.get("error") or {}
+                message = error.get("message")
+                description = error.get("description")
+                code = error.get("code")
+                if message or description:
+                    if description and description != message:
+                        return f"{message} ({description})" if message else description
+                    return message or description or str(code)
+        except Exception:
+            return None
+        return None
+
     def _auto_login(self) -> Optional[str]:
         try:
             if not getattr(self, "_username", None) or not getattr(self, "_password", None):
@@ -1793,26 +1868,19 @@ class HDHiveDailySign(_PluginBase):
                 'Referer': login_url,
                 'Content-Type': 'text/plain;charset=UTF-8'
             }
-            # 从预热页面尝试提取 next-action token
-            next_action_token = None
-            try:
-                warm_text = getattr(resp_warm, 'text', '') or ''
-                # 常见形式：next-action":"<token>" 或 name="next-action" value="<token>"
-                import re as _re
-                m = _re.search(r'next-action"\s*:\s*"([a-fA-F0-9]{16,64})"', warm_text)
-                if not m:
-                    m = _re.search(r'name="next-action"\s+value="([a-fA-F0-9]{16,64})"', warm_text)
-                if m:
-                    next_action_token = m.group(1)
-                    headers['next-action'] = next_action_token
-                    # 参考样例的最小 router state（静态值）
-                    headers['next-router-state-tree'] = '%5B%22%22%2C%7B%22children%22%3A%5B%22(auth)%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2C%22%2Flogin%22%2C%22refresh%22%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D%7D%2Cnull%2Cnull%2Ctrue%5D'
-                    logger.info(f"自动登录: 提取 next-action={next_action_token}")
-                else:
-                    logger.info("自动登录: 未在页面提取到 next-action token")
-            except Exception as e:
-                logger.debug(f"自动登录: 提取 next-action 失败: {e}")
-            body = json.dumps([{'username': getattr(self, "_username", ""), 'password': getattr(self, "_password", "")}])
+            warm_text = getattr(resp_warm, 'text', '') or ''
+            next_action_token = self._discover_login_action_id(warm_text, scraper)
+            if next_action_token:
+                headers['next-action'] = next_action_token
+                headers['next-router-state-tree'] = self._login_action_router_state
+                logger.info(f"自动登录: 使用 next-action={next_action_token}")
+            body = json.dumps([
+                {
+                    'username': getattr(self, "_username", ""),
+                    'password': getattr(self, "_password", "")
+                },
+                '/',
+            ])
             try:
                 logger.info(f"自动登录: 尝试 Server Action 登录 {url}")
                 resp = scraper.post(url, headers=headers, data=body, timeout=30, proxies=settings.PROXY)
@@ -1831,6 +1899,9 @@ class HDHiveDailySign(_PluginBase):
                     cookie_str = "; ".join(cookie_items)
                     logger.info("Server Action 登录成功，已生成Cookie")
                     return cookie_str
+                action_error = self._parse_server_action_error(getattr(resp, "text", "") or "")
+                if action_error:
+                    logger.warning(f"Server Action 登录返回错误: {action_error}")
             except Exception as e:
                 logger.warning(f"Server Action 登录失败: {e}")
             # 浏览器自动化兜底：使用 Playwright 直接执行页面登录并读取 Cookie
@@ -1910,6 +1981,10 @@ class HDHiveDailySign(_PluginBase):
                         cookie_str = "; ".join(cookie_items)
                         logger.info("Playwright 登录成功，已生成Cookie")
                         return cookie_str
+                logger.error("自动登录失败，未获取到有效Cookie")
+                return None
+            except ImportError:
+                logger.info("Playwright 不可用，跳过浏览器自动化兜底")
                 logger.error("自动登录失败，未获取到有效Cookie")
                 return None
             except Exception as e:
