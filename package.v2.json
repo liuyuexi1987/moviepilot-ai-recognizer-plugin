@@ -22,5 +22,17 @@
     "history": {
       "0.2.2": "支持飞书长连接、事件去重、115 手动整理回执、增量与全量 STRM 命令桥接。"
     }
+  },
+  "HdhiveOpenApi": {
+    "name": "影巢 OpenAPI",
+    "description": "通过 HDHive Open API 完成签到、关键词/TMDB 搜索、资源解锁、115 转存、分享管理与配额查询。",
+    "labels": "影巢,HDHive,OpenAPI,签到,TMDB,资源解锁,115,分享",
+    "version": "0.3.0",
+    "icon": "hdhive.ico",
+    "author": "liuyuexi1987",
+    "level": 1,
+    "history": {
+      "0.3.0": "支持关键词搜索、TMDB 候选解析、资源解锁后自动转存 115、分享管理、签到与配额查询。"
+    }
   }
 }
