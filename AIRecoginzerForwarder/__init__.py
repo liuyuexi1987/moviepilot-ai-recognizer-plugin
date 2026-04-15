@@ -1,7 +1,7 @@
 """
 MoviePilot AI 识别转发插件
 功能：原生识别失败时转发给 AI Gateway，等待异步回调后二次整理
-版本：v2.0.0-alpha.1
+版本：2.0.0-alpha.1
 作者：liuyuexi1987
 """
 
@@ -88,7 +88,7 @@ class AIRecoginzerForwarder(_PluginBase):
 
     plugin_name = "AI 识别转发"
     plugin_desc = "原生识别失败后异步调用 AI Gateway，并在回调后自动二次整理"
-    plugin_version = "v2.0.0-alpha.1"
+    plugin_version = "2.0.0-alpha.1"
     plugin_order = 100
     plugin_author = "liuyuexi1987"
 
@@ -458,7 +458,7 @@ class AIRecoginzerForwarder(_PluginBase):
                                                     {'component': 'br'},
 
                                                     {'component': 'h3', 'text': '🧭 当前版本'},
-                                                    {'component': 'p', 'text': 'v2.0.0-alpha.1：规划拆分为插件仓库和 Gateway 镜像仓库，并把直接大模型 API 模式作为主方向。'},
+                                                    {'component': 'p', 'text': '2.0.0-alpha.1：规划拆分为插件仓库和 Gateway 镜像仓库，并把直接大模型 API 模式作为主方向。'},
                                                     {'component': 'p', 'text': '设置页已收敛为推荐配置，不再暴露场景过滤开关，避免因上游事件差异导致误判。'}
                                                 ]
                                             }
