@@ -20,6 +20,25 @@
 
 ---
 
+## 智能体 Skill 模板
+
+如果你是为了“把影巢搜索 -> 选择 -> 解锁 -> 115 落地”这条链路交给 AI 智能体，直接看这里：
+
+- 公开版 Skill 模板：
+  [skills/hdhive-search-unlock-to-115/README.md](./skills/hdhive-search-unlock-to-115/README.md)
+- Skill 主说明：
+  [skills/hdhive-search-unlock-to-115/SKILL.md](./skills/hdhive-search-unlock-to-115/SKILL.md)
+- 推荐提示词：
+  [skills/hdhive-search-unlock-to-115/PROMPTS.md](./skills/hdhive-search-unlock-to-115/PROMPTS.md)
+
+这份模板已经做过去隐私处理：
+
+- 不包含本机绝对路径
+- 不包含 API Key / Token / Cookie
+- 默认通过环境变量和命令行参数适配不同机器
+
+---
+
 ## 1. AI 识别转发
 
 插件名：

@@ -31,6 +31,22 @@ MoviePilot 影巢 OpenAPI 插件。
 
 ---
 
+## 公开 Skill 模板
+
+如果你想把这套能力交给 AI 智能体，仓库里已经提供了一份去隐私的公开 Skill 模板：
+
+- [skills/hdhive-search-unlock-to-115/README.md](../skills/hdhive-search-unlock-to-115/README.md)
+- [skills/hdhive-search-unlock-to-115/SKILL.md](../skills/hdhive-search-unlock-to-115/SKILL.md)
+- [skills/hdhive-search-unlock-to-115/PROMPTS.md](../skills/hdhive-search-unlock-to-115/PROMPTS.md)
+
+适合场景：
+
+- 让别的机器快速复现
+- 让别的智能体直接调用统一流程
+- 避免把个人路径、密钥、Cookie 带进公开仓库
+
+---
+
 ## 资源搜索方式
 
 这个插件支持两种搜索方式：
