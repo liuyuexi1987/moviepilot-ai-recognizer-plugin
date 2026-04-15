@@ -1510,9 +1510,15 @@ class HDHiveDailySign(_PluginBase):
         if user:
             avatar = user.get('avatar_url') or ''
             nickname = user.get('nickname') or '—'
+            avatar_text = (nickname.strip()[:1] or '影').upper()
             points = user.get('points') if user.get('points') is not None else '—'
             signin_days_total = user.get('signin_days_total') if user.get('signin_days_total') is not None else '—'
             created_at = user.get('created_at') or '—'
+            avatar_content = (
+                [{'component': 'img', 'props': {'src': avatar, 'alt': nickname, 'style': 'width: 100%; height: 100%; object-fit: cover;'}}]
+                if avatar else
+                [{'component': 'span', 'props': {'class': 'text-subtitle-1 font-weight-bold'}, 'text': avatar_text}]
+            )
             info_card = [{
                 'component': 'VCard',
                 'props': {'variant': 'outlined', 'class': 'mb-4'},
@@ -1528,7 +1534,7 @@ class HDHiveDailySign(_PluginBase):
                                     {'component': 'div', 'props': {'class': 'text-caption'}, 'text': f'加入时间：{created_at}'}
                                 ]
                             },
-                            {'component': 'VAvatar', 'props': {'size': 64}, 'content': [{'component': 'img', 'props': {'src': avatar, 'alt': nickname}}]}
+                            {'component': 'VAvatar', 'props': {'size': 64, 'color': 'primary', 'variant': 'tonal'}, 'content': avatar_content}
                         ]
                     },
                     {'component': 'VDivider'},
@@ -1572,22 +1578,26 @@ class HDHiveDailySign(_PluginBase):
             else:
                 status_color = "info"
 
+            cell_style = 'padding: 8px 12px; vertical-align: middle; line-height: 1.35;'
+            time_text = history.get("date", "").replace(" ", "\n")
+
             history_rows.append({
                 'component': 'tr',
                 'content': [
-                    {'component': 'td', 'props': {'class': 'text-caption'}, 'text': history.get("date", "")},
+                    {'component': 'td', 'props': {'class': 'text-caption text-no-wrap', 'style': cell_style}, 'text': time_text},
                     {
                         'component': 'td',
+                        'props': {'style': cell_style},
                         'content': [{
                             'component': 'VChip',
                             'props': {'color': status_color, 'size': 'small', 'variant': 'outlined'},
                             'text': status
                         }]
                     },
-                    {'component': 'td', 'text': history.get('mode', '普通签到')},
-                    {'component': 'td', 'text': history.get('message', '—')},
-                    {'component': 'td', 'text': str(history.get('points', '—'))},
-                    {'component': 'td', 'text': str(history.get('days', '—'))},
+                    {'component': 'td', 'props': {'style': cell_style, 'class': 'text-no-wrap'}, 'text': history.get('mode', '普通签到')},
+                    {'component': 'td', 'props': {'style': cell_style}, 'text': history.get('message', '—')},
+                    {'component': 'td', 'props': {'style': cell_style, 'class': 'text-no-wrap'}, 'text': str(history.get('points', '—'))},
+                    {'component': 'td', 'props': {'style': cell_style, 'class': 'text-no-wrap'}, 'text': str(history.get('days', '—'))},
                 ]
             })
 
@@ -1607,12 +1617,12 @@ class HDHiveDailySign(_PluginBase):
                                 'content': [{
                                     'component': 'tr',
                                     'content': [
-                                        {'component': 'th', 'text': '时间'},
-                                        {'component': 'th', 'text': '状态'},
-                                        {'component': 'th', 'text': '模式'},
-                                        {'component': 'th', 'text': '详情'},
-                                        {'component': 'th', 'text': '奖励积分'},
-                                        {'component': 'th', 'text': '连续天数'}
+                                        {'component': 'th', 'props': {'style': 'padding: 8px 12px;'}, 'text': '时间'},
+                                        {'component': 'th', 'props': {'style': 'padding: 8px 12px;'}, 'text': '状态'},
+                                        {'component': 'th', 'props': {'style': 'padding: 8px 12px;'}, 'text': '模式'},
+                                        {'component': 'th', 'props': {'style': 'padding: 8px 12px;'}, 'text': '详情'},
+                                        {'component': 'th', 'props': {'style': 'padding: 8px 12px;'}, 'text': '奖励积分'},
+                                        {'component': 'th', 'props': {'style': 'padding: 8px 12px;'}, 'text': '连续天数'}
                                     ]
                                 }]
                             },
