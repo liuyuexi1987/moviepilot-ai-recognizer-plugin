@@ -3,12 +3,12 @@
     "name": "AI 识别转发",
     "description": "MoviePilot 原生识别失败后异步调用 AI Gateway，并在回调后自动二次整理。",
     "labels": "AI,识别,TMDB,Gateway",
-    "version": "2.0.0-alpha.1",
+    "version": "2.0.1",
     "icon": "airecoginzerforwarder.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
-      "2.0.0-alpha.1": "首个 v2 拆分仓库版本，支持 AI Gateway 对接与识别增强模式。"
+      "2.0.1": "修正版本展示格式，并保持 AI Gateway 对接与识别增强模式。"
     }
   },
   "FeishuCommandBridgeLong": {
