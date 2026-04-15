@@ -206,7 +206,7 @@ class HdhiveOpenApi(_PluginBase):
 
     def _is_115_share_url(self, url: str) -> bool:
         host = urlparse(url).netloc.lower()
-        return "115cdn.com" in host or host.endswith(".115.com")
+        return host == "115.com" or host.endswith(".115.com") or "115cdn.com" in host
 
     def _ensure_115_share_url(self, url: str, access_code: str = "") -> str:
         clean_url = self._normalize_text(url)
