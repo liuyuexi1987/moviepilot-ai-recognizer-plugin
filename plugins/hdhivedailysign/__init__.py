@@ -39,8 +39,6 @@ from app.plugins import _PluginBase
 from typing import Any, List, Dict, Tuple, Optional
 from app.log import logger
 from app.schemas import NotificationType
-from app.utils.http import RequestUtils
-
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -94,7 +92,6 @@ class HDHiveDailySign(_PluginBase):
         "/api/customer/auth/login",
     ]
     _login_page = "/login"
-    _login_action_name = "login"
     _login_action_id = None
     _login_action_router_state = '%5B%22%22%2C%7B%22children%22%3A%5B%22(auth)%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2C%22%2Flogin%22%2C%22refresh%22%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D%7D%2Cnull%2Cnull%2Ctrue%5D'
     _login_action_fallback = "602b5a3af7ab2e93be6a14001ca83c1be491ccecea"
@@ -181,6 +178,7 @@ class HDHiveDailySign(_PluginBase):
                 }
         
         logger.info("开始影巢签到")
+        logger.info(f"本次签到模式：{self._get_sign_mode_label()}")
         logger.debug(f"参数: retry={retry_count}, ext_retry={extended_retry}, trigger={self._current_trigger_type}")
 
         notification_sent = False  # 标记是否已发送通知
@@ -771,6 +769,7 @@ class HDHiveDailySign(_PluginBase):
         """
         signin_api = f"{self._base_url}/api/customer/user/checkin"
         payload = self._build_legacy_signin_payload()
+        logger.info(f"旧版签到接口请求模式：{self._get_sign_mode_label()}")
         headers = {
             'User-Agent': settings.USER_AGENT,
             'Accept': 'application/json, text/plain, */*',
@@ -876,6 +875,8 @@ class HDHiveDailySign(_PluginBase):
             }
             if csrf_token:
                 headers['x-csrf-token'] = csrf_token
+
+            logger.info(f"Next Action 签到请求模式：{self._get_sign_mode_label()}")
 
             signin_res = requests.post(
                 url=self._site_url,
