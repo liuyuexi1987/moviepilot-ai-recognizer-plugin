@@ -139,17 +139,13 @@ POST /api/v1/plugin/HdhiveOpenApi/resources/unlock
 - 插件负责搜索、解锁、115 转存
 - 智能体只负责调用稳定接口、展示结果、让用户选编号
 
-本机已经配套了一套 Skill，专门给智能体使用：
+更推荐的做法是：
 
-```text
-~/.codex/skills/hdhive-search-unlock-to-115
-```
+- 让智能体优先调用 MoviePilot 插件已经暴露的稳定接口
+- 不要让智能体现场拼影巢原始 API
+- 不要让智能体自己临时保存 `slug`、Cookie 或其它运行时状态
 
-最推荐的单入口脚本是：
-
-```text
-~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py
-```
+如果你需要给智能体配套额外 Skill、脚本或工作流，建议放在你自己的本地自动化目录里维护，而不是写进公开插件仓库。
 
 ---
 
