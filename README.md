@@ -1,10 +1,11 @@
 # MoviePilot-Plugins
 
-这个仓库现在主要维护 3 个 MoviePilot 插件：
+这个仓库现在主要维护 4 个 MoviePilot 插件：
 
 1. `AIRecoginzerForwarder`
 2. `FeishuCommandBridgeLong`
 3. `HdhiveOpenApi`
+4. `HdhiveSign`
 
 如果你是第一次打开这个仓库，直接先看这段就够了：
 
@@ -14,6 +15,8 @@
   用 `FeishuCommandBridgeLong`
 - 想把影巢资源搜索、解锁、签到、115 转存整合进 MoviePilot：
   用 `HdhiveOpenApi`
+- 想只保留一个更轻量的影巢签到插件：
+  用 `HdhiveSign`
 
 ---
 
@@ -96,6 +99,30 @@
 
 ---
 
+## 4. 影巢签到
+
+插件名：
+
+- `HdhiveSign`
+
+作用：
+
+- 自动完成影巢每日签到
+- 支持普通签到 / 赌狗签到
+- 支持失败重试、自动登录和历史记录
+
+适合场景：
+
+- 只想做影巢签到
+- 不需要资源搜索和解锁
+- 想保留一个更轻量的独立插件
+
+详细说明：
+
+- [HdhiveSign/README.md](./HdhiveSign/README.md)
+
+---
+
 ## 安装方式
 
 这个仓库已经补齐 MoviePilot 自定义仓库所需结构：
@@ -111,6 +138,8 @@
 
 - `plugins/hdhiveopenapi`
 - `plugins.v2/hdhiveopenapi`
+- `plugins/hdhivesign`
+- `plugins.v2/hdhivesign`
 
 ---
 
@@ -141,3 +170,4 @@ docs/
 - `AIRecoginzerForwarder` 解决“识别失败后的兜底”
 - `FeishuCommandBridgeLong` 解决“飞书远程控制 MoviePilot”
 - `HdhiveOpenApi` 解决“影巢资源搜索、解锁和 115 落地”
+- `HdhiveSign` 解决“影巢每日签到”

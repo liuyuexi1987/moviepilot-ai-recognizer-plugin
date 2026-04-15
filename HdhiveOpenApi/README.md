@@ -142,13 +142,13 @@ POST /api/v1/plugin/HdhiveOpenApi/resources/unlock
 本机已经配套了一套 Skill，专门给智能体使用：
 
 ```text
-/Users/jans/.codex/skills/hdhive-search-unlock-to-115
+~/.codex/skills/hdhive-search-unlock-to-115
 ```
 
 最推荐的单入口脚本是：
 
 ```text
-/Users/jans/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py
+~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py
 ```
 
 ---
