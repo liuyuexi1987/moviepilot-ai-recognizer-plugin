@@ -96,6 +96,8 @@
 详细说明：
 
 - [HdhiveOpenApi/README.md](./HdhiveOpenApi/README.md)
+- 去隐私后的公开智能体 Skill 模板：
+  [skills/hdhive-search-unlock-to-115/README.md](./skills/hdhive-search-unlock-to-115/README.md)
 
 ---
 
@@ -151,6 +153,7 @@ package.v2.json
 icons/
 plugins/
 plugins.v2/
+skills/
 AIRecoginzerForwarder/
 HdhiveOpenApi/
 docs/

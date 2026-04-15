@@ -161,13 +161,15 @@ POST /api/v1/plugin/HdhiveOpenApi/resources/unlock
 - 让智能体自己维护 `slug`、Cookie 或其它运行时状态
 - 为了区分同名影片而临时做网页登录、网页搜索或人工拼接流程
 
-如果需要，你可以基于这个思路，在自己的本地环境里再实现：
+如果需要，你也可以直接从仓库里的公开模板开始：
 
-- Skill
-- 单入口脚本
-- 自动化工作流
+- [skills/hdhive-search-unlock-to-115/README.md](../skills/hdhive-search-unlock-to-115/README.md)
 
-但这些具体实现更适合保留在个人环境中维护，而不是写死在公开插件仓库里。
+这份 Skill 已经做过去隐私处理：
+
+- 不包含本机绝对路径
+- 不包含 API Key / Token / Cookie
+- 默认通过环境变量或命令行参数适配不同机器
 
 ---
 
