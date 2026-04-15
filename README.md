@@ -5,7 +5,7 @@
 1. `AIRecoginzerForwarder`
 2. `FeishuCommandBridgeLong`
 3. `HdhiveOpenApi`
-4. `HdhiveSign`
+4. `HDHiveDailySign`
 
 如果你是第一次打开这个仓库，直接先看这段就够了：
 
@@ -16,7 +16,7 @@
 - 想把影巢资源搜索、解锁、签到、115 转存整合进 MoviePilot：
   用 `HdhiveOpenApi`
 - 想只保留一个更轻量的影巢签到插件：
-  用 `HdhiveSign`
+  用 `HDHiveDailySign`
 
 ---
 
@@ -119,7 +119,7 @@
 
 插件名：
 
-- `HdhiveSign`
+- `HDHiveDailySign`
 
 作用：
 
@@ -135,7 +135,7 @@
 
 详细说明：
 
-- [HdhiveSign/README.md](./HdhiveSign/README.md)
+- [HDHiveDailySign/README.md](./HDHiveDailySign/README.md)
 
 ---
 
@@ -154,8 +154,8 @@
 
 - `plugins/hdhiveopenapi`
 - `plugins.v2/hdhiveopenapi`
-- `plugins/hdhivesign`
-- `plugins.v2/hdhivesign`
+- `plugins/hdhivedailysign`
+- `plugins.v2/hdhivedailysign`
 
 ---
 
@@ -187,4 +187,4 @@ docs/
 - `AIRecoginzerForwarder` 解决“识别失败后的兜底”
 - `FeishuCommandBridgeLong` 解决“飞书远程控制 MoviePilot”
 - `HdhiveOpenApi` 解决“影巢资源搜索、解锁和 115 落地”
-- `HdhiveSign` 解决“影巢每日签到”
+- `HDHiveDailySign` 解决“影巢每日签到”

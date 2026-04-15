@@ -1,6 +1,6 @@
 """
 影巢签到插件
-版本: 1.4.7
+版本: 1.0.0
 作者: liuyuexi1987
 功能:
 - 自动完成影巢(HDHive)每日签到
@@ -45,21 +45,21 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-class HdhiveSign(_PluginBase):
+class HDHiveDailySign(_PluginBase):
     # 插件名称
-    plugin_name = "影巢签到"
+    plugin_name = "HDHive Daily Sign"
     # 插件描述
     plugin_desc = "自动完成影巢(HDHive)每日签到，支持失败重试和历史记录"
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/hdhive.ico"
     # 插件版本
-    plugin_version = "1.4.7"
+    plugin_version = "1.0.0"
     # 插件作者
     plugin_author = "liuyuexi1987"
     # 作者主页
     author_url = "https://github.com/liuyuexi1987"
     # 插件配置项ID前缀
-    plugin_config_prefix = "hdhivesign_"
+    plugin_config_prefix = "hdhivedailysign_"
     # 加载顺序
     plugin_order = 1
     # 可使用的用户级别
@@ -87,8 +87,8 @@ class HdhiveSign(_PluginBase):
     _signin_action_name = "checkIn"
     _signin_action_id = None
     _signin_router_tree = ["", {"children": ["(app)", {"children": ["__PAGE__", {}, None, None]}, None, None]}, None, None, True]
-    _history_fallback_file = "/config/logs/plugins/hdhivesign_history.json"
-    _user_info_fallback_file = "/config/logs/plugins/hdhive_user_info.json"
+    _history_fallback_file = "/config/logs/plugins/hdhivedailysign_history.json"
+    _user_info_fallback_file = "/config/logs/plugins/hdhivedailysign_user_info.json"
     _login_api_candidates = [
         "/api/customer/user/login",
         "/api/customer/auth/login",
@@ -99,7 +99,7 @@ class HdhiveSign(_PluginBase):
         # 停止现有任务
         self.stop_service()
 
-        logger.info("============= hdhivesign 初始化 =============")
+        logger.info("============= hdhivedailysign 初始化 =============")
         try:
             if config:
                 self._enabled = config.get("enabled")
@@ -151,7 +151,7 @@ class HdhiveSign(_PluginBase):
                     self._scheduler.start()
 
         except Exception as e:
-            logger.error(f"hdhivesign初始化错误: {str(e)}", exc_info=True)
+            logger.error(f"hdhivedailysign初始化错误: {str(e)}", exc_info=True)
 
     def sign(self, retry_count=0, extended_retry=0):
         """
@@ -1206,15 +1206,15 @@ class HdhiveSign(_PluginBase):
         )
 
     def get_state(self) -> bool:
-        logger.info(f"hdhivesign状态: {self._enabled}")
+        logger.info(f"hdhivedailysign状态: {self._enabled}")
         return self._enabled
 
     def get_service(self) -> List[Dict[str, Any]]:
         if self._enabled and self._cron:
             logger.info(f"注册定时服务: {self._cron}")
             return [{
-                "id": "hdhivesign",
-                "name": "影巢签到",
+                "id": "hdhivedailysign",
+                "name": "HDHive Daily Sign",
                 "trigger": CronTrigger.from_crontab(self._cron),
                 "func": self.sign,
                 "kwargs": {}

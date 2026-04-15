@@ -35,17 +35,16 @@
       "0.3.0": "支持关键词搜索、TMDB 候选解析、资源解锁后自动转存 115、分享管理、签到与配额查询。"
     }
   },
-  "HdhiveSign": {
-    "name": "影巢签到",
+  "HDHiveDailySign": {
+    "name": "HDHive Daily Sign",
     "description": "自动完成影巢(HDHive)每日签到，支持普通/赌狗模式、失败重试、自动登录与历史记录。",
-    "labels": "影巢签到,HdhiveSign,影巢,HDHive,签到,自动登录,赌狗签到",
-    "version": "1.4.7",
+    "labels": "HDHiveDailySign,HDHive Daily Sign,影巢签到,HDHive,签到,自动登录,赌狗签到",
+    "version": "1.0.0",
     "icon": "hdhive.ico",
     "author": "liuyuexi1987",
     "level": 2,
     "history": {
-      "1.4.7": "统一插件作者信息与仓库索引标签，优化仓库检索命中。",
-      "1.4.6": "支持普通/赌狗签到模式，并兼容旧接口与 Next Server Action 两种签到链路。"
+      "1.0.0": "以全新英文插件身份发布，统一作者信息并与旧插件统计口径分离。"
     }
   }
 }

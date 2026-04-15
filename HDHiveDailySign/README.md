@@ -1,4 +1,4 @@
-# HdhiveSign
+# HDHiveDailySign
 
 MoviePilot 影巢签到插件。
 
@@ -12,8 +12,8 @@ MoviePilot 影巢签到插件。
 
 ## 当前版本
 
-- 插件名：`影巢签到`
-- 版本：`1.4.7`
+- 插件名：`HDHive Daily Sign`
+- 版本：`1.0.0`
 - 作者：`liuyuexi1987`
 
 ---
@@ -59,8 +59,8 @@ MoviePilot 影巢签到插件。
 这个插件已经同步到：
 
 ```text
-plugins.v2/hdhivesign/__init__.py
-plugins/hdhivesign/__init__.py
+plugins.v2/hdhivedailysign/__init__.py
+plugins/hdhivedailysign/__init__.py
 icons/hdhive.ico
 ```
 
@@ -95,7 +95,7 @@ package.v2.json
 
 可以简单这样理解：
 
-- `HdhiveSign`：更轻，只管签到
+- `HDHiveDailySign`：更轻，只管签到
 - `HdhiveOpenApi`：更完整，管签到、搜索、解锁、115 转存、分享管理
 
 如果你只想保留一个插件，通常更推荐：
@@ -104,4 +104,4 @@ package.v2.json
 
 如果你想保留一个更轻量、单功能的签到插件，也可以继续发布：
 
-- `HdhiveSign`
+- `HDHiveDailySign`
