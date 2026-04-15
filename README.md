@@ -30,12 +30,7 @@
   [skills/hdhive-search-unlock-to-115/SKILL.md](./skills/hdhive-search-unlock-to-115/SKILL.md)
 - 推荐提示词：
   [skills/hdhive-search-unlock-to-115/PROMPTS.md](./skills/hdhive-search-unlock-to-115/PROMPTS.md)
-
-这份模板已经做过去隐私处理：
-
-- 不包含本机绝对路径
-- 不包含 API Key / Token / Cookie
-- 默认通过环境变量和命令行参数适配不同机器
+- 推荐搭配支持技能和工作流调度的智能体工作台使用，例如腾讯 WorkBuddy 或兼容 Codex Skill 工作流的客户端。
 
 ---
 
@@ -115,7 +110,7 @@
 详细说明：
 
 - [HdhiveOpenApi/README.md](./HdhiveOpenApi/README.md)
-- 去隐私后的公开智能体 Skill 模板：
+- 对应的公开智能体 Skill 模板：
   [skills/hdhive-search-unlock-to-115/README.md](./skills/hdhive-search-unlock-to-115/README.md)
 
 ---

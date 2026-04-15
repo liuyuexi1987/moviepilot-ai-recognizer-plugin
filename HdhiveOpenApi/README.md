@@ -33,7 +33,7 @@ MoviePilot 影巢 OpenAPI 插件。
 
 ## 公开 Skill 模板
 
-如果你想把这套能力交给 AI 智能体，仓库里已经提供了一份去隐私的公开 Skill 模板：
+如果你想把这套能力交给 AI 智能体，仓库里已经提供了一份可以直接复用的公开 Skill 模板：
 
 - [skills/hdhive-search-unlock-to-115/README.md](../skills/hdhive-search-unlock-to-115/README.md)
 - [skills/hdhive-search-unlock-to-115/SKILL.md](../skills/hdhive-search-unlock-to-115/SKILL.md)
@@ -43,7 +43,9 @@ MoviePilot 影巢 OpenAPI 插件。
 
 - 让别的机器快速复现
 - 让别的智能体直接调用统一流程
-- 避免把个人路径、密钥、Cookie 带进公开仓库
+- 让搜索、确认、解锁、115 落地形成固定工作流
+
+推荐搭配支持技能和工作流编排的智能体工作台使用，例如腾讯 WorkBuddy，或其它兼容 Codex Skill 工作流的客户端。
 
 ---
 
@@ -169,7 +171,7 @@ POST /api/v1/plugin/HdhiveOpenApi/resources/unlock
 - 更省 token
 - 更稳定
 - 更容易复现
-- 更不容易泄露 Cookie、Key、临时路径等运行时信息
+- 更容易复用到别的机器和智能体环境
 
 不推荐的做法：
 
@@ -180,12 +182,6 @@ POST /api/v1/plugin/HdhiveOpenApi/resources/unlock
 如果需要，你也可以直接从仓库里的公开模板开始：
 
 - [skills/hdhive-search-unlock-to-115/README.md](../skills/hdhive-search-unlock-to-115/README.md)
-
-这份 Skill 已经做过去隐私处理：
-
-- 不包含本机绝对路径
-- 不包含 API Key / Token / Cookie
-- 默认通过环境变量或命令行参数适配不同机器
 
 ---
 

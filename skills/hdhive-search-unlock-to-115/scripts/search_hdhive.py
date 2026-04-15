@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Search HDHive resources through the local MoviePilot plugin.
-
-This public repository copy is privacy-sanitized. It avoids machine-specific
-paths and expects callers to provide runtime paths through environment
-variables or command-line flags when necessary.
-"""
+"""Search HDHive resources through the local MoviePilot plugin."""
 
 from __future__ import annotations
 

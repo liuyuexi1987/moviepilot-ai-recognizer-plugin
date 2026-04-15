@@ -1,15 +1,11 @@
 ---
 name: hdhive-search-unlock-to-115
-description: Public, privacy-sanitized HDHive agent skill template. Use when an agent should search HDHive resources by movie or TV title, show the top 10 candidate results, let the user choose one, then unlock the selected resource and try to transfer 115 links into MoviePilot's configured `/待整理` directory.
+description: HDHive agent skill template. Use when an agent should search HDHive resources by movie or TV title, show the top 10 candidate results, let the user choose one, then unlock the selected resource and try to transfer 115 links into MoviePilot's configured `/待整理` directory.
 ---
 
 # HDHive Search, Choose, Unlock, and Drop to 115
 
-This is the public repository copy of the skill. It is intentionally sanitized:
-
-- no personal absolute paths
-- no local machine identifiers
-- no API keys, tokens, or cookies
+This is the public repository copy of the skill.
 
 After copying this skill into your own Codex environment, adapt runtime paths with:
 
