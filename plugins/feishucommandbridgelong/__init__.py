@@ -18,7 +18,7 @@ from app.utils.http import RequestUtils
 
 for _plugin_dir in (
     str(Path(__file__).resolve().parent),
-    "/config/plugins/FeishuCommandBridge",
+    "/config/plugins/FeishuCommandBridgeLong",
 ):
     if Path(_plugin_dir).exists() and _plugin_dir not in sys.path:
         sys.path.insert(0, _plugin_dir)
@@ -41,9 +41,9 @@ class _LongConnectionRuntime:
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
         self._fingerprint = ""
-        self._plugin: Optional["FeishuCommandBridge"] = None
+        self._plugin: Optional["FeishuCommandBridgeLong"] = None
 
-    def start(self, plugin: "FeishuCommandBridge") -> None:
+    def start(self, plugin: "FeishuCommandBridgeLong") -> None:
         global lark
         if lark is None:
             try:
@@ -51,7 +51,7 @@ class _LongConnectionRuntime:
                 lark = runtime_lark
             except Exception as exc:
                 logger.error(
-                    f"[FeishuCommandBridge] 缺少依赖 lark-oapi，请先安装插件依赖：{exc}"
+                    f"[FeishuCommandBridgeLong] 缺少依赖 lark-oapi，请先安装插件依赖：{exc}"
                 )
                 return
 
@@ -64,7 +64,7 @@ class _LongConnectionRuntime:
             if self._thread and self._thread.is_alive():
                 if fingerprint != self._fingerprint:
                     logger.warning(
-                        "[FeishuCommandBridge] 长连接已在运行，App ID / App Secret / Token 变更需要重启 MoviePilot 后生效"
+                        "[FeishuCommandBridgeLong] 长连接已在运行，App ID / App Secret / Token 变更需要重启 MoviePilot 后生效"
                     )
                 return
 
@@ -104,10 +104,10 @@ class _LongConnectionRuntime:
                 log_level=lark.LogLevel.DEBUG if plugin._debug else lark.LogLevel.INFO,
                 event_handler=event_handler,
             )
-            logger.info("[FeishuCommandBridge] 正在启动飞书长连接")
+            logger.info("[FeishuCommandBridgeLong] 正在启动飞书长连接")
             ws_client.start()
         except Exception as exc:
-            logger.error(f"[FeishuCommandBridge] 长连接退出：{exc}\n{traceback.format_exc()}")
+            logger.error(f"[FeishuCommandBridgeLong] 长连接退出：{exc}\n{traceback.format_exc()}")
 
     def is_running(self) -> bool:
         with self._lock:
@@ -115,17 +115,17 @@ class _LongConnectionRuntime:
 
 
 _runtime = _LongConnectionRuntime()
-_EVENT_CACHE_FILE = Path("/config/plugins/FeishuCommandBridge/.event_cache.json")
+_EVENT_CACHE_FILE = Path("/config/plugins/FeishuCommandBridgeLong/.event_cache.json")
 
 
-class FeishuCommandBridge(_PluginBase):
+class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.2.2"
+    plugin_version = "0.2.3"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
-    plugin_config_prefix = "feishucommandbridge_"
+    plugin_config_prefix = "feishucommandbridgelong_"
     plugin_order = 29
     auth_level = 1
 
