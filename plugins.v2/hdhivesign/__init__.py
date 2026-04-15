@@ -1,7 +1,7 @@
 """
 影巢签到插件
-版本: 1.4.6
-作者: madrays
+版本: 1.4.7
+作者: liuyuexi1987
 功能:
 - 自动完成影巢(HDHive)每日签到
 - 支持签到失败重试
@@ -53,11 +53,11 @@ class HdhiveSign(_PluginBase):
     # 插件图标
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/hdhive.ico"
     # 插件版本
-    plugin_version = "1.4.6"
+    plugin_version = "1.4.7"
     # 插件作者
-    plugin_author = "madrays"
+    plugin_author = "liuyuexi1987"
     # 作者主页
-    author_url = "https://github.com/madrays"
+    author_url = "https://github.com/liuyuexi1987"
     # 插件配置项ID前缀
     plugin_config_prefix = "hdhivesign_"
     # 加载顺序
