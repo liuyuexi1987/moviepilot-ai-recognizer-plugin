@@ -175,6 +175,10 @@ class FeishuCommandBridgeLong(_PluginBase):
     def _default_command_aliases(cls) -> str:
         return (
             "刮削=/p115_manual_transfer\n"
+            "搜索=/media_search\n"
+            "下载=/media_download\n"
+            "订阅=/media_subscribe\n"
+            "订阅搜索=/media_subscribe_search\n"
             "生成STRM=/p115_inc_sync\n"
             "全量STRM=/p115_full_sync\n"
             "指定路径STRM=/p115_strm\n"
@@ -1150,6 +1154,13 @@ class FeishuCommandBridgeLong(_PluginBase):
         rest = parts[1] if len(parts) > 1 else ""
         target = alias_map.get(alias)
         if not target:
+            for alias_key in sorted(alias_map.keys(), key=len, reverse=True):
+                if not text.startswith(alias_key):
+                    continue
+                remain = text[len(alias_key):].strip()
+                target = alias_map.get(alias_key)
+                if target:
+                    return f"{target} {remain}".strip()
             return None
         return f"{target} {rest}".strip()
 
