@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import fcntl
 import importlib
 import json
@@ -11,9 +12,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.event import eventmanager
+from app.core.metainfo import MetaInfo
 from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas.types import EventType
+from app.chain.download import DownloadChain
+from app.chain.media import MediaChain
+from app.chain.search import SearchChain
+from app.chain.subscribe import SubscribeChain
+from app.scheduler import Scheduler
+from app.utils.string import StringUtils
 from app.utils.http import RequestUtils
 
 for _plugin_dir in (
@@ -122,7 +130,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.2.3"
+    plugin_version = "0.3.0"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
@@ -146,6 +154,36 @@ class FeishuCommandBridgeLong(_PluginBase):
     _token_lock = threading.Lock()
     _event_cache: Dict[str, float] = {}
     _event_lock = threading.Lock()
+    _search_cache: Dict[str, Dict[str, Any]] = {}
+    _search_cache_lock = threading.Lock()
+
+    @classmethod
+    def _default_command_whitelist(cls) -> List[str]:
+        return [
+            "/p115_manual_transfer",
+            "/p115_inc_sync",
+            "/p115_full_sync",
+            "/p115_strm",
+            "/media_search",
+            "/media_download",
+            "/media_subscribe",
+            "/media_subscribe_search",
+            "/version",
+        ]
+
+    @classmethod
+    def _default_command_aliases(cls) -> str:
+        return (
+            "刮削=/p115_manual_transfer\n"
+            "生成STRM=/p115_inc_sync\n"
+            "全量STRM=/p115_full_sync\n"
+            "指定路径STRM=/p115_strm\n"
+            "搜索资源=/media_search\n"
+            "下载资源=/media_download\n"
+            "订阅媒体=/media_subscribe\n"
+            "订阅并搜索=/media_subscribe_search\n"
+            "版本=/version"
+        )
 
     @staticmethod
     def _clean_input(value: Any) -> str:
@@ -174,7 +212,7 @@ class FeishuCommandBridgeLong(_PluginBase):
         self._debug = bool(config.get("debug"))
 
         if not self._command_whitelist:
-            self._command_whitelist = ["/p115_manual_transfer", "/p115_inc_sync", "/p115_full_sync", "/p115_strm", "/version"]
+            self._command_whitelist = self._default_command_whitelist()
 
         _runtime.start(self)
 
@@ -332,7 +370,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                                         "props": {
                                             "model": "command_whitelist",
                                             "label": "命令白名单",
-                                            "placeholder": "/p115_manual_transfer,/p115_inc_sync,/p115_full_sync,/p115_strm,/version",
+                                            "placeholder": ",".join(self._default_command_whitelist()),
                                         },
                                     }
                                 ],
@@ -365,7 +403,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                                             "model": "command_aliases",
                                             "label": "命令别名",
                                             "rows": 6,
-                                            "placeholder": "刮削=/p115_manual_transfer\n生成STRM=/p115_inc_sync\n全量STRM=/p115_full_sync\n指定路径STRM=/p115_strm\n版本=/version",
+                                            "placeholder": self._default_command_aliases(),
                                         },
                                     }
                                 ],
@@ -402,8 +440,8 @@ class FeishuCommandBridgeLong(_PluginBase):
             "allowed_user_ids": "\n".join(self._allowed_user_ids),
             "reply_enabled": self._reply_enabled,
             "reply_receive_id_type": self._reply_receive_id_type,
-            "command_whitelist": ",".join(self._command_whitelist) if self._command_whitelist else "/p115_manual_transfer,/p115_inc_sync,/p115_full_sync,/p115_strm,/version",
-            "command_aliases": self._command_aliases or "刮削=/p115_manual_transfer\n生成STRM=/p115_inc_sync\n全量STRM=/p115_full_sync\n指定路径STRM=/p115_strm\n版本=/version",
+            "command_whitelist": ",".join(self._command_whitelist) if self._command_whitelist else ",".join(self._default_command_whitelist()),
+            "command_aliases": self._command_aliases or self._default_command_aliases(),
             "debug": self._debug,
         }
 
@@ -570,6 +608,26 @@ class FeishuCommandBridgeLong(_PluginBase):
                                                     {
                                                         "component": "div",
                                                         "props": {"class": "text-body-2 py-1"},
+                                                        "text": "搜索资源 流浪地球2",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "下载资源 1",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "订阅媒体 流浪地球2",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "订阅并搜索 流浪地球2",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
                                                         "text": "帮助",
                                                     },
                                                 ],
@@ -723,6 +781,76 @@ class FeishuCommandBridgeLong(_PluginBase):
                 receive_open_id=receive_open_id,
                 text=f"已接收命令：{command_text}\n任务已提交给 MoviePilot。",
             )
+            return True
+
+        if cmd == "/media_search":
+            if not arg:
+                self._reply_if_needed(
+                    receive_chat_id=receive_chat_id,
+                    receive_open_id=receive_open_id,
+                    text="用法：搜索资源 片名\n示例：搜索资源 流浪地球2",
+                )
+                return True
+            self._reply_if_needed(
+                receive_chat_id=receive_chat_id,
+                receive_open_id=receive_open_id,
+                text=f"正在搜索资源：{arg}\n我会返回前 10 条结果，之后可直接回复：下载资源 序号",
+            )
+            threading.Thread(
+                target=self._run_media_search,
+                args=(arg, receive_chat_id, receive_open_id),
+                name="feishu-media-search",
+                daemon=True,
+            ).start()
+            return True
+
+        if cmd == "/media_download":
+            if not arg or not arg.isdigit():
+                self._reply_if_needed(
+                    receive_chat_id=receive_chat_id,
+                    receive_open_id=receive_open_id,
+                    text="用法：下载资源 序号\n示例：下载资源 1",
+                )
+                return True
+            self._reply_if_needed(
+                receive_chat_id=receive_chat_id,
+                receive_open_id=receive_open_id,
+                text=f"正在提交第 {arg} 条资源到下载器，请稍候。",
+            )
+            threading.Thread(
+                target=self._run_media_download,
+                args=(int(arg), receive_chat_id, receive_open_id),
+                name="feishu-media-download",
+                daemon=True,
+            ).start()
+            return True
+
+        if cmd in {"/media_subscribe", "/media_subscribe_search"}:
+            if not arg:
+                usage = (
+                    "用法：订阅媒体 片名"
+                    if cmd == "/media_subscribe"
+                    else "用法：订阅并搜索 片名"
+                )
+                self._reply_if_needed(
+                    receive_chat_id=receive_chat_id,
+                    receive_open_id=receive_open_id,
+                    text=f"{usage}\n示例：{usage.replace('片名', '流浪地球2')}",
+                )
+                return True
+            immediate_search = cmd == "/media_subscribe_search"
+            action_text = "订阅并搜索" if immediate_search else "订阅"
+            self._reply_if_needed(
+                receive_chat_id=receive_chat_id,
+                receive_open_id=receive_open_id,
+                text=f"正在{action_text}：{arg}",
+            )
+            threading.Thread(
+                target=self._run_media_subscribe,
+                args=(arg, immediate_search, receive_chat_id, receive_open_id),
+                name="feishu-media-subscribe",
+                daemon=True,
+            ).start()
             return True
 
         if cmd != "/p115_manual_transfer":
@@ -1064,9 +1192,198 @@ class FeishuCommandBridgeLong(_PluginBase):
             "1. 刮削\n\n"
             "2. 生成STRM\n\n"
             "3. 全量STRM\n\n"
-            "4. 刷新极空间\n\n"
-            "5. 版本"
+            "4. 搜索资源 片名\n\n"
+            "5. 下载资源 序号\n\n"
+            "6. 订阅媒体 片名\n\n"
+            "7. 订阅并搜索 片名\n\n"
+            "8. 版本"
         )
+
+    def _cache_key(self, receive_chat_id: str, receive_open_id: str) -> str:
+        return f"{receive_chat_id or ''}::{receive_open_id or ''}"
+
+    def _set_search_cache(
+        self,
+        cache_key: str,
+        keyword: str,
+        mediainfo: Any,
+        results: List[Any],
+    ) -> None:
+        with self._search_cache_lock:
+            self._search_cache[cache_key] = {
+                "ts": time.time(),
+                "keyword": keyword,
+                "mediainfo": mediainfo,
+                "results": results[:10],
+            }
+
+    def _get_search_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        with self._search_cache_lock:
+            item = self._search_cache.get(cache_key)
+            if not item:
+                return None
+            if time.time() - float(item.get("ts") or 0) > 1800:
+                self._search_cache.pop(cache_key, None)
+                return None
+            return item
+
+    def _run_media_search(
+        self,
+        keyword: str,
+        receive_chat_id: str,
+        receive_open_id: str,
+    ) -> None:
+        text = self._execute_media_search(
+            keyword=keyword,
+            cache_key=self._cache_key(receive_chat_id, receive_open_id),
+        )
+        self._reply_if_needed(
+            receive_chat_id=receive_chat_id,
+            receive_open_id=receive_open_id,
+            text=text,
+        )
+
+    def _run_media_download(
+        self,
+        index: int,
+        receive_chat_id: str,
+        receive_open_id: str,
+    ) -> None:
+        text = self._execute_media_download(
+            index=index,
+            cache_key=self._cache_key(receive_chat_id, receive_open_id),
+        )
+        self._reply_if_needed(
+            receive_chat_id=receive_chat_id,
+            receive_open_id=receive_open_id,
+            text=text,
+        )
+
+    def _run_media_subscribe(
+        self,
+        keyword: str,
+        immediate_search: bool,
+        receive_chat_id: str,
+        receive_open_id: str,
+    ) -> None:
+        text = self._execute_media_subscribe(
+            keyword=keyword,
+            immediate_search=immediate_search,
+        )
+        self._reply_if_needed(
+            receive_chat_id=receive_chat_id,
+            receive_open_id=receive_open_id,
+            text=text,
+        )
+
+    def _execute_media_search(self, keyword: str, cache_key: str) -> str:
+        try:
+            meta = MetaInfo(keyword)
+            mediainfo = MediaChain().recognize_media(meta=meta)
+            if not mediainfo:
+                return f"未识别到媒体信息：{keyword}"
+
+            season = meta.begin_season if meta.begin_season else mediainfo.season
+            results = SearchChain().search_by_id(
+                tmdbid=mediainfo.tmdb_id,
+                doubanid=mediainfo.douban_id,
+                mtype=mediainfo.type,
+                season=season,
+                cache_local=False,
+            ) or []
+            if not results:
+                return f"已识别 {self._format_media_label(mediainfo, season)}，但暂未搜索到资源。"
+
+            self._set_search_cache(cache_key, keyword, mediainfo, results)
+            lines = [
+                f"已识别：{self._format_media_label(mediainfo, season)}",
+                f"共找到 {len(results)} 条资源，展示前 {min(len(results), 10)} 条：",
+            ]
+            for idx, context in enumerate(results[:10], start=1):
+                torrent = context.torrent_info
+                title = str(torrent.title or "").strip()
+                size = StringUtils.str_filesize(torrent.size) if torrent.size else "未知"
+                seeders = torrent.seeders if torrent.seeders is not None else "?"
+                site = torrent.site_name or "未知站点"
+                volume = torrent.volume_factor if getattr(torrent, "volume_factor", None) else "未知"
+                lines.append(f"{idx}. [{site}] {title}")
+                lines.append(f"   大小：{size} | 做种：{seeders} | 促销：{volume}")
+            lines.append("下一步：回复“下载资源 序号”即可下载选中项。")
+            lines.append("如需长期跟踪，回复“订阅媒体 片名”或“订阅并搜索 片名”。")
+            return "\n".join(lines)
+        except Exception as exc:
+            logger.error(
+                f"[FeishuCommandBridge] 搜索资源失败：{keyword} {exc}\n{traceback.format_exc()}"
+            )
+            return f"搜索资源失败：{keyword}\n错误：{exc}"
+
+    def _execute_media_download(self, index: int, cache_key: str) -> str:
+        cache = self._get_search_cache(cache_key)
+        if not cache:
+            return "没有可用的搜索缓存，请先发送：搜索资源 片名"
+        results = cache.get("results") or []
+        if index < 1 or index > len(results):
+            return f"序号超出范围，请输入 1 到 {len(results)} 之间的数字。"
+        context = copy.deepcopy(results[index - 1])
+        torrent = context.torrent_info
+        try:
+            download_id = DownloadChain().download_single(
+                context=context,
+                username="feishucommandbridgelong",
+                source="FeishuCommandBridgeLong",
+            )
+            if not download_id:
+                return f"下载提交失败：{torrent.title}"
+            return (
+                f"已提交下载：{torrent.title}\n"
+                f"站点：{torrent.site_name or '未知站点'}\n"
+                f"任务ID：{download_id}"
+            )
+        except Exception as exc:
+            logger.error(
+                f"[FeishuCommandBridge] 下载资源失败：{torrent.title} {exc}\n{traceback.format_exc()}"
+            )
+            return f"下载资源失败：{torrent.title}\n错误：{exc}"
+
+    def _execute_media_subscribe(self, keyword: str, immediate_search: bool) -> str:
+        meta = MetaInfo(keyword)
+        season = meta.begin_season
+        try:
+            sid, message = SubscribeChain().add(
+                title=keyword,
+                year=meta.year,
+                mtype=meta.type,
+                season=season,
+                username="feishucommandbridgelong",
+                exist_ok=True,
+                message=False,
+            )
+            if not sid:
+                return f"订阅失败：{keyword}\n原因：{message}"
+            lines = [f"已创建订阅：{keyword}", f"订阅ID：{sid}", f"结果：{message}"]
+            if immediate_search:
+                Scheduler().start(
+                    job_id="subscribe_search",
+                    **{"sid": sid, "state": None, "manual": True},
+                )
+                lines.append("已触发一次订阅搜索。")
+            return "\n".join(lines)
+        except Exception as exc:
+            logger.error(
+                f"[FeishuCommandBridge] 订阅媒体失败：{keyword} {exc}\n{traceback.format_exc()}"
+            )
+            return f"订阅失败：{keyword}\n错误：{exc}"
+
+    @staticmethod
+    def _format_media_label(mediainfo: Any, season: Optional[int] = None) -> str:
+        title = getattr(mediainfo, "title", "") or "未知媒体"
+        year = getattr(mediainfo, "year", None)
+        label = f"{title} ({year})" if year else title
+        media_type = getattr(mediainfo, "type", None)
+        media_type_name = getattr(media_type, "name", "")
+        if media_type_name == "TV" and season:
+            return f"{label} 第{season}季"
+        return label
 
     def _extract_text(self, content: Any) -> str:
         if isinstance(content, dict):
