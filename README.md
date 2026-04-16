@@ -127,6 +127,12 @@
 - 支持普通签到 / 赌狗签到
 - 支持失败重试、自动登录和历史记录
 
+说明：
+
+- 这是基于原作者 `madrays` 的影巢签到插件整理出来的自用魔改版
+- 如果你更想跟进原版更新，推荐优先关注原作者仓库：
+  [madrays/MoviePilot-Plugins](https://github.com/madrays/MoviePilot-Plugins)
+
 适合场景：
 
 - 只想做影巢签到
