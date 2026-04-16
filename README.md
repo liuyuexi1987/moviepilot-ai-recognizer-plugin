@@ -29,6 +29,7 @@
   用 `HdhiveOpenApi`
 - 想只保留一个更轻量的影巢签到插件：
   用 `HDHiveDailySign`
+  `HdhiveOpenApi` 里的 OpenAPI 签到需要付费用户时，这个轻量签到插件会更合适
 - 想让极影视按 MP 最近入库自动刷新，而且电影/电视剧共用一个分类：
   用 `ZspaceMediaFreshMix`
 
