@@ -43,6 +43,11 @@ try:
 except Exception:
     lark = None
 
+try:
+    from app.helper.sites import SitesHelper
+except Exception:
+    SitesHelper = None
+
 
 class _LongConnectionRuntime:
     def __init__(self) -> None:
@@ -1278,6 +1283,13 @@ class FeishuCommandBridgeLong(_PluginBase):
 
     def _execute_media_search(self, keyword: str, cache_key: str) -> str:
         try:
+            active_sites = self._get_active_indexer_count()
+            if active_sites == 0:
+                return (
+                    "当前没有可用 PT 站点，无法搜索资源。\n"
+                    "通常是 MoviePilot 站点功能未认证成功，或还没有启用任何站点。\n"
+                    "你可以先修复站点认证，再发送：搜索资源 片名"
+                )
             meta = MetaInfo(keyword)
             mediainfo = MediaChain().recognize_media(meta=meta)
             if not mediainfo:
@@ -1362,17 +1374,33 @@ class FeishuCommandBridgeLong(_PluginBase):
                 return f"订阅失败：{keyword}\n原因：{message}"
             lines = [f"已创建订阅：{keyword}", f"订阅ID：{sid}", f"结果：{message}"]
             if immediate_search:
-                Scheduler().start(
-                    job_id="subscribe_search",
-                    **{"sid": sid, "state": None, "manual": True},
-                )
-                lines.append("已触发一次订阅搜索。")
+                active_sites = self._get_active_indexer_count()
+                if active_sites == 0:
+                    lines.append("已创建订阅，但当前没有可用 PT 站点，暂不触发立即搜索。")
+                    lines.append("等站点认证恢复后，订阅任务会继续生效。")
+                else:
+                    Scheduler().start(
+                        job_id="subscribe_search",
+                        **{"sid": sid, "state": None, "manual": True},
+                    )
+                    lines.append("已触发一次订阅搜索。")
             return "\n".join(lines)
         except Exception as exc:
             logger.error(
                 f"[FeishuCommandBridge] 订阅媒体失败：{keyword} {exc}\n{traceback.format_exc()}"
             )
             return f"订阅失败：{keyword}\n错误：{exc}"
+
+    @staticmethod
+    def _get_active_indexer_count() -> int:
+        if SitesHelper is None:
+            return 0
+        try:
+            indexers = SitesHelper().get_indexers() or []
+            return len(indexers)
+        except Exception as exc:
+            logger.warning(f"[FeishuCommandBridge] 获取可用站点失败：{exc}")
+            return 0
 
     @staticmethod
     def _format_media_label(mediainfo: Any, season: Optional[int] = None) -> str:
