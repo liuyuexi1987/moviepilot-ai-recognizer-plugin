@@ -1,6 +1,17 @@
 # MoviePilot-Plugins
 
-这个仓库现在主要维护 5 个 MoviePilot 插件：
+这个仓库现在主要维护 5 个 MoviePilot 插件，核心思路不是“插件越多越好”，而是把几个关键环节拆清楚：
+
+- `MoviePilot` 负责搜索、订阅、整理、入库
+- `P115StrmHelper` 负责 115 落地、整理目录、STRM 等底层能力
+- 这个仓库里的插件负责把影巢、飞书、AI 识别、极影视刷新这些能力接进现有流程
+- 智能体负责调用稳定入口，不直接硬拼站点接口
+
+如果你只想先理解“这几个插件分别干什么、怎么配合”，先看下面这段就够了。
+
+## 插件分工
+
+这个仓库里的 5 个插件分别是：
 
 1. `AIRecoginzerForwarder`
 2. `FeishuCommandBridgeLong`
@@ -8,7 +19,7 @@
 4. `HDHiveDailySign`
 5. `ZspaceMediaFreshMix`
 
-如果你是第一次打开这个仓库，直接先看这段就够了：
+它们各自更像这样：
 
 - 想做“原生识别失败后的 AI 兜底”：
   用 `AIRecoginzerForwarder`
@@ -20,6 +31,57 @@
   用 `HDHiveDailySign`
 - 想让极影视按 MP 最近入库自动刷新，而且电影/电视剧共用一个分类：
   用 `ZspaceMediaFreshMix`
+
+## 和 115 的关系
+
+这几个插件里，和 `115` 关系最直接的是两块：
+
+- `HdhiveOpenApi`
+  负责“搜索影巢资源 -> 解锁 -> 判断是不是 115 分享链接 -> 调用 115 转存”
+- `FeishuCommandBridgeLong`
+  负责“在飞书里触发 115 整理、STRM 生成、命令桥接”
+
+但真正落到 `115` 目录、`/待整理`、STRM 生成这层，通常还是依赖你现有环境里的：
+
+- `P115StrmHelper`
+
+可以把它理解成：
+
+- `HdhiveOpenApi` 是资源入口
+- `FeishuCommandBridgeLong` 是远程操作入口
+- `P115StrmHelper` 是 115 文件落地和整理能力
+
+也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
+
+## 和智能体怎么配合
+
+这套仓库现在更推荐的做法不是让智能体自己写临时脚本、自己拼接口，而是：
+
+- 插件做能力
+- 智能体做调度
+
+最典型的一条链路是：
+
+1. 智能体根据片名发起影巢搜索
+2. `HdhiveOpenApi` 负责把关键词转换成可搜索的候选并返回资源列表
+3. 智能体只展示前几条结果，让用户按编号选
+4. 插件执行解锁
+5. 如果返回的是 `115` 分享链接，再交给现有 115 流程落到 `/待整理`
+6. 后续 MoviePilot / `P115StrmHelper` 继续整理、生成 STRM 或补充操作
+
+另一条常见链路是：
+
+1. 智能体在飞书侧接收自然语言或命令
+2. `FeishuCommandBridgeLong` 把命令桥接进 MoviePilot / 115 流程
+3. 如果媒体识别失败，再由 `AIRecoginzerForwarder` 做兜底识别
+
+所以这几个插件不是平铺的独立小工具，更像一套配合关系：
+
+- `HdhiveOpenApi` 解决资源搜索、解锁和 115 落地入口
+- `FeishuCommandBridgeLong` 解决远程控制入口
+- `AIRecoginzerForwarder` 解决识别失败后的补救
+- `ZspaceMediaFreshMix` 解决入库后的极影视刷新
+- `HDHiveDailySign` 解决签到这种独立轻量任务
 
 ---
 
