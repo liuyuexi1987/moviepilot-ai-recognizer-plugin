@@ -51,5 +51,18 @@
     "history": {
       "1.0.0": "以全新英文插件身份发布，统一作者信息并与旧插件统计口径分离。"
     }
+  },
+  "ZspaceMediaFreshMix": {
+    "name": "极影视刷新（自用魔改）",
+    "description": "基于 gxterry 原版整理的自用魔改版，兼容电影/电视剧混合分类、新版极空间 Cookie 和分类刷新轮询。",
+    "labels": "极影视,极空间,Zspace,媒体刷新,混合分类,自用魔改",
+    "version": "1.0.0",
+    "icon": "zspacemediafreshmix.png",
+    "author": "liuyuexi1987",
+    "level": 1,
+    "v2": true,
+    "history": {
+      "1.0.0": "基于原版刷新极影视插件整理为独立自用魔改版，兼容混合分类与新版极空间 Cookie。"
+    }
   }
 }

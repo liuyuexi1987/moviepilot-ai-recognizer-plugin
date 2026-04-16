@@ -1,11 +1,12 @@
 # MoviePilot-Plugins
 
-这个仓库现在主要维护 4 个 MoviePilot 插件：
+这个仓库现在主要维护 5 个 MoviePilot 插件：
 
 1. `AIRecoginzerForwarder`
 2. `FeishuCommandBridgeLong`
 3. `HdhiveOpenApi`
 4. `HDHiveDailySign`
+5. `ZspaceMediaFreshMix`
 
 如果你是第一次打开这个仓库，直接先看这段就够了：
 
@@ -17,6 +18,8 @@
   用 `HdhiveOpenApi`
 - 想只保留一个更轻量的影巢签到插件：
   用 `HDHiveDailySign`
+- 想让极影视按 MP 最近入库自动刷新，而且电影/电视剧共用一个分类：
+  用 `ZspaceMediaFreshMix`
 
 ---
 
@@ -145,6 +148,36 @@
 
 ---
 
+## 5. 极影视刷新（自用魔改）
+
+插件名：
+
+- `ZspaceMediaFreshMix`
+
+作用：
+
+- 按 MoviePilot 最近入库记录刷新极影视分类
+- 兼容电影和电视剧共用一个极影视分类
+- 兼容新版极空间 Cookie 字段
+
+说明：
+
+- 这是基于原作者 `gxterry` 刷新极影视插件整理出来的自用魔改版
+- 如果你更想跟进原版更新，推荐优先关注原作者仓库：
+  [gxterry/MoviePilot-Plugins](https://github.com/gxterry/MoviePilot-Plugins)
+
+适合场景：
+
+- 极影视里电影和电视剧混放在同一个分类
+- 官方原版在你当前极空间 Cookie 形态下无法直接工作
+- 想保留一个独立插件身份，避免和原版配置、统计互相影响
+
+详细说明：
+
+- [ZspaceMediaFreshMix/README.md](./ZspaceMediaFreshMix/README.md)
+
+---
+
 ## 安装方式
 
 这个仓库已经补齐 MoviePilot 自定义仓库所需结构：
@@ -162,6 +195,8 @@
 - `plugins.v2/hdhiveopenapi`
 - `plugins/hdhivedailysign`
 - `plugins.v2/hdhivedailysign`
+- `plugins/zspacemediafreshmix`
+- `plugins.v2/zspacemediafreshmix`
 
 ---
 
@@ -194,3 +229,4 @@ docs/
 - `FeishuCommandBridgeLong` 解决“飞书远程控制 MoviePilot”
 - `HdhiveOpenApi` 解决“影巢资源搜索、解锁和 115 落地”
 - `HDHiveDailySign` 解决“影巢每日签到”
+- `ZspaceMediaFreshMix` 解决“极影视混合分类刷新不稳定”
