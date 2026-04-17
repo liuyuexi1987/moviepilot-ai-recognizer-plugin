@@ -427,22 +427,23 @@ class AIRecoginzerForwarder(_PluginBase):
                                                 'component': 'VCardText',
                                                 'content': [
                                                     {'component': 'h3', 'text': '⚠️ 重要设置'},
-                                                    {'component': 'p', 'text': '推荐在 MoviePilot 设置 -> 媒体 中保持【插件优先模式】关闭。本插件设计为原生 TMDB 识别失败后的兜底链路，这样更省 AI 资源，也更容易排查问题。'},
+                                                    {'component': 'p', 'text': '推荐在 MoviePilot 设置 -> 媒体 中保持【插件优先模式】关闭。本插件更适合作为原生识别失败后的兜底链路，而不是主识别入口；这样更省 AI 资源，也更容易排查问题。'},
                                                     {'component': 'br'},
 
                                                     {'component': 'h3', 'text': '🎯 插件功能'},
-                                                    {'component': 'p', 'text': '当 MoviePilot 原生识别失败时，插件会把标题和可用文件信息转发给 AI Gateway，等待异步回调识别结果，并自动触发二次整理。'},
+                                                    {'component': 'p', 'text': '当 MoviePilot 原生识别失败时，插件会把标题和可用文件信息转发给 AI Gateway，等待异步回调识别结果，并自动触发二次整理。适合命名混乱、网盘挂载、手动整理失败补救这类边角场景。'},
                                                     {'component': 'br'},
 
                                                     {'component': 'h3', 'text': '✅ 推荐搭建方式'},
-                                                    {'component': 'p', 'text': '场景 1：MoviePilot 和 Gateway 在同一台 Docker 主机。插件中直接填写容器可达地址，例如 http://moviepilot-ai-recognizer-gateway:9000/webhook。'},
-                                                    {'component': 'p', 'text': '场景 2：MoviePilot 和 Gateway 不在同一台机器。插件地址可以填写对端机器可访问的 Gateway 地址，例如 http://<对端IP>:9000/webhook，但不建议作为默认推荐方案。'},
-                                                    {'component': 'p', 'text': '原因：跨主机场景更容易出现容器网络、宿主机地址、双向回调、端口映射和超时排查问题。更推荐 MoviePilot 与 Gateway 同机部署，并在同一 Docker 网络内互通。'},
-                                                    {'component': 'p', 'text': '场景 3：如果用户已有 OpenClaw 或其他外部识别端，也可以由 Gateway 转发过去；插件本身不绑定具体 AI 后端。'},
+                                                    {'component': 'p', 'text': '推荐方案：MoviePilot 与 Gateway 同机部署，并尽量保持容器互通。这样最容易排查网络、回调和超时问题。'},
+                                                    {'component': 'p', 'text': '同机容器互通时可直接填写容器可达地址，例如 http://moviepilot-ai-recognizer-gateway:9000/webhook。'},
+                                                    {'component': 'p', 'text': '如果 MoviePilot 需要经宿主机访问 Gateway，也可以使用宿主机可达地址，例如 http://host.docker.internal:9000/webhook 或实际宿主机 IP。'},
+                                                    {'component': 'p', 'text': '如果用户已有 OpenClaw 或其他外部识别端，也可以继续由 Gateway 转发；插件本身不绑定具体 AI 后端。'},
                                                     {'component': 'br'},
 
                                                     {'component': 'h3', 'text': '📦 适用场景'},
                                                     {'component': 'p', 'text': '支持本地文件整理、手动整理失败补救、下载入库时的兜底识别，以及 115/u115 云盘挂载文件的二次整理。'},
+                                                    {'component': 'p', 'text': '影巢搜索/解锁/115 转存这条主链并不依赖本插件；本插件更偏向资源落地后的识别补救。'},
                                                     {'component': 'p', 'text': '赛事和新闻这类非标准影视条目建议直接回退为 tmdb_id=0；演唱会、电影、剧集则继续正常识别。'},
                                                     {'component': 'br'},
 
@@ -458,8 +459,8 @@ class AIRecoginzerForwarder(_PluginBase):
                                                     {'component': 'br'},
 
                                                     {'component': 'h3', 'text': '🧭 当前版本'},
-                                                    {'component': 'p', 'text': '2.0.1：修正版本展示格式，并继续以插件仓库 + Gateway 镜像仓库为主方向。'},
-                                                    {'component': 'p', 'text': '设置页已收敛为推荐配置，不再暴露场景过滤开关，避免因上游事件差异导致误判。'}
+                                                    {'component': 'p', 'text': '2.0.1：修正版本展示格式，继续保持“插件仓库 + Gateway 镜像仓库”双仓发布。'},
+                                                    {'component': 'p', 'text': '当前更推荐把它当作兜底插件来用，默认标准模式即可；只有在网盘规避命名、拼音标题较多时再考虑增强模式。'}
                                                 ]
                                             }
                                         ]
