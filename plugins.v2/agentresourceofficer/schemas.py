@@ -1,0 +1,22 @@
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
+
+class HDHiveSearchSessionToolInput(BaseModel):
+    keyword: str = Field(..., description="要搜索的影片或剧集名称")
+    media_type: str = Field(default="movie", description="媒体类型，movie 或 tv")
+    year: Optional[str] = Field(default=None, description="可选年份，用于缩小候选范围")
+    path: Optional[str] = Field(default=None, description="可选目标目录，不填则使用默认目录")
+
+
+class HDHiveSessionPickToolInput(BaseModel):
+    session_id: str = Field(..., description="上一步搜索返回的会话 ID")
+    choice: int = Field(..., description="当前阶段要选择的编号，从 1 开始")
+    path: Optional[str] = Field(default=None, description="可选目标目录，不填则使用会话中的目录")
+
+
+class ShareRouteToolInput(BaseModel):
+    url: str = Field(..., description="115 或夸克分享链接")
+    path: Optional[str] = Field(default=None, description="目标目录")
+    access_code: Optional[str] = Field(default=None, description="提取码，可选")
