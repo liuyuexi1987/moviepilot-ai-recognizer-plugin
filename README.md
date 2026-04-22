@@ -1,28 +1,62 @@
 # MoviePilot-Plugins
 
-这个仓库现在主要维护 5 个 MoviePilot 插件，核心思路不是“插件越多越好”，而是把几个关键环节拆清楚：
+这个仓库现在的方向不是“插件越多越好”，而是把关键能力收拢成更清楚的两条线：
 
 - `MoviePilot` 负责搜索、订阅、整理、入库
 - `P115StrmHelper` 负责 115 落地、整理目录、STRM 等底层能力
-- 这个仓库里的插件负责把影巢、飞书、AI 识别、极影视刷新这些能力接进现有流程
+- 这个仓库里的插件负责把影巢、飞书、夸克转存、AI 识别、极影视刷新这些能力接进现有流程
 - 智能体负责调用稳定入口，不直接硬拼站点接口
 
 如果你只想先理解“这几个插件分别干什么、怎么配合”，先看下面这段就够了。
 
+## 重构状态
+
+这个仓库已经进入下一阶段重构：
+
+- 旧插件目录继续保留，作为当前可运行版本
+- 新能力逐步收拢到两套新插件
+  - `Agent资源官`
+  - `AI识别增强`
+- 重构说明见：
+  [docs/REBUILD_AGENT_SUITE.md](./docs/REBUILD_AGENT_SUITE.md)
+
+当前已经进入第一阶段可用状态的新插件是：
+
+- `Agent资源官`
+  - 已支持影巢搜索、盘搜搜索、115 直链、夸克直链统一入口
+  - 已支持影巢解锁后自动路由到 115 / 夸克执行层
+  - 已支持原生 Agent Tool、插件 API、智能体会话式调用
+- `FeishuCommandBridgeLong`
+  - 继续保留，不删除
+  - 当前默认保留 `legacy` 直连快路径，适合继续日常飞书使用
+  - 需要时也可以切换为 `auto`，把智能入口整条委托给 `Agent资源官`
+
+`AI识别增强` 仍在继续重做中，目标是替代旧版 AI Gateway 转发链路。
+
 ## 插件分工
 
-这个仓库里的 5 个插件分别是：
+当前线上主插件仍然是这些：
 
 1. `AIRecoginzerForwarder`
-2. `FeishuCommandBridgeLong`
-3. `HdhiveOpenApi`
-4. `HDHiveDailySign`
-5. `ZspaceMediaFreshMix`
+2. `AgentResourceOfficer`
+3. `FeishuCommandBridgeLong`
+4. `HdhiveOpenApi`
+5. `HDHiveDailySign`
+6. `QuarkShareSaver`
+7. `ZspaceMediaFreshMix`
+
+另外还有一个正在重写中的目录：
+
+- `AIRecognizerEnhancer`
+  - 这是新识别线的固定落点
+  - 目前还是骨架，不作为当前安装主入口
 
 它们各自更像这样：
 
 - 想做“原生识别失败后的 AI 兜底”：
   用 `AIRecoginzerForwarder`
+- 想给智能体、原生 Agent Tool、后续飞书统一一个资源执行主线：
+  用 `AgentResourceOfficer`
 - 想在飞书里直接操作 MoviePilot / 115 / STRM：
   用 `FeishuCommandBridgeLong`
 - 想把影巢资源搜索、解锁、签到、115 转存整合进 MoviePilot：
@@ -30,17 +64,23 @@
 - 想只保留一个更轻量的影巢签到插件：
   用 `HDHiveDailySign`
   `HdhiveOpenApi` 里的 OpenAPI 签到需要付费用户时，这个轻量签到插件会更合适
+- 想把夸克分享链接直接转存到自己的夸克网盘目录：
+  用 `QuarkShareSaver`
 - 想让极影视按 MP 最近入库自动刷新，而且电影/电视剧共用一个分类：
   用 `ZspaceMediaFreshMix`
 
 ## 和 115 的关系
 
-这几个插件里，和 `115` 关系最直接的是两块：
+这几个插件里，和 `115` 关系最直接的是四块：
 
-- `HdhiveOpenApi`
-  负责“搜索影巢资源 -> 解锁 -> 判断是不是 115 分享链接 -> 调用 115 转存”
+- `AgentResourceOfficer`
+  负责“统一接住智能体 / Agent Tool / API 的资源请求 -> 分流到影巢、115、夸克执行层”
 - `FeishuCommandBridgeLong`
   负责“在飞书里触发 115 整理、STRM 生成、命令桥接”
+- `HdhiveOpenApi`
+  负责“搜索影巢资源 -> 解锁 -> 判断是不是 115 分享链接 -> 调用 115 转存”
+- `QuarkShareSaver`
+  负责“把夸克分享链接稳定转存到自己的夸克目录”
 
 但真正落到 `115` 目录、`/待整理`、STRM 生成这层，通常还是依赖你现有环境里的：
 
@@ -48,8 +88,10 @@
 
 可以把它理解成：
 
-- `HdhiveOpenApi` 是资源入口
+- `AgentResourceOfficer` 是新的资源中枢入口
 - `FeishuCommandBridgeLong` 是远程操作入口
+- `HdhiveOpenApi` 是旧影巢能力入口
+- `QuarkShareSaver` 是夸克分享落盘入口
 - `P115StrmHelper` 是 115 文件落地和整理能力
 
 也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
@@ -63,10 +105,10 @@
 
 最典型的一条链路是：
 
-1. 智能体根据片名发起影巢搜索
-2. `HdhiveOpenApi` 负责把关键词转换成可搜索的候选并返回资源列表
+1. 智能体把自然语言、片名或分享链接发给 `AgentResourceOfficer`
+2. `AgentResourceOfficer` 负责判断是影巢搜索、盘搜搜索，还是 115 / 夸克直链路由
 3. 智能体只展示前几条结果，让用户按编号选
-4. 插件执行解锁
+4. 插件执行解锁或转存
 5. 如果返回的是 `115` 分享链接，再交给现有 115 流程落到 `/待整理`
 6. 后续 MoviePilot / `P115StrmHelper` 继续整理、生成 STRM 或补充操作
 
@@ -74,12 +116,16 @@
 
 1. 智能体在飞书侧接收自然语言或命令
 2. `FeishuCommandBridgeLong` 把命令桥接进 MoviePilot / 115 流程
-3. 如果媒体识别失败，再由 `AIRecoginzerForwarder` 做兜底识别
+3. 默认继续走 `legacy` 快路径，速度更稳
+4. 需要统一资源工作流时，可以切到 `auto`，把智能入口委托给 `AgentResourceOfficer`
+5. 如果媒体识别失败，再由 `AIRecoginzerForwarder` 做兜底识别
 
 所以这几个插件不是平铺的独立小工具，更像一套配合关系：
 
-- `HdhiveOpenApi` 解决资源搜索、解锁和 115 落地入口
+- `AgentResourceOfficer` 解决智能体 / Agent Tool 的统一资源入口
 - `FeishuCommandBridgeLong` 解决远程控制入口
+- `HdhiveOpenApi` 继续保留旧影巢 OpenAPI 入口
+- `QuarkShareSaver` 解决夸克分享转存入口
 - `AIRecoginzerForwarder` 解决识别失败后的补救
 - `ZspaceMediaFreshMix` 解决入库后的极影视刷新
 - `HDHiveDailySign` 解决签到这种独立轻量任务
@@ -97,6 +143,7 @@
 - 推荐提示词：
   [skills/hdhive-search-unlock-to-115/PROMPTS.md](./skills/hdhive-search-unlock-to-115/PROMPTS.md)
 - 推荐搭配支持技能和工作流调度的智能体工作台使用，例如腾讯 WorkBuddy 或兼容 Codex Skill 工作流的客户端。
+- 如果你已经接入 MP 原生 Agent / MCP，更推荐直接调用 `AgentResourceOfficer` 的统一 API / Agent Tool，而不是让智能体自己拼影巢或夸克接口。
 
 ---
 
@@ -136,12 +183,13 @@
 
 - 用飞书长连接接收消息
 - 在飞书里直接发命令
-- 桥接到 MoviePilot 和 115 / STRM 流程
+- 桥接到 MoviePilot、115 / STRM 和夸克转存流程
 
 适合场景：
 
 - 想在飞书里远程操作 MoviePilot
 - 想执行 `刮削`、`生成STRM`、`全量STRM`、`版本`
+- 想直接在飞书里发 `夸克转存` 命令
 - 不想折腾公网 webhook 和 HTTPS 回调
 
 ---
@@ -211,7 +259,31 @@
 
 ---
 
-## 5. 极影视刷新（自用魔改）
+## 5. 夸克分享转存
+
+插件名：
+
+- `QuarkShareSaver`
+
+作用：
+
+- 把夸克分享链接直接转存到自己的夸克网盘目录
+- 目录不存在时自动创建
+- 提供稳定 API 给智能体和飞书桥接调用
+
+适合场景：
+
+- 智能体拿到夸克分享链接后，需要一个稳定落盘入口
+- 想把“搜索”和“转存”拆开，避免智能体自己硬拼夸克接口
+- 想在飞书里直接发命令完成夸克转存
+
+详细说明：
+
+- [QuarkShareSaver/README.md](./QuarkShareSaver/README.md)
+
+---
+
+## 6. 极影视刷新（自用魔改）
 
 插件名：
 
