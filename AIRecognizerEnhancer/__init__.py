@@ -46,7 +46,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.8"
+    plugin_version = "0.1.10"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -534,6 +534,41 @@ class AIRecognizerEnhancer(_PluginBase):
             "priority_samples": actionable[:top],
         }
 
+    def _render_sample_brief(self, samples: List[Dict[str, Any]], top: int = 5) -> str:
+        summaries = [self._summarize_sample(sample) for sample in samples[: max(1, min(top, 20))]]
+        if not summaries:
+            return "当前没有失败样本。"
+        lines = [f"失败样本 {len(samples)} 条，展示前 {len(summaries)} 条："]
+        for summary in summaries:
+            label = self._sample_display_name(summary)
+            confidence = round(self._safe_float(summary.get("guess_confidence"), 0.0), 2)
+            can_suggest = "可建议" if summary.get("can_auto_suggest") else "需人工"
+            lines.append(f"{summary.get('sample_index')}. {label} | 置信度 {confidence} | {can_suggest}")
+        lines.append("下一步：可直接调用批量建议或批量复查接口。")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _render_batch_results_brief(
+        action_name: str,
+        requested_count: int,
+        success_count: int,
+        failed_count: int,
+        results: List[Dict[str, Any]],
+    ) -> str:
+        lines = [f"{action_name}：共处理 {requested_count} 条，成功 {success_count}，失败 {failed_count}。"]
+        for item in results[:10]:
+            idx = item.get("sample_index")
+            if item.get("success"):
+                label = (
+                    ((item.get("source_sample") or {}).get("title"))
+                    or ((item.get("target") or {}).get("name"))
+                    or "样本"
+                )
+                lines.append(f"{idx}. 成功 | {label}")
+            else:
+                lines.append(f"{idx}. 失败 | {item.get('message', '未知错误')}")
+        return "\n".join(lines)
+
     def _build_body_from_sample(self, body: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]:
         body = dict(body or {})
         title = str(body.get("title") or "").strip()
@@ -972,6 +1007,13 @@ AI 识别增强结果：
                 "requested_count": len(selected_indexes),
                 "success_count": success_count,
                 "failed_count": len(selected_indexes) - success_count,
+                "brief": self._render_batch_results_brief(
+                    action_name="批量建议",
+                    requested_count=len(selected_indexes),
+                    success_count=success_count,
+                    failed_count=len(selected_indexes) - success_count,
+                    results=results,
+                ),
                 "results": results,
             },
         }
@@ -1078,6 +1120,13 @@ AI 识别增强结果：
                 "failed_count": len(selected_indexes) - success_count,
                 "sample_removed_count": int((removal_result or {}).get("removed_count") or 0),
                 "sample_removal_result": removal_result,
+                "brief": self._render_batch_results_brief(
+                    action_name="批量写入",
+                    requested_count=len(selected_indexes),
+                    success_count=success_count,
+                    failed_count=len(selected_indexes) - success_count,
+                    results=results,
+                ),
                 "results": results,
             },
         }
@@ -1156,10 +1205,15 @@ AI 识别增强结果：
 
         result = self._recognize(title=title, path=path, record_failed_sample=False)
         target = self._build_target(body, result=result)
+        invoke_error = ""
         try:
             bundle = self._invoke_identifier_llm(title=title, path=path, result=result, target=target)
         except Exception as exc:
-            return {"success": False, "message": f"识别词建议生成失败: {exc}"}
+            bundle = IdentifierSuggestionBundle(
+                summary="识别词建议模型暂不可用，已自动回退到精确规则兜底。",
+                suggestions=[],
+            )
+            invoke_error = str(exc)
 
         cleaned: List[Dict[str, Any]] = []
         for item in bundle.suggestions:
@@ -1187,12 +1241,14 @@ AI 识别增强结果：
         if not cleaned:
             fallback = self._build_exact_identifier_fallback(title=title, target=target)
             if fallback:
+                if invoke_error:
+                    fallback["reason"] = f"{fallback.get('reason', '')} 当前识别词建议模型不可用，已自动切到精确规则兜底。".strip()
                 cleaned.append(fallback)
 
         if not cleaned:
             return {
                 "success": False,
-                "message": "没有生成可直接使用的识别词规则",
+                "message": f"识别词建议生成失败: {invoke_error}" if invoke_error else "没有生成可直接使用的识别词规则",
                 "data": {
                     "summary": bundle.summary,
                     "target": target,
@@ -1405,6 +1461,21 @@ AI 识别增强结果：
             "data": insights,
         }
 
+    async def api_sample_brief(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        limit = self._safe_int(request.query_params.get("limit"), 5)
+        limit = max(1, min(limit, 20))
+        samples = self._inject_sample_indices(self._read_failed_samples(limit=100))
+        return {
+            "success": True,
+            "data": {
+                "count": len(samples),
+                "text": self._render_sample_brief(samples, top=limit),
+            },
+        }
+
     async def api_suggest_identifiers(self, request: Request):
         body = await request.json()
         ok, message = self._check_api_access(request, body)
@@ -1544,6 +1615,12 @@ AI 识别增强结果：
                 "endpoint": self.api_sample_insights,
                 "methods": ["GET"],
                 "summary": "汇总失败样本原因、重复问题和优先处理样本",
+            },
+            {
+                "path": "/sample_brief",
+                "endpoint": self.api_sample_brief,
+                "methods": ["GET"],
+                "summary": "返回适合智能体低 token 消费的失败样本精简摘要",
             },
             {
                 "path": "/suggest_identifiers",
