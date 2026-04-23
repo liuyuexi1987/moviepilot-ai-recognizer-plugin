@@ -46,7 +46,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.5"
+    plugin_version = "0.1.6"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -355,6 +355,10 @@ class AIRecognizerEnhancer(_PluginBase):
             "inferred_target": inferred_target,
             "can_auto_suggest": bool(inferred_target["name"]),
         }
+
+    def _target_from_sample(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        summary = self._summarize_sample(sample)
+        return summary.get("inferred_target") or {}
 
     @staticmethod
     def _normalize_reason_tag(reason: Any) -> str:
@@ -698,12 +702,13 @@ AI 识别增强结果：
             return ""
         return f"#{text.lstrip('#').strip()}"
 
-    def _preview_identifier_rule(self, title: str, rule: str, target: Dict[str, Any]) -> Dict[str, Any]:
-        prepared_title, apply_words = WordsMatcher().prepare(title, custom_words=[rule])
-        meta = MetaInfo(title=title, custom_words=[rule])
+    def _preview_custom_words(self, title: str, custom_words: List[str], target: Dict[str, Any]) -> Dict[str, Any]:
+        prepared_title, apply_words = WordsMatcher().prepare(title, custom_words=custom_words)
+        meta = MetaInfo(title=title, custom_words=custom_words)
         preview = {
             "prepared_title": prepared_title,
-            "applied": rule in (apply_words or []),
+            "applied_words": apply_words or [],
+            "applied": bool(apply_words),
             "name": getattr(meta, "name", "") or "",
             "year": getattr(meta, "year", "") or "",
             "media_type": self._normalize_media_type(getattr(meta, "type", None)),
@@ -724,6 +729,72 @@ AI 识别增强结果：
                 matched = matched and (preview["episode"] == target["episode"])
             preview["matched_target"] = matched
         return preview
+
+    def _preview_identifier_rule(self, title: str, rule: str, target: Dict[str, Any]) -> Dict[str, Any]:
+        preview = self._preview_custom_words(title=title, custom_words=[rule], target=target)
+        preview["applied"] = rule in (preview.get("applied_words") or [])
+        return preview
+
+    def _preview_current_identifiers(self, title: str, target: Dict[str, Any]) -> Dict[str, Any]:
+        custom_words = self._get_custom_identifiers()
+        preview = self._preview_custom_words(title=title, custom_words=custom_words, target=target)
+        preview["custom_identifier_count"] = len(custom_words)
+        preview["applied_count"] = len(preview.get("applied_words") or [])
+        return preview
+
+    @staticmethod
+    def _match_recognize_result_to_target(result: Dict[str, Any], target: Dict[str, Any]) -> bool:
+        if not target:
+            return bool(result.get("success"))
+        guess = result.get("guess") or {}
+        matched = True
+        if target.get("name"):
+            matched = matched and (str(guess.get("name") or "").strip().lower() == str(target.get("name") or "").strip().lower())
+        if target.get("year"):
+            matched = matched and (str(guess.get("year") or "") == str(target.get("year") or ""))
+        if target.get("media_type") and target.get("media_type") != "unknown":
+            matched = matched and (str(guess.get("media_type") or "unknown") == str(target.get("media_type") or "unknown"))
+        if target.get("season"):
+            matched = matched and (int(guess.get("season") or 0) == int(target.get("season") or 0))
+        if target.get("episode"):
+            matched = matched and (int(guess.get("episode") or 0) == int(target.get("episode") or 0))
+        return bool(result.get("success")) and matched
+
+    def _replay_failed_sample(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        body = dict(body or {})
+        sample_index, sample, message = self._resolve_failed_sample(
+            body.get("sample_index"),
+            limit=1000,
+        )
+        if not sample:
+            return {"success": False, "message": message}
+        title = str(sample.get("title") or "").strip()
+        path = str(sample.get("path") or "").strip()
+        target = self._target_from_sample(sample)
+        identifier_preview = self._preview_current_identifiers(title=title, target=target)
+        recognize_result = self._recognize(title=title, path=path, record_failed_sample=False)
+        resolved_by_identifiers = bool(identifier_preview.get("applied")) and bool(identifier_preview.get("matched_target"))
+        resolved_by_recognizer = self._match_recognize_result_to_target(recognize_result, target)
+        resolved = resolved_by_identifiers or resolved_by_recognizer
+        removal_result = None
+        if resolved and bool(body.get("remove_if_resolved")):
+            removal_result = self._remove_failed_sample(sample_index, limit=1000)
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "source_sample_index": sample_index,
+                "source_sample": sample,
+                "target": target,
+                "identifier_preview": identifier_preview,
+                "recognize_result": recognize_result,
+                "resolved_by_identifiers": resolved_by_identifiers,
+                "resolved_by_recognizer": resolved_by_recognizer,
+                "resolved": resolved,
+                "sample_removed": bool(removal_result and removal_result.get("removed")),
+                "sample_removal_result": removal_result,
+            },
+        }
 
     def _build_exact_identifier_fallback(self, title: str, target: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         target_name = str((target or {}).get("name") or "").strip()
@@ -797,7 +868,7 @@ AI 识别增强结果：
         if not title:
             return {"success": False, "message": "标题为空"}
 
-        result = self._recognize(title=title, path=path)
+        result = self._recognize(title=title, path=path, record_failed_sample=False)
         target = self._build_target(body, result=result)
         try:
             bundle = self._invoke_identifier_llm(title=title, path=path, result=result, target=target)
@@ -902,7 +973,7 @@ AI 识别增强结果：
                 logger.warning(f"[AI识别增强] 二次校验失败: {exc}")
             return None
 
-    def _recognize(self, title: str, path: str = "") -> Dict[str, Any]:
+    def _recognize(self, title: str, path: str = "", record_failed_sample: bool = True) -> Dict[str, Any]:
         title = str(title or "").strip()
         path = str(path or "").strip()
         if not title and path:
@@ -912,19 +983,20 @@ AI 识别增强结果：
         try:
             guess = self._invoke_llm(title, path)
         except Exception as exc:
-            self._record_failed_sample(
-                {
-                    "title": title,
-                    "path": path,
-                    "meta_hint": self._build_meta_hint(path or title),
-                    "reason": f"llm_error:{exc}",
-                }
-            )
+            if record_failed_sample:
+                self._record_failed_sample(
+                    {
+                        "title": title,
+                        "path": path,
+                        "meta_hint": self._build_meta_hint(path or title),
+                        "reason": f"llm_error:{exc}",
+                    }
+                )
             return {"success": False, "message": f"LLM 调用失败: {exc}"}
 
         verified = self._verify_guess(title, path, guess)
         passed = bool(guess.name and guess.confidence >= self._confidence_threshold)
-        if not passed:
+        if not passed and record_failed_sample:
             self._record_failed_sample(
                 {
                     "title": title,
@@ -1098,6 +1170,15 @@ AI 识别增强结果：
             "data": result,
         }
 
+    async def api_replay_failed_sample(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        return self._replay_failed_sample(body)
+
     async def api_suggest_identifiers_from_sample(self, request: Request):
         body = await request.json()
         body["use_latest_sample"] = True if body.get("use_latest_sample") is None else body.get("use_latest_sample")
@@ -1213,6 +1294,12 @@ AI 识别增强结果：
                 "endpoint": self.api_remove_failed_sample,
                 "methods": ["POST"],
                 "summary": "按索引移除单条失败样本",
+            },
+            {
+                "path": "/replay_failed_sample",
+                "endpoint": self.api_replay_failed_sample,
+                "methods": ["POST"],
+                "summary": "按当前识别词和当前识别器复查某条失败样本，并可在确认修复后自动出队",
             },
             {
                 "path": "/apply_suggested_identifier",
