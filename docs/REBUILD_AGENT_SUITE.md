@@ -114,7 +114,7 @@
 - `FeishuCommandBridgeLong` 保持线上可运行，默认继续走 `legacy` 快路径
 - `FeishuCommandBridgeLong` 已支持切换到 `auto`，把智能入口委托给 `Agent资源官`
 - 运行环境已完成双链路验证：`legacy` 日常可用，`auto` 可接手统一资源工作流
-- `AIRecognizerEnhancer` 已进入 `0.1.1` 阶段，可直接复用 MoviePilot 当前 LLM 配置，在 `NameRecognize` 阶段做本地结构化兜底，并支持把失败样本转成自定义识别词建议
+- `AIRecognizerEnhancer` 已进入 `0.1.2` 阶段，可直接复用 MoviePilot 当前 LLM 配置，在 `NameRecognize` 阶段做本地结构化兜底，并支持把失败样本直接转成自定义识别词建议和写入动作
 
 下一步重点：
 

@@ -15,11 +15,12 @@
     "name": "AI识别增强",
     "description": "直接复用 MoviePilot 当前 LLM 配置，在原生识别失败后做本地结构化识别兜底，并交回原生链路继续二次识别。",
     "labels": "AI,识别,LLM,本地兜底,MoviePilot,TMDB",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "icon": "airecoginzerforwarder.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.2": "新增按失败样本直接生成建议和直接写入规则的快捷 API，进一步缩短从失败样本到 CustomIdentifiers 的闭环。",
       "0.1.1": "新增失败样本查看、自定义识别词建议和一键追加写入能力，让 AI 识别增强开始和 MoviePilot 原生 CustomIdentifiers 闭环联动。",
       "0.1.0": "首个可用版本，复用 MoviePilot 当前 LLM 配置，在原生识别失败后通过 Chain NameRecognize 做本地结构化兜底。"
     }
