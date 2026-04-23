@@ -12,6 +12,19 @@
       "2.0.1": "修正版本展示格式，并保持 AI Gateway 对接与识别增强模式。"
     }
   },
+  "AIRecognizerEnhancer": {
+    "name": "AI识别增强",
+    "description": "直接复用 MoviePilot 当前 LLM 配置，在原生识别失败后做本地结构化识别兜底，并交回原生链路继续二次识别。",
+    "labels": "AI,识别,LLM,本地兜底,MoviePilot,TMDB",
+    "version": "0.1.0",
+    "icon": "airecoginzerforwarder.png",
+    "author": "liuyuexi1987",
+    "level": 1,
+    "v2": true,
+    "history": {
+      "0.1.0": "首个可用版本，复用 MoviePilot 当前 LLM 配置，在原生识别失败后通过 Chain NameRecognize 做本地结构化兜底。"
+    }
+  },
   "AgentResourceOfficer": {
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",

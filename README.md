@@ -31,7 +31,7 @@
   - 当前默认保留 `legacy` 直连快路径，适合继续日常飞书使用
   - 需要时也可以切换为 `auto`，把智能入口整条委托给 `Agent资源官`
 
-`AI识别增强` 仍在继续重做中，目标是替代旧版 AI Gateway 转发链路。
+`AI识别增强` 已进入第一版可用阶段，方向是逐步替代旧版 AI Gateway 转发链路。
 
 ## 插件分工
 
@@ -45,11 +45,12 @@
 6. `QuarkShareSaver`
 7. `ZspaceMediaFreshMix`
 
-另外还有一个正在重写中的目录：
+另外还有一个已经进入首版可用阶段的新目录：
 
 - `AIRecognizerEnhancer`
   - 这是新识别线的固定落点
-  - 目前还是骨架，不作为当前安装主入口
+  - 当前已经能接住 `NameRecognize` 并回写结构化识别结果
+  - 仍在继续打磨，不直接删除旧 `AIRecoginzerForwarder`
 
 它们各自更像这样：
 
@@ -170,6 +171,32 @@
 
 - [AIRecoginzerForwarder/README.md](./AIRecoginzerForwarder/README.md)
 - 配套网关仓库：[moviepilot-ai-recognizer-gateway](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway)
+
+---
+
+## 1.1 AI 识别增强
+
+插件名：
+
+- `AIRecognizerEnhancer`
+
+作用：
+
+- MoviePilot 原生识别失败时，在本机直接复用当前已启用的 LLM 配置
+- 结构化推断作品名、年份、类型、季集
+- 把结果回写给 MoviePilot，继续原生二次识别
+
+适合场景：
+
+- 不想再维护额外 AI Gateway
+- 想先把 AI 识别增强收口到 MP 容器内
+- 想逐步替代旧版外部回调链路
+
+当前状态：
+
+- 第一版已可用
+- 已提供健康检查和手动识别测试 API
+- 后续继续补失败样本分析与自定义识别词建议
 
 ---
 
