@@ -46,7 +46,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.7"
+    plugin_version = "0.1.8"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -356,6 +356,30 @@ class AIRecognizerEnhancer(_PluginBase):
         row = dict(samples[index] or {})
         row["sample_index"] = index
         return index, row, ""
+
+    def _select_failed_sample_indexes(
+        self,
+        sample_indexes: Optional[List[Any]] = None,
+        limit: int = 10,
+        pool_limit: int = 200,
+    ) -> Tuple[List[int], List[Dict[str, Any]], str]:
+        current_samples = self._inject_sample_indices(self._read_failed_samples(limit=max(1, min(pool_limit, 1000))))
+        if not current_samples:
+            return [], [], "暂无失败样本"
+        if isinstance(sample_indexes, list) and sample_indexes:
+            selected_indexes: List[int] = []
+            seen = set()
+            for raw in sample_indexes:
+                idx = self._safe_int(raw, -1)
+                if idx < 0 or idx >= len(current_samples) or idx in seen:
+                    continue
+                seen.add(idx)
+                selected_indexes.append(idx)
+        else:
+            selected_indexes = [int(sample.get("sample_index", 0)) for sample in current_samples[: max(1, min(limit, 50))]]
+        if not selected_indexes:
+            return [], current_samples, "没有可处理的有效样本索引"
+        return selected_indexes, current_samples, ""
 
     def _inject_sample_indices(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         indexed: List[Dict[str, Any]] = []
@@ -833,24 +857,14 @@ AI 识别增强结果：
 
     def _replay_failed_samples(self, body: Dict[str, Any]) -> Dict[str, Any]:
         body = dict(body or {})
-        requested_indexes = body.get("sample_indexes")
         limit = max(1, min(self._safe_int(body.get("limit"), 10), 50))
-        current_samples = self._inject_sample_indices(self._read_failed_samples(limit=200))
-        if not current_samples:
-            return {"success": False, "message": "暂无失败样本"}
-        if isinstance(requested_indexes, list) and requested_indexes:
-            selected_indexes = []
-            seen = set()
-            for raw in requested_indexes:
-                idx = self._safe_int(raw, -1)
-                if idx < 0 or idx >= len(current_samples) or idx in seen:
-                    continue
-                seen.add(idx)
-                selected_indexes.append(idx)
-        else:
-            selected_indexes = [sample.get("sample_index", 0) for sample in current_samples[:limit]]
+        selected_indexes, _, message = self._select_failed_sample_indexes(
+            sample_indexes=body.get("sample_indexes"),
+            limit=limit,
+            pool_limit=200,
+        )
         if not selected_indexes:
-            return {"success": False, "message": "没有可复查的有效样本索引"}
+            return {"success": False, "message": message}
 
         replay_results: List[Dict[str, Any]] = []
         resolved_indexes: List[int] = []
@@ -907,6 +921,164 @@ AI 识别增强结果：
                 "sample_removed_count": int((removal_result or {}).get("removed_count") or 0),
                 "sample_removal_result": removal_result,
                 "results": replay_results,
+            },
+        }
+
+    def _suggest_identifiers_for_failed_samples(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        body = dict(body or {})
+        limit = max(1, min(self._safe_int(body.get("limit"), 5), 20))
+        selected_indexes, _, message = self._select_failed_sample_indexes(
+            sample_indexes=body.get("sample_indexes"),
+            limit=limit,
+            pool_limit=200,
+        )
+        if not selected_indexes:
+            return {"success": False, "message": message}
+
+        results: List[Dict[str, Any]] = []
+        success_count = 0
+        for sample_index in selected_indexes:
+            suggest_body = dict(body)
+            suggest_body.pop("sample_indexes", None)
+            suggest_body["sample_index"] = sample_index
+            suggest_body["use_latest_sample"] = False
+            suggested = self._suggest_identifiers(suggest_body)
+            if suggested.get("success"):
+                success_count += 1
+                data = suggested.get("data") or {}
+                results.append(
+                    {
+                        "sample_index": sample_index,
+                        "success": True,
+                        "summary": data.get("summary"),
+                        "source_sample": data.get("source_sample"),
+                        "target": data.get("target"),
+                        "suggestions": data.get("suggestions") or [],
+                    }
+                )
+            else:
+                results.append(
+                    {
+                        "sample_index": sample_index,
+                        "success": False,
+                        "message": suggested.get("message", "建议生成失败"),
+                        "data": suggested.get("data"),
+                    }
+                )
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "requested_count": len(selected_indexes),
+                "success_count": success_count,
+                "failed_count": len(selected_indexes) - success_count,
+                "results": results,
+            },
+        }
+
+    def _apply_suggested_identifier_internal(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        body = dict(body or {})
+        if body.get("title") is None and body.get("path") is None:
+            body["use_latest_sample"] = True if body.get("use_latest_sample") is None else body.get("use_latest_sample")
+        suggested = self._suggest_identifiers(body)
+        if not suggested.get("success"):
+            return suggested
+        data = suggested.get("data") or {}
+        suggestions = data.get("suggestions") or []
+        suggestion_index = self._safe_int(body.get("suggestion_index"), 0)
+        if suggestion_index < 0:
+            suggestion_index = 0
+        if suggestion_index >= len(suggestions):
+            return {"success": False, "message": f"建议索引超出范围，当前共有 {len(suggestions)} 条"}
+        chosen = suggestions[suggestion_index]
+        applied = self._append_custom_identifiers(chosen.get("lines") or [])
+        should_remove_sample = bool(
+            self._auto_remove_applied_sample if body.get("remove_sample") is None else body.get("remove_sample")
+        )
+        removal_result = None
+        source_sample = data.get("source_sample") or {}
+        if should_remove_sample and source_sample.get("sample_index") is not None:
+            removal_result = self._remove_failed_sample(source_sample.get("sample_index"), limit=1000)
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "chosen_suggestion": chosen,
+                "apply_result": applied,
+                "source_sample_index": source_sample.get("sample_index"),
+                "source_sample": source_sample,
+                "sample_removed": bool(removal_result and removal_result.get("removed")),
+                "sample_removal_result": removal_result,
+                "target": data.get("target"),
+            },
+        }
+
+    def _apply_suggested_identifiers_for_failed_samples(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        body = dict(body or {})
+        limit = max(1, min(self._safe_int(body.get("limit"), 5), 20))
+        selected_indexes, _, message = self._select_failed_sample_indexes(
+            sample_indexes=body.get("sample_indexes"),
+            limit=limit,
+            pool_limit=200,
+        )
+        if not selected_indexes:
+            return {"success": False, "message": message}
+
+        results: List[Dict[str, Any]] = []
+        success_count = 0
+        removable_indexes: List[int] = []
+        should_remove_samples = bool(
+            self._auto_remove_applied_sample if body.get("remove_sample") is None else body.get("remove_sample")
+        )
+        for sample_index in selected_indexes:
+            apply_body = dict(body)
+            apply_body.pop("sample_indexes", None)
+            apply_body["sample_index"] = sample_index
+            apply_body["use_latest_sample"] = False
+            apply_body["remove_sample"] = False
+            applied = self._apply_suggested_identifier_internal(apply_body)
+            if applied.get("success"):
+                success_count += 1
+                data = applied.get("data") or {}
+                if should_remove_samples:
+                    removable_indexes.append(sample_index)
+                results.append(
+                    {
+                        "sample_index": sample_index,
+                        "success": True,
+                        "source_sample": data.get("source_sample"),
+                        "target": data.get("target"),
+                        "chosen_suggestion": data.get("chosen_suggestion"),
+                        "apply_result": data.get("apply_result"),
+                        "sample_removed": False,
+                    }
+                )
+            else:
+                results.append(
+                    {
+                        "sample_index": sample_index,
+                        "success": False,
+                        "message": applied.get("message", "写入失败"),
+                        "data": applied.get("data"),
+                    }
+                )
+        removal_result = None
+        if should_remove_samples and removable_indexes:
+            removal_result = self._remove_failed_samples(removable_indexes, limit=1000)
+            removed_index_set = set((removal_result or {}).get("removed_sample_indexes") or [])
+            for item in results:
+                if item.get("success"):
+                    item["sample_removed"] = item.get("sample_index") in removed_index_set
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "requested_count": len(selected_indexes),
+                "success_count": success_count,
+                "failed_count": len(selected_indexes) - success_count,
+                "sample_removed_count": int((removal_result or {}).get("removed_count") or 0),
+                "sample_removal_result": removal_result,
+                "results": results,
             },
         }
 
@@ -1314,6 +1486,15 @@ AI 识别增强结果：
             body["use_latest_sample"] = True
         return self._suggest_identifiers(body)
 
+    async def api_suggest_identifiers_for_failed_samples(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        return self._suggest_identifiers_for_failed_samples(body)
+
     async def api_apply_suggested_identifier(self, request: Request):
         body = await request.json()
         ok, message = self._check_api_access(request, body)
@@ -1321,40 +1502,16 @@ AI 识别增强结果：
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
-        if body.get("title") is None and body.get("path") is None:
-            body["use_latest_sample"] = True if body.get("use_latest_sample") is None else body.get("use_latest_sample")
-        suggested = self._suggest_identifiers(body)
-        if not suggested.get("success"):
-            return suggested
-        data = suggested.get("data") or {}
-        suggestions = data.get("suggestions") or []
-        suggestion_index = self._safe_int(body.get("suggestion_index"), 0)
-        if suggestion_index < 0:
-            suggestion_index = 0
-        if suggestion_index >= len(suggestions):
-            return {"success": False, "message": f"建议索引超出范围，当前共有 {len(suggestions)} 条"}
-        chosen = suggestions[suggestion_index]
-        applied = self._append_custom_identifiers(chosen.get("lines") or [])
-        should_remove_sample = bool(
-            self._auto_remove_applied_sample if body.get("remove_sample") is None else body.get("remove_sample")
-        )
-        removal_result = None
-        source_sample = data.get("source_sample") or {}
-        if should_remove_sample and source_sample.get("sample_index") is not None:
-            removal_result = self._remove_failed_sample(source_sample.get("sample_index"), limit=1000)
-        return {
-            "success": True,
-            "message": "success",
-            "data": {
-                "chosen_suggestion": chosen,
-                "apply_result": applied,
-                "source_sample_index": source_sample.get("sample_index"),
-                "source_sample": source_sample,
-                "sample_removed": bool(removal_result and removal_result.get("removed")),
-                "sample_removal_result": removal_result,
-                "target": data.get("target"),
-            },
-        }
+        return self._apply_suggested_identifier_internal(body)
+
+    async def api_apply_suggested_identifiers_for_failed_samples(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        return self._apply_suggested_identifiers_for_failed_samples(body)
 
     def get_api(self) -> List[Dict[str, Any]]:
         return [
@@ -1401,6 +1558,12 @@ AI 识别增强结果：
                 "summary": "直接基于最近失败样本或指定样本生成自定义识别词建议",
             },
             {
+                "path": "/suggest_identifiers_for_failed_samples",
+                "endpoint": self.api_suggest_identifiers_for_failed_samples,
+                "methods": ["POST"],
+                "summary": "批量为失败样本生成自定义识别词建议",
+            },
+            {
                 "path": "/apply_identifiers",
                 "endpoint": self.api_apply_identifiers,
                 "methods": ["POST"],
@@ -1435,6 +1598,12 @@ AI 识别增强结果：
                 "endpoint": self.api_apply_suggested_identifier,
                 "methods": ["POST"],
                 "summary": "直接把最近失败样本或指定样本生成的建议规则写入 CustomIdentifiers，并按需移除该样本",
+            },
+            {
+                "path": "/apply_suggested_identifiers_for_failed_samples",
+                "endpoint": self.api_apply_suggested_identifiers_for_failed_samples,
+                "methods": ["POST"],
+                "summary": "批量把失败样本生成的建议规则写入 CustomIdentifiers，并按需移除对应样本",
             },
         ]
 
