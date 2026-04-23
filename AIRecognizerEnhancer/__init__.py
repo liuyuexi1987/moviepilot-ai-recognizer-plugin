@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -9,11 +10,13 @@ from pydantic import BaseModel, Field
 from app.chain.media import MediaChain
 from app.core.config import settings
 from app.core.event import eventmanager
+from app.core.meta.words import WordsMatcher
 from app.core.metainfo import MetaInfo
+from app.db.systemconfig_oper import SystemConfigOper
 from app.helper.llm import LLMHelper
 from app.log import logger
 from app.plugins import _PluginBase
-from app.schemas.types import ChainEventType, MediaType
+from app.schemas.types import ChainEventType, MediaType, SystemConfigKey
 
 
 class AIRecognitionGuess(BaseModel):
@@ -26,11 +29,23 @@ class AIRecognitionGuess(BaseModel):
     reason: str = Field(default="", description="简短说明为什么这样判断")
 
 
+class IdentifierSuggestion(BaseModel):
+    comment: str = Field(default="", description="可选注释，不带 #")
+    rule: str = Field(default="", description="一条 MoviePilot 自定义识别词规则")
+    confidence: float = Field(default=0.0, description="0 到 1 之间的置信度")
+    reason: str = Field(default="", description="为什么建议这条规则")
+
+
+class IdentifierSuggestionBundle(BaseModel):
+    summary: str = Field(default="", description="整体建议摘要")
+    suggestions: List[IdentifierSuggestion] = Field(default_factory=list, description="建议规则列表")
+
+
 class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.0"
+    plugin_version = "0.1.1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -43,6 +58,7 @@ class AIRecognizerEnhancer(_PluginBase):
     _request_timeout = 25
     _max_retries = 2
     _save_failed_samples = True
+    _systemconfig: Optional[SystemConfigOper] = None
 
     def init_plugin(self, config: Optional[Dict[str, Any]] = None):
         config = config or {}
@@ -52,6 +68,7 @@ class AIRecognizerEnhancer(_PluginBase):
         self._request_timeout = self._safe_int(config.get("request_timeout"), 25)
         self._max_retries = max(1, min(5, self._safe_int(config.get("max_retries"), 2)))
         self._save_failed_samples = bool(config.get("save_failed_samples", True))
+        self._systemconfig = SystemConfigOper()
         self._register_events()
 
     def get_state(self) -> bool:
@@ -199,6 +216,29 @@ class AIRecognizerEnhancer(_PluginBase):
         except Exception as exc:
             logger.warning(f"[AI识别增强] 写入失败样本失败: {exc}")
 
+    def _read_failed_samples(self, limit: int = 20) -> List[Dict[str, Any]]:
+        sample_path = self.get_data_path() / "failed_samples.jsonl"
+        if not sample_path.exists():
+            return []
+        rows: List[Dict[str, Any]] = []
+        try:
+            with sample_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rows.append(json.loads(line))
+                    except Exception:
+                        continue
+        except Exception as exc:
+            logger.warning(f"[AI识别增强] 读取失败样本失败: {exc}")
+            return []
+        if limit > 0:
+            rows = rows[-limit:]
+        rows.reverse()
+        return rows
+
     def _build_prompt(self) -> ChatPromptTemplate:
         return ChatPromptTemplate.from_messages(
             [
@@ -234,6 +274,54 @@ MoviePilot 当前基础解析提示：
             ]
         )
 
+    def _build_identifier_prompt(self) -> ChatPromptTemplate:
+        return ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """你是 MoviePilot 自定义识别词规则助手。
+
+你的任务是根据错误标题、当前解析结果和目标结果，生成尽量窄作用域、可直接用于 MoviePilot CustomIdentifiers 的规则。
+
+支持格式只有四种：
+1. 屏蔽词
+2. 替换词：被替换词 => 替换词
+3. 集偏移：前定位词 <> 后定位词 >> EP±N
+4. 组合规则：被替换词 => 替换词 && 前定位词 <> 后定位词 >> EP±N
+
+硬性要求：
+1. 运算符两侧必须保留空格： => 、 <> 、 >> 、 &&
+2. 优先生成窄作用域规则，尽量带发布组、年份、季集、分辨率等锚点
+3. 不要生成过宽的裸屏蔽词，比如 1080p、WEB-DL、字幕
+4. 如果需要强制绑 TMDB，可使用 {{[tmdbid=xxx;type=tv/movies;s=1;e=14]}} 这种替换词
+5. comment 不带 #，rule 里不要再包 markdown 或代码块
+6. 如果没有把握，请返回空 suggestions
+""",
+                ),
+                (
+                    "human",
+                    """原始标题：
+{title}
+
+原始路径：
+{path}
+
+MoviePilot 当前基础解析：
+{meta_hint}
+
+AI 识别增强结果：
+{guess}
+
+二次校验到的媒体信息摘要：
+{verified_summary}
+
+希望修正成的目标结果：
+{target}
+""",
+                ),
+            ]
+        )
+
     def _invoke_llm(self, title: str, path: str) -> AIRecognitionGuess:
         raw_text = path or title
         meta_hint = self._build_meta_hint(raw_text)
@@ -252,6 +340,273 @@ MoviePilot 当前基础解析提示：
             config={"configurable": {"timeout": self._request_timeout}},
         )
         return self._normalize_guess(result)
+
+    @staticmethod
+    def _normalize_media_type(value: Any) -> str:
+        if value == MediaType.MOVIE:
+            return "movie"
+        if value == MediaType.TV:
+            return "tv"
+        text = str(value or "").strip().lower()
+        if text in {"movie", "movies", "电影"}:
+            return "movie"
+        if text in {"tv", "电视剧", "剧集"}:
+            return "tv"
+        return "unknown"
+
+    def _build_target(self, body: Dict[str, Any], result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        body = body or {}
+        result = result or {}
+        guess = result.get("guess") or {}
+        verified = result.get("verified_media_info") or {}
+        verified_type = self._normalize_media_type(verified.get("type"))
+        target = {
+            "name": str(body.get("desired_name") or verified.get("title") or guess.get("name") or "").strip(),
+            "year": str(body.get("desired_year") or verified.get("year") or guess.get("year") or "").strip(),
+            "media_type": self._normalize_media_type(
+                body.get("desired_media_type") or verified_type or guess.get("media_type")
+            ),
+            "season": self._safe_int(
+                body.get("desired_season"),
+                self._safe_int(guess.get("season"), 0),
+            ),
+            "episode": self._safe_int(
+                body.get("desired_episode"),
+                self._safe_int(guess.get("episode"), 0),
+            ),
+            "tmdb_id": self._safe_int(body.get("desired_tmdb_id") or verified.get("tmdb_id"), 0),
+        }
+        if len(target["year"]) != 4 or not target["year"].isdigit():
+            target["year"] = ""
+        return target
+
+    @staticmethod
+    def _compact_verified_summary(verified: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        verified = verified or {}
+        return {
+            "title": verified.get("title"),
+            "year": verified.get("year"),
+            "type": verified.get("type"),
+            "tmdb_id": verified.get("tmdb_id"),
+            "title_year": verified.get("title_year"),
+            "season_years": verified.get("season_years"),
+            "seasons": verified.get("seasons"),
+            "names": (verified.get("names") or [])[:8],
+        }
+
+    @staticmethod
+    def _normalize_identifier_line(value: Any) -> str:
+        return " ".join(str(value or "").strip().split())
+
+    def _validate_identifier_rule(self, rule: str) -> bool:
+        rule = self._normalize_identifier_line(rule)
+        if not rule or rule.startswith("#"):
+            return False
+        if " => " in rule and " && " in rule and " >> " in rule and " <> " in rule:
+            return True
+        if " => " in rule:
+            return True
+        if " >> " in rule and " <> " in rule:
+            return True
+        return len(rule) >= 4
+
+    def _enrich_identifier_rule(self, rule: str, target: Dict[str, Any]) -> str:
+        rule = self._normalize_identifier_line(rule)
+        target_name = str((target or {}).get("name") or "").strip()
+        if not target_name or " => " not in rule:
+            return rule
+        left, right = rule.split(" => ", 1)
+        suffix = ""
+        replace_part = right
+        if " && " in right:
+            replace_part, extra = right.split(" && ", 1)
+            suffix = f" && {extra}"
+        if replace_part.startswith("{["):
+            replace_part = f"{target_name}{replace_part}"
+        return f"{left} => {replace_part}{suffix}"
+
+    @staticmethod
+    def _clean_comment_line(comment: str) -> str:
+        text = str(comment or "").strip()
+        if not text:
+            return ""
+        return f"#{text.lstrip('#').strip()}"
+
+    def _preview_identifier_rule(self, title: str, rule: str, target: Dict[str, Any]) -> Dict[str, Any]:
+        prepared_title, apply_words = WordsMatcher().prepare(title, custom_words=[rule])
+        meta = MetaInfo(title=title, custom_words=[rule])
+        preview = {
+            "prepared_title": prepared_title,
+            "applied": rule in (apply_words or []),
+            "name": getattr(meta, "name", "") or "",
+            "year": getattr(meta, "year", "") or "",
+            "media_type": self._normalize_media_type(getattr(meta, "type", None)),
+            "season": getattr(meta, "begin_season", None) or 0,
+            "episode": getattr(meta, "begin_episode", None) or 0,
+        }
+        if target:
+            matched = True
+            if target.get("name"):
+                matched = matched and (preview["name"].strip().lower() == str(target["name"]).strip().lower())
+            if target.get("year"):
+                matched = matched and (preview["year"] == target["year"])
+            if target.get("media_type") and target.get("media_type") != "unknown":
+                matched = matched and (preview["media_type"] == target["media_type"])
+            if target.get("season"):
+                matched = matched and (preview["season"] == target["season"])
+            if target.get("episode"):
+                matched = matched and (preview["episode"] == target["episode"])
+            preview["matched_target"] = matched
+        return preview
+
+    def _build_exact_identifier_fallback(self, title: str, target: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        target_name = str((target or {}).get("name") or "").strip()
+        tmdb_id = self._safe_int((target or {}).get("tmdb_id"), 0)
+        media_type = self._normalize_media_type((target or {}).get("media_type"))
+        if not title or not target_name or not tmdb_id or media_type == "unknown":
+            return None
+        replace = target_name
+        target_year = str((target or {}).get("year") or "").strip()
+        if len(target_year) == 4 and target_year.isdigit():
+            replace += f".{target_year}"
+        replace += f"{{[tmdbid={tmdb_id};type={'tv' if media_type == 'tv' else 'movie'}"
+        if media_type == "tv" and self._safe_int(target.get("season"), 0):
+            replace += f";s={self._safe_int(target.get('season'), 0)}"
+        if media_type == "tv" and self._safe_int(target.get("episode"), 0):
+            replace += f";e={self._safe_int(target.get('episode'), 0)}"
+        replace += "]}"
+        rule = f"{re.escape(title)} => {replace}"
+        preview = self._preview_identifier_rule(title=title, rule=rule, target=target)
+        if not preview.get("applied"):
+            return None
+        return {
+            "comment": "当 AI 建议无法稳定通过本地预演时，使用精确标题绑定规则直接固定到目标 TMDB 与季集",
+            "comment_line": "#当 AI 建议无法稳定通过本地预演时，使用精确标题绑定规则直接固定到目标 TMDB 与季集",
+            "rule": rule,
+            "confidence": 0.95,
+            "reason": "精确匹配当前标题并强制绑定目标 TMDB / 季集，作用域最窄，稳定性最高。",
+            "preview": preview,
+            "lines": [
+                "#当 AI 建议无法稳定通过本地预演时，使用精确标题绑定规则直接固定到目标 TMDB 与季集",
+                rule,
+            ],
+        }
+
+    def _invoke_identifier_llm(
+        self,
+        title: str,
+        path: str,
+        result: Dict[str, Any],
+        target: Dict[str, Any],
+    ) -> IdentifierSuggestionBundle:
+        llm = LLMHelper.get_llm(streaming=False)
+        prompt = self._build_identifier_prompt()
+        chain = (
+            prompt
+            | llm.with_structured_output(IdentifierSuggestionBundle).with_retry(
+                stop_after_attempt=self._max_retries
+            )
+        )
+        bundle: IdentifierSuggestionBundle = chain.invoke(
+            {
+                "title": title,
+                "path": path,
+                "meta_hint": self._build_meta_hint(path or title),
+                "guess": result.get("guess") or {},
+                "verified_summary": self._compact_verified_summary(result.get("verified_media_info")),
+                "target": target,
+            },
+            config={"configurable": {"timeout": self._request_timeout}},
+        )
+        return bundle
+
+    def _suggest_identifiers(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        title = str(body.get("title") or "").strip()
+        path = str(body.get("path") or "").strip()
+        if not title and path:
+            title = Path(path).name
+        if not title:
+            return {"success": False, "message": "标题为空"}
+
+        result = self._recognize(title=title, path=path)
+        target = self._build_target(body, result=result)
+        try:
+            bundle = self._invoke_identifier_llm(title=title, path=path, result=result, target=target)
+        except Exception as exc:
+            return {"success": False, "message": f"识别词建议生成失败: {exc}"}
+
+        cleaned: List[Dict[str, Any]] = []
+        for item in bundle.suggestions:
+            rule = self._enrich_identifier_rule(item.rule, target=target)
+            if not self._validate_identifier_rule(rule):
+                continue
+            comment_line = self._clean_comment_line(item.comment)
+            preview = self._preview_identifier_rule(title=title, rule=rule, target=target)
+            if not preview.get("applied"):
+                continue
+            if target and any(target.values()) and preview.get("matched_target") is False:
+                continue
+            cleaned.append(
+                {
+                    "comment": item.comment.strip(),
+                    "comment_line": comment_line,
+                    "rule": rule,
+                    "confidence": min(1.0, max(0.0, self._safe_float(item.confidence, 0.0))),
+                    "reason": str(item.reason or "").strip(),
+                    "preview": preview,
+                    "lines": [line for line in [comment_line, rule] if line],
+                }
+            )
+
+        if not cleaned:
+            fallback = self._build_exact_identifier_fallback(title=title, target=target)
+            if fallback:
+                cleaned.append(fallback)
+
+        if not cleaned:
+            return {
+                "success": False,
+                "message": "没有生成可直接使用的识别词规则",
+                "data": {
+                    "summary": bundle.summary,
+                    "target": target,
+                    "recognize_result": result,
+                },
+            }
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "summary": bundle.summary,
+                "target": target,
+                "recognize_result": result,
+                "suggestions": cleaned,
+            },
+        }
+
+    def _get_custom_identifiers(self) -> List[str]:
+        if not self._systemconfig:
+            self._systemconfig = SystemConfigOper()
+        return self._systemconfig.get(SystemConfigKey.CustomIdentifiers) or []
+
+    def _append_custom_identifiers(self, lines: List[str]) -> Dict[str, Any]:
+        existing = self._get_custom_identifiers()
+        added: List[str] = []
+        for line in lines:
+            normalized = str(line or "").rstrip()
+            if not normalized:
+                continue
+            if normalized in existing or normalized in added:
+                continue
+            added.append(normalized)
+        if added:
+            merged = existing + added
+            self._systemconfig.set(SystemConfigKey.CustomIdentifiers, merged)
+        return {
+            "added": added,
+            "added_count": len(added),
+            "total_count": len(self._get_custom_identifiers()),
+        }
 
     def _verify_guess(self, title: str, path: str, guess: AIRecognitionGuess) -> Optional[Dict[str, Any]]:
         if not guess.name:
@@ -290,6 +645,7 @@ MoviePilot 当前基础解析提示：
                 {
                     "title": title,
                     "path": path,
+                    "meta_hint": self._build_meta_hint(path or title),
                     "reason": f"llm_error:{exc}",
                 }
             )
@@ -302,7 +658,9 @@ MoviePilot 当前基础解析提示：
                 {
                     "title": title,
                     "path": path,
+                    "meta_hint": self._build_meta_hint(path or title),
                     "guess": guess.model_dump(),
+                    "verified_media_info": self._compact_verified_summary(verified),
                     "reason": "low_confidence_or_empty_name",
                 }
             )
@@ -372,6 +730,45 @@ MoviePilot 当前基础解析提示：
             },
         }
 
+    async def api_failed_samples(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        limit = self._safe_int(request.query_params.get("limit"), 20)
+        limit = max(1, min(limit, 100))
+        samples = self._read_failed_samples(limit=limit)
+        return {
+            "success": True,
+            "data": {
+                "count": len(samples),
+                "samples": samples,
+            },
+        }
+
+    async def api_suggest_identifiers(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        return self._suggest_identifiers(body)
+
+    async def api_apply_identifiers(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        identifiers = body.get("identifiers") or []
+        if not isinstance(identifiers, list):
+            return {"success": False, "message": "identifiers 必须是数组"}
+        result = self._append_custom_identifiers([str(line or "") for line in identifiers])
+        return {
+            "success": True,
+            "message": "success",
+            "data": result,
+        }
+
     def get_api(self) -> List[Dict[str, Any]]:
         return [
             {
@@ -386,10 +783,30 @@ MoviePilot 当前基础解析提示：
                 "methods": ["POST"],
                 "summary": "用当前 LLM 对失败标题做一次本地结构化识别测试",
             },
+            {
+                "path": "/failed_samples",
+                "endpoint": self.api_failed_samples,
+                "methods": ["GET"],
+                "summary": "查看最近保存的低置信度失败样本",
+            },
+            {
+                "path": "/suggest_identifiers",
+                "endpoint": self.api_suggest_identifiers,
+                "methods": ["POST"],
+                "summary": "根据标题和目标结果生成 MoviePilot 自定义识别词建议",
+            },
+            {
+                "path": "/apply_identifiers",
+                "endpoint": self.api_apply_identifiers,
+                "methods": ["POST"],
+                "summary": "将确认后的自定义识别词追加写入系统 CustomIdentifiers",
+            },
         ]
 
     def get_page(self) -> List[dict]:
         llm_ready = bool(getattr(settings, "LLM_API_KEY", None))
+        failed_samples_count = len(self._read_failed_samples(limit=200))
+        custom_identifiers_count = len(self._get_custom_identifiers())
         return [
             {
                 "component": "VCard",
@@ -403,7 +820,10 @@ MoviePilot 当前基础解析提示：
                             f"\nLLM 可用：{'是' if llm_ready else '否'}"
                             f"\n置信度阈值：{self._confidence_threshold}"
                             f"\n请求超时：{self._request_timeout} 秒"
+                            f"\n失败样本：{failed_samples_count} 条"
+                            f"\n系统自定义识别词：{custom_identifiers_count} 条"
                             "\n\n当前会在 Chain NameRecognize 阶段回写 name/year/season/episode，供 MoviePilot 继续原生二次识别。"
+                            "\n并且已经支持把失败样本进一步生成为 CustomIdentifiers 建议，再按需追加写入系统配置。"
                         ),
                     }
                 ],

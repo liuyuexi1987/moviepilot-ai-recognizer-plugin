@@ -18,8 +18,8 @@
 - 用 MP 当前 LLM 结构化判断标题、年份、类型、季集
 - 把识别结果回写到 `name/year/season/episode`
 - 交回 MoviePilot 原生链路继续二次识别
-- 提供 `/health` 与 `/recognize` 两个测试 API
-- 可选保存低置信度样本，便于后续优化提示词或补自定义识别词
+- 提供 `/health`、`/recognize`、`/failed_samples`、`/suggest_identifiers`、`/apply_identifiers` 五个 API
+- 可选保存低置信度样本，并把失败样本继续转成 MoviePilot 原生自定义识别词建议
 
 ## 当前接口
 
@@ -27,6 +27,12 @@
   返回启用状态、LLM 提供方、模型名、阈值和超时配置
 - `POST /api/v1/plugin/AIRecognizerEnhancer/recognize`
   用当前 LLM 对指定标题做一次本地结构化识别测试
+- `GET /api/v1/plugin/AIRecognizerEnhancer/failed_samples`
+  查看最近保存的低置信度样本
+- `POST /api/v1/plugin/AIRecognizerEnhancer/suggest_identifiers`
+  根据标题、目标结果和当前识别结果生成 MoviePilot 自定义识别词建议
+- `POST /api/v1/plugin/AIRecognizerEnhancer/apply_identifiers`
+  将确认后的规则追加写入系统 `CustomIdentifiers`
 
 ## 二期方向
 
@@ -42,6 +48,6 @@
 
 ## 当前状态
 
-- 第一版插件代码已落地
+- `0.1.1` 已补上识别词建议与写入能力
 - 方向已切到 MP 内置 LLM 本地兜底
 - 还会继续补提示词、样本分析和识别词建议

@@ -70,4 +70,5 @@
 - 已接住 `ChainEventType.NameRecognize`
 - 已复用 `LLMHelper.get_llm(streaming=False)` 做结构化输出
 - 已提供手动调试接口用于验证标题识别结果
-- 下一步重点会放在提示词打磨、失败样本回放和识别词建议生成
+- 已支持查看低置信度样本，并继续生成为 MoviePilot 自定义识别词建议
+- 下一步重点会放在提示词打磨、失败样本回放和识别词建议质量提升
