@@ -45,7 +45,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.1"
+    plugin_version = "0.1.3"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -58,6 +58,7 @@ class AIRecognizerEnhancer(_PluginBase):
     _request_timeout = 25
     _max_retries = 2
     _save_failed_samples = True
+    _max_failed_samples = 200
     _systemconfig: Optional[SystemConfigOper] = None
 
     def init_plugin(self, config: Optional[Dict[str, Any]] = None):
@@ -68,6 +69,7 @@ class AIRecognizerEnhancer(_PluginBase):
         self._request_timeout = self._safe_int(config.get("request_timeout"), 25)
         self._max_retries = max(1, min(5, self._safe_int(config.get("max_retries"), 2)))
         self._save_failed_samples = bool(config.get("save_failed_samples", True))
+        self._max_failed_samples = max(20, min(1000, self._safe_int(config.get("max_failed_samples"), 200)))
         self._systemconfig = SystemConfigOper()
         self._register_events()
 
@@ -205,19 +207,44 @@ class AIRecognizerEnhancer(_PluginBase):
             reason=reason,
         )
 
+    def _sample_path(self) -> Path:
+        return self.get_data_path() / "failed_samples.jsonl"
+
+    @staticmethod
+    def _sample_identity(payload: Dict[str, Any]) -> str:
+        return json.dumps(
+            {
+                "title": str(payload.get("title") or "").strip(),
+                "path": str(payload.get("path") or "").strip(),
+                "reason": str(payload.get("reason") or "").strip(),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
+    def _write_failed_samples(self, rows: List[Dict[str, Any]]) -> None:
+        sample_path = self._sample_path()
+        sample_path.parent.mkdir(parents=True, exist_ok=True)
+        trimmed = rows[-self._max_failed_samples:]
+        with sample_path.open("w", encoding="utf-8") as f:
+            for row in trimmed:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
     def _record_failed_sample(self, payload: Dict[str, Any]) -> None:
         if not self._save_failed_samples:
             return
         try:
-            sample_path = self.get_data_path() / "failed_samples.jsonl"
-            sample_path.parent.mkdir(parents=True, exist_ok=True)
-            with sample_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            rows = self._read_failed_samples(limit=1000)
+            rows.reverse()
+            identity = self._sample_identity(payload)
+            filtered = [row for row in rows if self._sample_identity(row) != identity]
+            filtered.append(payload)
+            self._write_failed_samples(filtered)
         except Exception as exc:
             logger.warning(f"[AI识别增强] 写入失败样本失败: {exc}")
 
     def _read_failed_samples(self, limit: int = 20) -> List[Dict[str, Any]]:
-        sample_path = self.get_data_path() / "failed_samples.jsonl"
+        sample_path = self._sample_path()
         if not sample_path.exists():
             return []
         rows: List[Dict[str, Any]] = []
@@ -238,6 +265,13 @@ class AIRecognizerEnhancer(_PluginBase):
             rows = rows[-limit:]
         rows.reverse()
         return rows
+
+    def _clear_failed_samples(self) -> int:
+        rows = self._read_failed_samples(limit=1000)
+        sample_path = self._sample_path()
+        if sample_path.exists():
+            sample_path.unlink()
+        return len(rows)
 
     def _resolve_failed_sample(
         self,
@@ -263,6 +297,32 @@ class AIRecognizerEnhancer(_PluginBase):
             row["sample_index"] = idx
             indexed.append(row)
         return indexed
+
+    def _summarize_sample(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        sample = dict(sample or {})
+        guess = sample.get("guess") or {}
+        verified = sample.get("verified_media_info") or {}
+        inferred_target = {
+            "name": verified.get("title") or guess.get("name") or "",
+            "year": verified.get("year") or guess.get("year") or "",
+            "media_type": self._normalize_media_type(verified.get("type") or guess.get("media_type")),
+            "season": self._safe_int(guess.get("season"), 0),
+            "episode": self._safe_int(guess.get("episode"), 0),
+            "tmdb_id": self._safe_int(verified.get("tmdb_id"), 0),
+        }
+        return {
+            "sample_index": sample.get("sample_index"),
+            "title": sample.get("title"),
+            "path": sample.get("path"),
+            "reason": sample.get("reason"),
+            "guess_name": guess.get("name"),
+            "guess_confidence": self._safe_float(guess.get("confidence"), 0.0),
+            "verified_title": verified.get("title"),
+            "verified_year": verified.get("year"),
+            "verified_tmdb_id": verified.get("tmdb_id"),
+            "inferred_target": inferred_target,
+            "can_auto_suggest": bool(inferred_target["name"]),
+        }
 
     def _build_body_from_sample(self, body: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]:
         body = dict(body or {})
@@ -809,6 +869,22 @@ AI 识别增强结果：
             },
         }
 
+    async def api_sample_worklist(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        limit = self._safe_int(request.query_params.get("limit"), 20)
+        limit = max(1, min(limit, 100))
+        samples = self._inject_sample_indices(self._read_failed_samples(limit=limit))
+        worklist = [self._summarize_sample(sample) for sample in samples]
+        return {
+            "success": True,
+            "data": {
+                "count": len(worklist),
+                "samples": worklist,
+            },
+        }
+
     async def api_suggest_identifiers(self, request: Request):
         body = await request.json()
         ok, message = self._check_api_access(request, body)
@@ -831,6 +907,19 @@ AI 识别增强结果：
             "success": True,
             "message": "success",
             "data": result,
+        }
+
+    async def api_clear_failed_samples(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        cleared = self._clear_failed_samples()
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "cleared_count": cleared,
+            },
         }
 
     async def api_suggest_identifiers_from_sample(self, request: Request):
@@ -899,6 +988,12 @@ AI 识别增强结果：
                 "summary": "查看最近保存的低置信度失败样本",
             },
             {
+                "path": "/sample_worklist",
+                "endpoint": self.api_sample_worklist,
+                "methods": ["GET"],
+                "summary": "返回适合智能体使用的失败样本摘要列表",
+            },
+            {
                 "path": "/suggest_identifiers",
                 "endpoint": self.api_suggest_identifiers,
                 "methods": ["POST"],
@@ -915,6 +1010,12 @@ AI 识别增强结果：
                 "endpoint": self.api_apply_identifiers,
                 "methods": ["POST"],
                 "summary": "将确认后的自定义识别词追加写入系统 CustomIdentifiers",
+            },
+            {
+                "path": "/clear_failed_samples",
+                "endpoint": self.api_clear_failed_samples,
+                "methods": ["POST"],
+                "summary": "清空失败样本文件",
             },
             {
                 "path": "/apply_suggested_identifier",
@@ -941,6 +1042,7 @@ AI 识别增强结果：
                             f"\nLLM 可用：{'是' if llm_ready else '否'}"
                             f"\n置信度阈值：{self._confidence_threshold}"
                             f"\n请求超时：{self._request_timeout} 秒"
+                            f"\n失败样本上限：{self._max_failed_samples} 条"
                             f"\n失败样本：{failed_samples_count} 条"
                             f"\n系统自定义识别词：{custom_identifiers_count} 条"
                             "\n\n当前会在 Chain NameRecognize 阶段回写 name/year/season/episode，供 MoviePilot 继续原生二次识别。"
@@ -1072,6 +1174,27 @@ AI 识别增强结果：
                             }
                         ],
                     },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "max_failed_samples",
+                                            "label": "失败样本保留上限",
+                                            "type": "number",
+                                            "hint": "默认保留最近 200 条，并对重复样本自动去重",
+                                            "persistent-hint": True,
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
                 ],
             }
         ]
@@ -1082,4 +1205,5 @@ AI 识别增强结果：
             "request_timeout": 25,
             "max_retries": 2,
             "save_failed_samples": True,
+            "max_failed_samples": 200,
         }
