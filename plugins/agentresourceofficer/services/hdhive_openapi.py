@@ -304,3 +304,74 @@ class HDHiveOpenApiService:
             "data": payload.get("data") if isinstance(payload, dict) else {},
         }
         return ok, result, message
+
+    def fetch_me(self) -> Tuple[bool, Dict[str, Any], str]:
+        ok, payload, message, status_code = self.request("GET", "/api/open/me")
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": ok,
+            "status_code": status_code,
+            "message": payload.get("message") if ok else message,
+            "data": payload.get("data") if isinstance(payload, dict) else {},
+        }
+        return ok, result, message
+
+    def fetch_quota(self) -> Tuple[bool, Dict[str, Any], str]:
+        ok, payload, message, status_code = self.request("GET", "/api/open/quota")
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": ok,
+            "status_code": status_code,
+            "message": payload.get("message") if ok else message,
+            "data": payload.get("data") if isinstance(payload, dict) else {},
+        }
+        return ok, result, message
+
+    def fetch_usage_today(self) -> Tuple[bool, Dict[str, Any], str]:
+        ok, payload, message, status_code = self.request("GET", "/api/open/usage/today")
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": ok,
+            "status_code": status_code,
+            "message": payload.get("message") if ok else message,
+            "data": payload.get("data") if isinstance(payload, dict) else {},
+        }
+        return ok, result, message
+
+    def fetch_weekly_free_quota(self) -> Tuple[bool, Dict[str, Any], str]:
+        ok, payload, message, status_code = self.request("GET", "/api/open/vip/weekly-free-quota")
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": ok,
+            "status_code": status_code,
+            "message": payload.get("message") if ok else message,
+            "data": payload.get("data") if isinstance(payload, dict) else {},
+        }
+        return ok, result, message
+
+    def perform_checkin(
+        self,
+        *,
+        is_gambler: Optional[bool] = None,
+        trigger: str = "手动",
+    ) -> Tuple[bool, Dict[str, Any], str]:
+        gambler_mode = bool(is_gambler)
+        payload = {"is_gambler": True} if gambler_mode else None
+        ok, result_payload, message, status_code = self.request("POST", "/api/open/checkin", payload=payload)
+        data = result_payload.get("data") if isinstance(result_payload, dict) else {}
+        checked_in = bool((data or {}).get("checked_in")) if ok else False
+        if ok:
+            status_text = "签到成功" if checked_in else "今日已签到"
+        else:
+            status_text = "签到失败"
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": ok,
+            "status_code": status_code,
+            "trigger": trigger,
+            "is_gambler": gambler_mode,
+            "status": status_text,
+            "message": (data or {}).get("message") or result_payload.get("message") or message,
+            "data": data or {},
+        }
+        return ok, result, message
