@@ -46,7 +46,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.10"
+    plugin_version = "0.1.11"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -66,6 +66,8 @@ class AgentResourceOfficer(_PluginBase):
     _hdhive_default_path = "/待整理"
     _hdhive_candidate_page_size = 10
     _p115_default_path = "/待整理"
+    _p115_cookie = ""
+    _p115_prefer_direct = True
 
     _quark_service: Optional[QuarkTransferService] = None
     _hdhive_service: Optional[HDHiveOpenApiService] = None
@@ -153,6 +155,8 @@ class AgentResourceOfficer(_PluginBase):
         self._hdhive_default_path = self._normalize_path(config.get("hdhive_default_path") or "/待整理")
         self._hdhive_candidate_page_size = max(5, min(20, self._safe_int(config.get("hdhive_candidate_page_size"), 10)))
         self._p115_default_path = self._normalize_path(config.get("p115_default_path") or "/待整理")
+        self._p115_cookie = self._clean_text(config.get("p115_cookie"))
+        self._p115_prefer_direct = bool(config.get("p115_prefer_direct", True))
         self._quark_service = QuarkTransferService(
             cookie=self._quark_cookie,
             timeout=self._quark_timeout,
@@ -165,7 +169,11 @@ class AgentResourceOfficer(_PluginBase):
             base_url=self._hdhive_base_url,
             timeout=self._hdhive_timeout,
         )
-        self._p115_service = P115TransferService(default_target_path=self._p115_default_path)
+        self._p115_service = P115TransferService(
+            default_target_path=self._p115_default_path,
+            cookie=self._p115_cookie,
+            prefer_direct=self._p115_prefer_direct,
+        )
         self._agent_tools_reloaded = False
 
     def get_state(self) -> bool:
@@ -310,6 +318,8 @@ class AgentResourceOfficer(_PluginBase):
             "hdhive_default_path": self._hdhive_default_path,
             "hdhive_candidate_page_size": self._hdhive_candidate_page_size,
             "p115_default_path": self._p115_default_path,
+            "p115_cookie": self._p115_cookie,
+            "p115_prefer_direct": self._p115_prefer_direct,
         }
         if overrides:
             config.update(overrides)
@@ -424,9 +434,15 @@ class AgentResourceOfficer(_PluginBase):
 
     def _ensure_p115_service(self) -> P115TransferService:
         if self._p115_service is None:
-            self._p115_service = P115TransferService(default_target_path=self._p115_default_path)
+            self._p115_service = P115TransferService(
+                default_target_path=self._p115_default_path,
+                cookie=self._p115_cookie,
+                prefer_direct=self._p115_prefer_direct,
+            )
         else:
             self._p115_service.default_target_path = self._p115_default_path
+            self._p115_service.set_cookie(self._p115_cookie)
+            self._p115_service.prefer_direct = self._p115_prefer_direct
         return self._p115_service
 
     @staticmethod
@@ -590,6 +606,7 @@ class AgentResourceOfficer(_PluginBase):
     def get_page(self) -> List[dict]:
         quark_ready = "已配置" if self._quark_cookie else "未配置"
         hdhive_ready = "已配置" if self._hdhive_api_key else "未配置"
+        p115_ready = "独立 Cookie 优先" if self._p115_cookie else "复用 115 助手客户端"
         hdhive_summary = self._build_hdhive_page_summary()
         return [
             {
@@ -604,6 +621,7 @@ class AgentResourceOfficer(_PluginBase):
                             f"\n当前影巢配置状态：{hdhive_ready}"
                             f"\n影巢默认目录：{self._hdhive_default_path}"
                             f"\n115 默认目录：{self._p115_default_path}"
+                            f"\n115 执行方式：{p115_ready}"
                             "\n\n已支持的影巢用户态 API：/hdhive/account /hdhive/checkin /hdhive/quota /hdhive/usage_today /hdhive/weekly_free_quota"
                             f"\n\n{hdhive_summary}"
                         ),
@@ -839,6 +857,39 @@ class AgentResourceOfficer(_PluginBase):
                                             "model": "p115_default_path",
                                             "label": "115 默认目录",
                                             "placeholder": "/待整理",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "p115_prefer_direct",
+                                            "label": "115 优先直转",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "p115_cookie",
+                                            "label": "115 Cookie（可选）",
+                                            "rows": 3,
+                                            "placeholder": "留空时复用 P115StrmHelper 已登录客户端；填写后 Agent资源官 可独立执行 115 分享转存",
                                         },
                                     }
                                 ],
@@ -1646,7 +1697,10 @@ class AgentResourceOfficer(_PluginBase):
             "data": {
                 "plugin_version": self.plugin_version,
                 "enabled": self._enabled,
-                "p115_helper_ready": health_ok,
+                "p115_ready": health_ok,
+                "p115_direct_ready": bool(result.get("direct_ready")),
+                "p115_direct_source": result.get("direct_source") or "",
+                "p115_helper_ready": bool(result.get("helper_ready")),
                 "default_target_path": self._p115_default_path,
                 "message": "" if health_ok else health_message,
                 "raw": result,
