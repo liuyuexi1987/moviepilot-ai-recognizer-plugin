@@ -18,8 +18,8 @@
 - 用 MP 当前 LLM 结构化判断标题、年份、类型、季集
 - 把识别结果回写到 `name/year/season/episode`
 - 交回 MoviePilot 原生链路继续二次识别
-- 提供 `/health`、`/recognize`、`/failed_samples`、`/sample_worklist`、`/suggest_identifiers`、`/suggest_identifiers_from_sample`、`/apply_identifiers`、`/apply_suggested_identifier`、`/clear_failed_samples` 九个 API
-- 可选保存低置信度样本，并对重复样本自动去重、限制保留上限，再继续转成 MoviePilot 原生自定义识别词建议
+- 提供 `/health`、`/recognize`、`/failed_samples`、`/sample_worklist`、`/sample_insights`、`/suggest_identifiers`、`/suggest_identifiers_from_sample`、`/apply_identifiers`、`/apply_suggested_identifier`、`/clear_failed_samples` 十个 API
+- 可选保存低置信度样本，并对重复样本自动去重、限制保留上限，再继续做样本洞察和 MoviePilot 原生自定义识别词建议
 
 ## 当前接口
 
@@ -31,6 +31,8 @@
   查看最近保存的低置信度样本
 - `GET /api/v1/plugin/AIRecognizerEnhancer/sample_worklist`
   返回适合智能体直接消费的失败样本摘要列表
+- `GET /api/v1/plugin/AIRecognizerEnhancer/sample_insights`
+  聚合失败样本原因、重复问题和优先处理样本，方便先挑最值得写规则的那批
 - `POST /api/v1/plugin/AIRecognizerEnhancer/suggest_identifiers`
   根据标题、目标结果和当前识别结果生成 MoviePilot 自定义识别词建议
 - `POST /api/v1/plugin/AIRecognizerEnhancer/suggest_identifiers_from_sample`
@@ -56,6 +58,6 @@
 
 ## 当前状态
 
-- `0.1.3` 已补上样本摘要、样本清理、样本去重和保留上限
+- `0.1.4` 已补上失败样本洞察，可自动归纳重复问题、失败原因和优先处理样本
 - 方向已切到 MP 内置 LLM 本地兜底
 - 还会继续补提示词、样本分析和识别词建议
