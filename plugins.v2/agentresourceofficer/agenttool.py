@@ -47,7 +47,7 @@ class HDHiveSessionPickTool(MoviePilotTool):
         choice = kwargs.get("choice", "")
         return f"正在继续 Agent资源官 会话：{session_id}，选择 {choice}"
 
-    async def run(self, session_id: str, choice: int, path: str = None, **kwargs) -> str:
+    async def run(self, session_id: str, choice: int = 0, path: str = None, action: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
@@ -55,6 +55,7 @@ class HDHiveSessionPickTool(MoviePilotTool):
             session_id=session_id,
             index=choice,
             target_path=path,
+            action=action,
         )
 
 

@@ -138,7 +138,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.5.16"
+    plugin_version = "0.5.17"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
@@ -2223,6 +2223,7 @@ class FeishuCommandBridgeLong(_PluginBase):
         session_id: str,
         index: int,
         target_path: str = "",
+        action: str = "",
     ) -> Tuple[bool, Dict[str, Any], str]:
         return self._call_local_json_post(
             "/api/v1/plugin/AgentResourceOfficer/assistant/pick",
@@ -2230,6 +2231,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                 "session": session_id,
                 "index": index,
                 "path": target_path,
+                "action": action,
             },
         )
 
@@ -3072,13 +3074,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     ) -> Tuple[bool, str, Dict[str, Any]]:
         index, override_path, pick_action = self._parse_pick_arg(arg)
         if self._should_use_agent_resource_officer():
-            if pick_action in {"detail", "next_page"}:
-                return False, "当前 Agent资源官 后端暂不支持详情补充或翻页，请直接回复编号继续。", {
-                    "action": "pick",
-                    "ok": False,
-                    "message": "unsupported action for Agent资源官 backend",
-                }
-            if index <= 0:
+            if index <= 0 and not pick_action:
                 return False, "请选择有效序号，例如：选择 1", {
                     "action": "pick",
                     "ok": False,
@@ -3088,6 +3084,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                 cache_key,
                 index,
                 override_path or "",
+                pick_action,
             )
             data = payload.get("data") or {}
             text = str(message or "处理失败").strip()

@@ -1,3 +1,6 @@
+import concurrent.futures
+import os
+import threading
 import time
 import uuid
 import json
@@ -43,7 +46,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.8"
+    plugin_version = "0.1.9"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -69,6 +72,8 @@ class AgentResourceOfficer(_PluginBase):
     _p115_service: Optional[P115TransferService] = None
     _session_cache: Dict[str, Dict[str, Any]] = {}
     _agent_tools_reloaded = False
+    _candidate_actor_cache: Dict[str, List[str]] = {}
+    _candidate_actor_cache_lock = threading.Lock()
 
     @staticmethod
     def _extract_first_url(text: str) -> str:
@@ -123,6 +128,15 @@ class AgentResourceOfficer(_PluginBase):
         }
         mapped = alias_map.get(text, text)
         return cls._normalize_path(mapped)
+
+    @staticmethod
+    def _normalize_pick_action(value: Any) -> str:
+        text = str(value or "").strip().lower()
+        if text in {"detail", "details", "review", "详情", "审查"}:
+            return "detail"
+        if text in {"n", "next", "next_page", "下一页", "下页"} or text.startswith("n "):
+            return "next_page"
+        return ""
 
     def init_plugin(self, config: Optional[Dict[str, Any]] = None):
         config = config or {}
@@ -1249,16 +1263,126 @@ class AgentResourceOfficer(_PluginBase):
         lines.append(f"如需改目录，可发“选择 1 path=/目录”或“选择 {next_quark_hint} path=/目录”。")
         return "\n".join(lines)
 
+    @classmethod
+    def _read_tmdb_api_key(cls) -> str:
+        for value in [
+            os.environ.get("TMDB_API_KEY", ""),
+            os.environ.get("TMDB_KEY", ""),
+            cls._clean_text(getattr(settings, "TMDB_API_KEY", "") if settings is not None else ""),
+        ]:
+            if cls._clean_text(value):
+                return cls._clean_text(value)
+        compose_path = Path("/Applications/Dockge/moviepilot-ai-recognizer-gateway/docker-compose.yml")
+        if compose_path.exists():
+            for line in compose_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if "TMDB_API_KEY" not in line:
+                    continue
+                _, _, value = line.partition(":")
+                key = cls._clean_text(value.strip().strip("'\""))
+                if key:
+                    return key
+        return ""
+
+    @classmethod
+    def _fetch_candidate_actors(cls, tmdb_id: Any, media_type: str) -> List[str]:
+        clean_tmdb_id = cls._clean_text(tmdb_id)
+        clean_media_type = cls._clean_text(media_type).lower()
+        if not clean_tmdb_id or clean_media_type not in {"movie", "tv"}:
+            return []
+        cache_key = f"{clean_media_type}:{clean_tmdb_id}"
+        with cls._candidate_actor_cache_lock:
+            cached = cls._candidate_actor_cache.get(cache_key)
+        if cached is not None:
+            return list(cached)
+        tmdb_api_key = cls._read_tmdb_api_key()
+        if not tmdb_api_key:
+            return []
+        endpoint = "movie" if clean_media_type == "movie" else "tv"
+        url = (
+            f"https://api.themoviedb.org/3/{endpoint}/{clean_tmdb_id}?"
+            f"{urlencode({'api_key': tmdb_api_key, 'language': 'zh-CN', 'append_to_response': 'credits'})}"
+        )
+        actors: List[str] = []
+        try:
+            request = UrlRequest(url=url, headers={"Accept": "application/json"})
+            with urlopen(request, timeout=20) as response:
+                payload = json.loads(response.read().decode("utf-8", "ignore"))
+            cast = ((payload.get("credits") or {}).get("cast") or []) if isinstance(payload, dict) else []
+            for member in cast[:10]:
+                name = cls._clean_text((member or {}).get("name"))
+                department = cls._clean_text((member or {}).get("known_for_department"))
+                if not name:
+                    continue
+                if department and department != "Acting":
+                    continue
+                if name not in actors:
+                    actors.append(name)
+                if len(actors) >= 2:
+                    break
+        except Exception:
+            actors = []
+        with cls._candidate_actor_cache_lock:
+            cls._candidate_actor_cache[cache_key] = list(actors)
+        return actors
+
+    def _maybe_enrich_hdhive_candidate_with_actors(self, candidate: Dict[str, Any]) -> Dict[str, Any]:
+        enriched = dict(candidate or {})
+        if enriched.get("actors"):
+            return enriched
+        enriched["actors"] = self._fetch_candidate_actors(
+            enriched.get("tmdb_id"),
+            str(enriched.get("media_type") or enriched.get("type") or ""),
+        )
+        return enriched
+
+    def _enrich_hdhive_candidates_with_actors(self, candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        indexed = [(idx, dict(item or {})) for idx, item in enumerate(candidates)]
+        pending = [(idx, item) for idx, item in indexed if not (item.get("actors") or [])]
+        enriched_map: Dict[int, Dict[str, Any]] = {idx: item for idx, item in indexed}
+        if pending:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(pending))) as executor:
+                future_map = {
+                    executor.submit(self._maybe_enrich_hdhive_candidate_with_actors, item): idx
+                    for idx, item in pending
+                }
+                for future in concurrent.futures.as_completed(future_map):
+                    idx = future_map[future]
+                    try:
+                        enriched_map[idx] = future.result()
+                    except Exception:
+                        enriched_map[idx] = dict(indexed[idx][1])
+        return [enriched_map[idx] for idx, _ in indexed]
+
     @staticmethod
-    def _format_candidate_lines(candidates: List[Dict[str, Any]]) -> str:
+    def _format_candidate_label(item: Dict[str, Any]) -> str:
+        title = str(item.get("title") or "未命名")
+        year = str(item.get("year") or "?")
+        media_type = str(item.get("media_type") or item.get("type") or "?")
+        actors = item.get("actors") or []
+        parts = [year, media_type]
+        actor_text = " / ".join(str(name).strip() for name in actors[:2] if str(name).strip())
+        if actor_text:
+            parts.append(f"主演:{actor_text}")
+        return f"{title} ({' | '.join([part for part in parts if part])})"
+
+    @staticmethod
+    def _format_candidate_lines(candidates: List[Dict[str, Any]], page: int = 1, page_size: int = 10) -> str:
         if not candidates:
             return "候选影片：0 个"
-        lines = [f"候选影片：{len(candidates)} 个"]
-        for idx, item in enumerate(candidates, start=1):
-            title = str(item.get("title") or "未命名")
-            year = str(item.get("year") or "?")
-            media_type = str(item.get("media_type") or item.get("type") or "?")
-            lines.append(f"{idx}. {title} ({year} | {media_type})")
+        safe_page_size = max(1, int(page_size or 10))
+        total_pages = max(1, (len(candidates) + safe_page_size - 1) // safe_page_size)
+        safe_page = min(max(1, int(page or 1)), total_pages)
+        start = (safe_page - 1) * safe_page_size
+        page_items = candidates[start:start + safe_page_size]
+        lines = [f"候选影片：{len(candidates)} 个，请先选择影片："]
+        if total_pages > 1:
+            lines.append(f"当前第 {safe_page}/{total_pages} 页，每页 {safe_page_size} 条：")
+        for idx, item in enumerate(page_items, start=start + 1):
+            lines.append(f"{idx}. {AgentResourceOfficer._format_candidate_label(item)}")
+        lines.append("下一步：回复“选择 编号”查看该影片的影巢资源。")
+        lines.append("如需补充当前候选页全部主演，可回复：详情 或 审查。")
+        if safe_page < total_pages:
+            lines.append("如需继续翻页，可回复：n 下一页")
         return "\n".join(lines)
 
     @staticmethod
@@ -1387,7 +1511,7 @@ class AgentResourceOfficer(_PluginBase):
             keyword=self._clean_text(keyword),
             media_type=self._clean_text(media_type or "movie").lower(),
             year=self._clean_text(year),
-            candidate_limit=self._hdhive_candidate_page_size,
+            candidate_limit=max(30, self._hdhive_candidate_page_size),
         )
         if not search_ok:
             return f"影巢搜索失败：{search_message}"
@@ -1404,15 +1528,17 @@ class AgentResourceOfficer(_PluginBase):
                 "year": self._clean_text(year),
                 "target_path": self._clean_text(target_path),
                 "candidates": candidates,
+                "page": 1,
+                "page_size": self._hdhive_candidate_page_size,
             },
         )
         return (
-            f"{self._format_candidate_lines(candidates)}\n"
+            f"{self._format_candidate_lines(candidates, page=1, page_size=self._hdhive_candidate_page_size)}\n"
             f"session_id: {session_id}\n"
             "下一步：调用 agent_resource_officer_hdhive_pick，并传入 session_id 与 choice"
         )
 
-    async def tool_hdhive_pick_session(self, session_id: str, index: int, target_path: str = "") -> str:
+    async def tool_hdhive_pick_session(self, session_id: str, index: int, target_path: str = "", action: str = "") -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
         session = self._load_session(self._clean_text(session_id))
@@ -1421,9 +1547,26 @@ class AgentResourceOfficer(_PluginBase):
 
         stage = session.get("stage")
         service = self._ensure_hdhive_service()
+        action = self._normalize_pick_action(action)
 
         if stage == "candidate":
             candidates = session.get("candidates") or []
+            page_size = max(1, self._safe_int(session.get("page_size"), self._hdhive_candidate_page_size))
+            current_page = max(1, self._safe_int(session.get("page"), 1))
+            if action == "detail":
+                start = (current_page - 1) * page_size
+                end = start + page_size
+                enriched = [dict(item or {}) for item in candidates]
+                enriched[start:end] = self._enrich_hdhive_candidates_with_actors(enriched[start:end])
+                self._save_session(self._clean_text(session_id), {**session, "candidates": enriched})
+                return self._format_candidate_lines(enriched, page=current_page, page_size=page_size)
+            if action == "next_page":
+                total_pages = max(1, (len(candidates) + page_size - 1) // page_size)
+                if current_page >= total_pages:
+                    return "已经是最后一页了，可以直接回复编号继续选择。"
+                next_page = current_page + 1
+                self._save_session(self._clean_text(session_id), {**session, "page": next_page})
+                return self._format_candidate_lines(candidates, page=next_page, page_size=page_size)
             if index <= 0 or index > len(candidates):
                 return "候选编号超出范围"
             candidate = dict(candidates[index - 1])
@@ -1639,6 +1782,18 @@ class AgentResourceOfficer(_PluginBase):
         parsed = self._parse_assistant_text(text)
         cache_key = self._assistant_session_id(session)
         target_path = parsed.get("path") or ""
+        route_action = self._normalize_pick_action(text)
+        if route_action:
+            pick_result = await self.api_assistant_pick(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "index": 0,
+                    "action": route_action,
+                    "path": target_path,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            )
+            return pick_result
 
         if parsed.get("url"):
             provider = "quark" if self._is_quark_url(parsed["url"]) else "115" if self._is_115_url(parsed["url"]) else "unknown"
@@ -1712,7 +1867,7 @@ class AgentResourceOfficer(_PluginBase):
             keyword=keyword,
             media_type=media_type,
             year=year,
-            candidate_limit=self._hdhive_candidate_page_size,
+            candidate_limit=max(30, self._hdhive_candidate_page_size),
         )
         if not search_ok:
             return {"success": False, "message": f"影巢搜索失败：{search_message}", "data": result}
@@ -1727,10 +1882,11 @@ class AgentResourceOfficer(_PluginBase):
                 "year": year,
                 "target_path": target_path or self._hdhive_default_path,
                 "candidates": candidates,
+                "page": 1,
+                "page_size": self._hdhive_candidate_page_size,
             },
         )
-        text_message = self._format_candidate_lines(candidates)
-        text_message += "\n下一步：回复“选择 编号”查看该影片的影巢资源。"
+        text_message = self._format_candidate_lines(candidates, page=1, page_size=self._hdhive_candidate_page_size)
         return {
             "success": True,
             "message": text_message,
@@ -1764,12 +1920,13 @@ class AgentResourceOfficer(_PluginBase):
             or body.get("number"),
             0,
         )
+        action = self._normalize_pick_action(body.get("action") or body.get("pick_action"))
         target_path = self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path")))
         cache_key = self._assistant_session_id(session)
         state = self._load_session(cache_key)
         if not state:
             return {"success": False, "message": "没有可继续的缓存，请先发起搜索或发送分享链接。"}
-        if index <= 0:
+        if index <= 0 and not action:
             return {"success": False, "message": "请选择有效序号，例如：选择 1"}
 
         kind = str(state.get("kind") or "").strip()
@@ -1811,6 +1968,42 @@ class AgentResourceOfficer(_PluginBase):
             final_path = target_path or state.get("target_path") or self._hdhive_default_path
             if stage == "candidate":
                 candidates = state.get("candidates") or []
+                page_size = max(1, self._safe_int(state.get("page_size"), self._hdhive_candidate_page_size))
+                current_page = max(1, self._safe_int(state.get("page"), 1))
+                if action == "detail":
+                    start = (current_page - 1) * page_size
+                    end = start + page_size
+                    enriched = [dict(item or {}) for item in candidates]
+                    enriched[start:end] = self._enrich_hdhive_candidates_with_actors(enriched[start:end])
+                    self._save_session(cache_key, {**state, "candidates": enriched, "target_path": final_path})
+                    return {
+                        "success": True,
+                        "message": self._format_candidate_lines(enriched, page=current_page, page_size=page_size),
+                        "data": {
+                            "action": "hdhive_candidates_detail",
+                            "ok": True,
+                            "session_id": cache_key,
+                            "page": current_page,
+                            "candidates": enriched,
+                        },
+                    }
+                if action == "next_page":
+                    total_pages = max(1, (len(candidates) + page_size - 1) // page_size)
+                    if current_page >= total_pages:
+                        return {"success": False, "message": "已经是最后一页了，可以直接回复编号继续选择。"}
+                    next_page = current_page + 1
+                    self._save_session(cache_key, {**state, "page": next_page, "target_path": final_path})
+                    return {
+                        "success": True,
+                        "message": self._format_candidate_lines(candidates, page=next_page, page_size=page_size),
+                        "data": {
+                            "action": "hdhive_candidates_next_page",
+                            "ok": True,
+                            "session_id": cache_key,
+                            "page": next_page,
+                            "total_pages": total_pages,
+                        },
+                    }
                 if index > len(candidates):
                     return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(candidates)} 之间的数字。"}
                 candidate = dict(candidates[index - 1])
@@ -1881,7 +2074,7 @@ class AgentResourceOfficer(_PluginBase):
             keyword=keyword,
             media_type=media_type,
             year=year,
-            candidate_limit=self._hdhive_candidate_page_size,
+            candidate_limit=max(30, self._hdhive_candidate_page_size),
         )
         if not search_ok:
             return {"success": False, "message": search_message, "data": result}
@@ -1897,13 +2090,15 @@ class AgentResourceOfficer(_PluginBase):
                 "year": year,
                 "target_path": target_path,
                 "candidates": result.get("candidates") or [],
+                "page": 1,
+                "page_size": self._hdhive_candidate_page_size,
             },
         )
         return {
             "success": True,
             "message": "success",
             "data": {
-                "text": self._format_candidate_lines(result.get("candidates") or []),
+                "text": self._format_candidate_lines(result.get("candidates") or [], page=1, page_size=self._hdhive_candidate_page_size),
                 "session_id": session_id,
                 "stage": "candidate",
                 "keyword": keyword,
@@ -1929,9 +2124,10 @@ class AgentResourceOfficer(_PluginBase):
             or body.get("number"),
             0,
         )
+        action = self._normalize_pick_action(body.get("action") or body.get("pick_action"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        if not session_id or index <= 0:
-            return {"success": False, "message": "session_id 和选择编号必填"}
+        if not session_id or (index <= 0 and not action):
+            return {"success": False, "message": "session_id 和选择编号必填；详情/翻页动作可传 action"}
 
         session = self._load_session(session_id)
         if not session:
@@ -1942,6 +2138,42 @@ class AgentResourceOfficer(_PluginBase):
 
         if stage == "candidate":
             candidates = session.get("candidates") or []
+            page_size = max(1, self._safe_int(session.get("page_size"), self._hdhive_candidate_page_size))
+            current_page = max(1, self._safe_int(session.get("page"), 1))
+            if action == "detail":
+                start = (current_page - 1) * page_size
+                end = start + page_size
+                enriched = [dict(item or {}) for item in candidates]
+                enriched[start:end] = self._enrich_hdhive_candidates_with_actors(enriched[start:end])
+                self._save_session(session_id, {**session, "candidates": enriched, "target_path": target_path or session.get("target_path") or ""})
+                return {
+                    "success": True,
+                    "message": "success",
+                    "data": {
+                        "text": self._format_candidate_lines(enriched, page=current_page, page_size=page_size),
+                        "session_id": session_id,
+                        "stage": "candidate",
+                        "page": current_page,
+                        "candidates": enriched,
+                    },
+                }
+            if action == "next_page":
+                total_pages = max(1, (len(candidates) + page_size - 1) // page_size)
+                if current_page >= total_pages:
+                    return {"success": False, "message": "已经是最后一页了，可以直接回复编号继续选择。"}
+                next_page = current_page + 1
+                self._save_session(session_id, {**session, "page": next_page, "target_path": target_path or session.get("target_path") or ""})
+                return {
+                    "success": True,
+                    "message": "success",
+                    "data": {
+                        "text": self._format_candidate_lines(candidates, page=next_page, page_size=page_size),
+                        "session_id": session_id,
+                        "stage": "candidate",
+                        "page": next_page,
+                        "total_pages": total_pages,
+                    },
+                }
             if index > len(candidates):
                 return {"success": False, "message": "候选编号超出范围"}
             candidate = dict(candidates[index - 1])

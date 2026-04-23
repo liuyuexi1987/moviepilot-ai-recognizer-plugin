@@ -12,8 +12,9 @@ class HDHiveSearchSessionToolInput(BaseModel):
 
 class HDHiveSessionPickToolInput(BaseModel):
     session_id: str = Field(..., description="上一步搜索返回的会话 ID")
-    choice: int = Field(..., description="当前阶段要选择的编号，从 1 开始")
+    choice: int = Field(default=0, description="当前阶段要选择的编号，从 1 开始；详情或翻页时可为 0")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则使用会话中的目录")
+    action: Optional[str] = Field(default=None, description="可选动作：detail/details/review/详情/审查 或 next/n/下一页")
 
 
 class ShareRouteToolInput(BaseModel):

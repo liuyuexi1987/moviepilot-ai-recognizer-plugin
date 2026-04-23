@@ -111,6 +111,7 @@
 - `Agent资源官` 目录、配置模型、执行层、统一 API 已落地
 - `Agent资源官` 已接通影巢搜索/解锁、115 转存、夸克转存、盘搜搜索与直链路由
 - `Agent资源官` 已接通原生 Agent Tool 和智能体会话式 API
+- `Agent资源官` 已补齐影巢候选分页与 `详情` / `审查` 按需补主演，飞书新主线不再缺这段交互
 - `FeishuCommandBridgeLong` 保持线上可运行，默认继续走 `legacy` 快路径
 - `FeishuCommandBridgeLong` 已支持切换到 `auto`，把智能入口委托给 `Agent资源官`
 - 运行环境已完成双链路验证：`legacy` 日常可用，`auto` 可接手统一资源工作流
