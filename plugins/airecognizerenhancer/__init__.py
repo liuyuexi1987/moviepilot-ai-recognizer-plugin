@@ -239,6 +239,65 @@ class AIRecognizerEnhancer(_PluginBase):
         rows.reverse()
         return rows
 
+    def _resolve_failed_sample(
+        self,
+        sample_index: Optional[Any] = None,
+        limit: int = 100,
+    ) -> Tuple[Optional[int], Optional[Dict[str, Any]], str]:
+        samples = self._read_failed_samples(limit=max(1, min(limit, 200)))
+        if not samples:
+            return None, None, "暂无失败样本"
+        index = self._safe_int(sample_index, 0)
+        if index < 0:
+            index = 0
+        if index >= len(samples):
+            return None, None, f"失败样本索引超出范围，当前共有 {len(samples)} 条"
+        row = dict(samples[index] or {})
+        row["sample_index"] = index
+        return index, row, ""
+
+    def _inject_sample_indices(self, samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        indexed: List[Dict[str, Any]] = []
+        for idx, sample in enumerate(samples):
+            row = dict(sample or {})
+            row["sample_index"] = idx
+            indexed.append(row)
+        return indexed
+
+    def _build_body_from_sample(self, body: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]:
+        body = dict(body or {})
+        title = str(body.get("title") or "").strip()
+        path = str(body.get("path") or "").strip()
+        sample_requested = body.get("use_latest_sample") or body.get("sample_index") is not None
+        if title or path:
+            return body, None, ""
+        if not sample_requested:
+            return body, None, ""
+
+        sample_index, sample, message = self._resolve_failed_sample(body.get("sample_index"), limit=100)
+        if not sample:
+            return body, None, message
+        body["title"] = str(sample.get("title") or "").strip()
+        body["path"] = str(sample.get("path") or "").strip()
+        verified = sample.get("verified_media_info") or {}
+        guess = sample.get("guess") or {}
+        if not body.get("desired_name"):
+            body["desired_name"] = verified.get("title") or guess.get("name") or ""
+        if not body.get("desired_year"):
+            body["desired_year"] = verified.get("year") or guess.get("year") or ""
+        if not body.get("desired_media_type"):
+            body["desired_media_type"] = self._normalize_media_type(
+                verified.get("type") or guess.get("media_type")
+            )
+        if body.get("desired_season") is None:
+            body["desired_season"] = guess.get("season") or 0
+        if body.get("desired_episode") is None:
+            body["desired_episode"] = guess.get("episode") or 0
+        if body.get("desired_tmdb_id") is None:
+            body["desired_tmdb_id"] = verified.get("tmdb_id") or 0
+        body["sample_index"] = sample_index
+        return body, sample, ""
+
     def _build_prompt(self) -> ChatPromptTemplate:
         return ChatPromptTemplate.from_messages(
             [
@@ -521,6 +580,9 @@ AI 识别增强结果：
         return bundle
 
     def _suggest_identifiers(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        body, source_sample, sample_message = self._build_body_from_sample(body)
+        if sample_message:
+            return {"success": False, "message": sample_message}
         title = str(body.get("title") or "").strip()
         path = str(body.get("path") or "").strip()
         if not title and path:
@@ -578,6 +640,8 @@ AI 识别增强结果：
             "message": "success",
             "data": {
                 "summary": bundle.summary,
+                "source_sample_index": (source_sample or {}).get("sample_index"),
+                "source_sample": source_sample,
                 "target": target,
                 "recognize_result": result,
                 "suggestions": cleaned,
@@ -736,7 +800,7 @@ AI 识别增强结果：
             return {"success": False, "message": message}
         limit = self._safe_int(request.query_params.get("limit"), 20)
         limit = max(1, min(limit, 100))
-        samples = self._read_failed_samples(limit=limit)
+        samples = self._inject_sample_indices(self._read_failed_samples(limit=limit))
         return {
             "success": True,
             "data": {
@@ -769,6 +833,51 @@ AI 识别增强结果：
             "data": result,
         }
 
+    async def api_suggest_identifiers_from_sample(self, request: Request):
+        body = await request.json()
+        body["use_latest_sample"] = True if body.get("use_latest_sample") is None else body.get("use_latest_sample")
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        if body.get("sample_index") is None and body.get("use_latest_sample") is False:
+            body["use_latest_sample"] = True
+        return self._suggest_identifiers(body)
+
+    async def api_apply_suggested_identifier(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        if body.get("title") is None and body.get("path") is None:
+            body["use_latest_sample"] = True if body.get("use_latest_sample") is None else body.get("use_latest_sample")
+        suggested = self._suggest_identifiers(body)
+        if not suggested.get("success"):
+            return suggested
+        data = suggested.get("data") or {}
+        suggestions = data.get("suggestions") or []
+        suggestion_index = self._safe_int(body.get("suggestion_index"), 0)
+        if suggestion_index < 0:
+            suggestion_index = 0
+        if suggestion_index >= len(suggestions):
+            return {"success": False, "message": f"建议索引超出范围，当前共有 {len(suggestions)} 条"}
+        chosen = suggestions[suggestion_index]
+        applied = self._append_custom_identifiers(chosen.get("lines") or [])
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "chosen_suggestion": chosen,
+                "apply_result": applied,
+                "source_sample_index": ((data.get("source_sample") or {}).get("sample_index")),
+                "source_sample": data.get("source_sample"),
+                "target": data.get("target"),
+            },
+        }
+
     def get_api(self) -> List[Dict[str, Any]]:
         return [
             {
@@ -796,10 +905,22 @@ AI 识别增强结果：
                 "summary": "根据标题和目标结果生成 MoviePilot 自定义识别词建议",
             },
             {
+                "path": "/suggest_identifiers_from_sample",
+                "endpoint": self.api_suggest_identifiers_from_sample,
+                "methods": ["POST"],
+                "summary": "直接基于最近失败样本或指定样本生成自定义识别词建议",
+            },
+            {
                 "path": "/apply_identifiers",
                 "endpoint": self.api_apply_identifiers,
                 "methods": ["POST"],
                 "summary": "将确认后的自定义识别词追加写入系统 CustomIdentifiers",
+            },
+            {
+                "path": "/apply_suggested_identifier",
+                "endpoint": self.api_apply_suggested_identifier,
+                "methods": ["POST"],
+                "summary": "直接把最近失败样本或指定样本生成的建议规则写入 CustomIdentifiers",
             },
         ]
 
