@@ -43,7 +43,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.6"
+    plugin_version = "0.1.7"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -188,6 +188,16 @@ class AgentResourceOfficer(_PluginBase):
     @staticmethod
     def _normalize_path(value: Any) -> str:
         return QuarkTransferService.normalize_path(value)
+
+    @staticmethod
+    def _friendly_hdhive_error(message: str, capability: str) -> str:
+        text = str(message or "").strip()
+        lowered = text.lower()
+        if "premium" in lowered or "仅对 premium 用户开放" in text:
+            if capability == "checkin":
+                return "影巢 OpenAPI 签到当前需要 Premium 用户；非 Premium 用户仍建议继续使用 HDHiveDailySign 网页签到链路。"
+            return f"影巢 OpenAPI 的{capability}接口当前需要 Premium 用户。"
+        return text or f"影巢 {capability} 接口调用失败"
 
     def _build_config(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         config = {
@@ -351,6 +361,36 @@ class AgentResourceOfficer(_PluginBase):
                 "summary": "检查 Agent资源官 的影巢配置",
             },
             {
+                "path": "/hdhive/account",
+                "endpoint": self.api_hdhive_account,
+                "methods": ["GET"],
+                "summary": "获取影巢当前账号信息",
+            },
+            {
+                "path": "/hdhive/checkin",
+                "endpoint": self.api_hdhive_checkin,
+                "methods": ["POST"],
+                "summary": "执行影巢普通签到或赌狗签到",
+            },
+            {
+                "path": "/hdhive/quota",
+                "endpoint": self.api_hdhive_quota,
+                "methods": ["GET"],
+                "summary": "获取影巢当前配额信息",
+            },
+            {
+                "path": "/hdhive/usage_today",
+                "endpoint": self.api_hdhive_usage_today,
+                "methods": ["GET"],
+                "summary": "获取影巢今日用量统计",
+            },
+            {
+                "path": "/hdhive/weekly_free_quota",
+                "endpoint": self.api_hdhive_weekly_free_quota,
+                "methods": ["GET"],
+                "summary": "获取影巢每周免费解锁额度",
+            },
+            {
                 "path": "/hdhive/search",
                 "endpoint": self.api_hdhive_search,
                 "methods": ["POST"],
@@ -418,9 +458,35 @@ class AgentResourceOfficer(_PluginBase):
             },
         ]
 
+    def _build_hdhive_page_summary(self) -> str:
+        if not self._enabled:
+            return "插件未启用"
+        if not self._hdhive_api_key:
+            return "影巢 API Key 未配置"
+        service = self._ensure_hdhive_service()
+        account_ok, account_result, _account_message = service.fetch_me()
+        quota_ok, quota_result, _quota_message = service.fetch_quota()
+        usage_ok, usage_result, _usage_message = service.fetch_usage_today()
+
+        account = account_result.get("data") or {}
+        user_meta = account.get("user_meta") or {}
+        quota = quota_result.get("data") or {}
+        usage = usage_result.get("data") or {}
+
+        return (
+            f"影巢账号：{'可用' if account_ok else '异常'}"
+            f"\n昵称：{account.get('nickname') or account.get('username') or '—'}"
+            f"\n积分：{user_meta.get('points', '—')}"
+            f"\nVIP：{'是' if account.get('is_vip') else '否'}"
+            f"\n累计签到：{user_meta.get('signin_days_total', '—')}"
+            f"\n今日剩余配额：{quota.get('endpoint_remaining', '—')}"
+            f"\n今日总调用：{usage.get('total_calls', '—')}"
+        )
+
     def get_page(self) -> List[dict]:
         quark_ready = "已配置" if self._quark_cookie else "未配置"
         hdhive_ready = "已配置" if self._hdhive_api_key else "未配置"
+        hdhive_summary = self._build_hdhive_page_summary()
         return [
             {
                 "component": "VCard",
@@ -434,6 +500,8 @@ class AgentResourceOfficer(_PluginBase):
                             f"\n当前影巢配置状态：{hdhive_ready}"
                             f"\n影巢默认目录：{self._hdhive_default_path}"
                             f"\n115 默认目录：{self._p115_default_path}"
+                            "\n\n已支持的影巢用户态 API：/hdhive/account /hdhive/checkin /hdhive/quota /hdhive/usage_today /hdhive/weekly_free_quota"
+                            f"\n\n{hdhive_summary}"
                         ),
                     }
                 ],
@@ -742,6 +810,79 @@ class AgentResourceOfficer(_PluginBase):
                 "raw": result,
             },
         }
+
+    async def api_hdhive_account(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        service = self._ensure_hdhive_service()
+        account_ok, result, account_message = service.fetch_me()
+        if not account_ok:
+            return {"success": False, "message": self._friendly_hdhive_error(account_message, "账号"), "data": result}
+        return {"success": True, "message": result.get("message") or "success", "data": result.get("data") or {}}
+
+    async def api_hdhive_checkin(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        service = self._ensure_hdhive_service()
+        checkin_ok, result, checkin_message = service.perform_checkin(
+            is_gambler=bool(body.get("is_gambler")),
+            trigger="Agent资源官 API",
+        )
+        if not checkin_ok:
+            return {
+                "success": False,
+                "message": self._friendly_hdhive_error(result.get("message") or checkin_message, "checkin"),
+                "data": result,
+            }
+        return {"success": True, "message": result.get("message") or "success", "data": result}
+
+    async def api_hdhive_quota(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        service = self._ensure_hdhive_service()
+        quota_ok, result, quota_message = service.fetch_quota()
+        if not quota_ok:
+            return {"success": False, "message": self._friendly_hdhive_error(quota_message, "配额"), "data": result}
+        return {"success": True, "message": result.get("message") or "success", "data": result.get("data") or {}}
+
+    async def api_hdhive_usage_today(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        service = self._ensure_hdhive_service()
+        usage_ok, result, usage_message = service.fetch_usage_today()
+        if not usage_ok:
+            return {"success": False, "message": self._friendly_hdhive_error(usage_message, "今日用量"), "data": result}
+        return {"success": True, "message": result.get("message") or "success", "data": result.get("data") or {}}
+
+    async def api_hdhive_weekly_free_quota(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        service = self._ensure_hdhive_service()
+        weekly_ok, result, weekly_message = service.fetch_weekly_free_quota()
+        if not weekly_ok:
+            return {"success": False, "message": self._friendly_hdhive_error(weekly_message, "每周免费额度"), "data": result}
+        return {"success": True, "message": result.get("message") or "success", "data": result.get("data") or {}}
 
     async def api_hdhive_search(self, request: Request):
         body = await request.json()

@@ -9,6 +9,10 @@
 - 115 依赖健康检查
 - 115 分享转存
 - 影巢健康检查
+- 影巢账号信息
+- 影巢签到
+- 影巢配额与今日用量
+- 影巢每周免费额度
 - 影巢 TMDB 搜索
 - 影巢关键词候选搜索
 - 影巢资源解锁
@@ -55,12 +59,13 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.6`
+- 当前版本：`0.1.7`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
+- 影巢部分用户态接口受站点 Premium 权限限制；当前插件会明确返回限制原因，不再误报为插件故障
 - `115` 自动转存层目前仍受 `P115StrmHelper` 与当前 MP 版本兼容性影响，需单独继续收口
-- 飞书入口、签到与更完整的用户态能力仍会继续迁移进来
+- 飞书入口仍会继续迁移进来
 
 ## 当前可用 API
 
@@ -71,6 +76,11 @@
 - `GET /api/v1/plugin/AgentResourceOfficer/p115/health`
 - `POST /api/v1/plugin/AgentResourceOfficer/p115/transfer`
 - `GET /api/v1/plugin/AgentResourceOfficer/hdhive/health`
+- `GET /api/v1/plugin/AgentResourceOfficer/hdhive/account`
+- `POST /api/v1/plugin/AgentResourceOfficer/hdhive/checkin`
+- `GET /api/v1/plugin/AgentResourceOfficer/hdhive/quota`
+- `GET /api/v1/plugin/AgentResourceOfficer/hdhive/usage_today`
+- `GET /api/v1/plugin/AgentResourceOfficer/hdhive/weekly_free_quota`
 - `POST /api/v1/plugin/AgentResourceOfficer/hdhive/search`
 - `POST /api/v1/plugin/AgentResourceOfficer/hdhive/search_by_keyword`
 - `POST /api/v1/plugin/AgentResourceOfficer/hdhive/unlock`
