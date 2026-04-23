@@ -16,7 +16,7 @@
     "name": "AI识别增强",
     "description": "直接复用 MoviePilot 当前 LLM 配置，在原生识别失败后做本地结构化识别兜底，并交回原生链路继续二次识别。",
     "labels": "AI,识别,LLM,本地兜底,MoviePilot,TMDB",
-    "version": "0.1.10",
+    "version": "0.1.11",
     "icon": "airecoginzerforwarder.png",
     "author": "liuyuexi1987",
     "level": 1,
@@ -45,6 +45,7 @@
     "level": 1,
     "v2": true,
     "history": {
+      "0.1.11": "新增 115 独立直转执行层，可优先使用独立 Cookie 或已加载客户端直接转存分享链接，失败时再回退 P115StrmHelper。",
       "0.1.10": "补齐 P115StrmHelper 新版 MoviePilot 兼容补丁说明与复现脚本，115 健康检查已验证可用。",
       "0.1.9": "影巢候选会话支持分页和详情/审查按需补主演，原生 Agent Tool 与飞书 auto 后端可复用同一能力。",
       "0.1.8": "非 Premium 用户现在也可回退复用 HDHiveDailySign 的网页 Cookie 与用户快照，补齐签到和账号信息兜底。",

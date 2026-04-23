@@ -59,14 +59,16 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.10`
+- 当前版本：`0.1.11`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
 - 影巢候选已支持新主线分页、`详情` / `审查` 按需补主演，飞书切 `auto` 时也能复用
 - 影巢部分用户态接口受站点 Premium 权限限制；账号信息会优先回退到 `HDHiveDailySign` 的网页快照，签到会优先尝试 `HDHiveDailySign` 现有 Cookie 做网页兜底
-- `115` 自动转存依赖 `P115StrmHelper`；当前已验证可通过兼容补丁适配新版 MoviePilot 缺失 `TransferOverwriteCheck` 事件的情况
+- `115` 自动转存已具备轻量直转层：可优先使用独立 115 Cookie，或复用已加载的 115 客户端直接调用分享转存接口；直转失败时再回退 `P115StrmHelper`
 - 飞书入口仍会继续迁移进来
+
+这意味着 `Agent资源官` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
 
 如遇到 `P115StrmHelper` 因 `TransferOverwriteCheckEventData` 导入失败而无法加载，可执行仓库脚本：
 
@@ -74,7 +76,7 @@
 MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 ```
 
-执行后重启 MoviePilot，再检查 `AgentResourceOfficer` 的 `p115/health` 是否返回 `p115_helper_ready=true`。
+执行后重启 MoviePilot，再检查 `AgentResourceOfficer` 的 `p115/health` 是否返回 `p115_ready=true`。
 
 ## 当前可用 API
 

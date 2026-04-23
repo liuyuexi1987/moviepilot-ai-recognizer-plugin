@@ -98,6 +98,8 @@
 
 也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
 
+从 `AgentResourceOfficer 0.1.11` 开始，115 分享链接“直接转存到目标目录”已经有轻量直转层：可以填独立 115 Cookie，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
+
 如果升级 MoviePilot 后 `P115StrmHelper` 因旧事件导入失败无法加载，可以使用仓库里的兼容脚本恢复：
 
 ```bash

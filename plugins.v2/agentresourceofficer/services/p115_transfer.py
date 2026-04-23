@@ -1,4 +1,5 @@
 import importlib
+import re
 import sys
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
@@ -19,8 +20,19 @@ except Exception:
 class P115TransferService:
     """Reusable 115 share transfer execution layer for Agent资源官."""
 
-    def __init__(self, *, default_target_path: str = "/待整理") -> None:
+    def __init__(
+        self,
+        *,
+        default_target_path: str = "/待整理",
+        cookie: str = "",
+        prefer_direct: bool = True,
+    ) -> None:
         self.default_target_path = self.normalize_pan_path(default_target_path) or "/待整理"
+        self.cookie = self.normalize_text(cookie)
+        self.prefer_direct = bool(prefer_direct)
+
+    def set_cookie(self, cookie: str = "") -> None:
+        self.cookie = self.normalize_text(cookie)
 
     @staticmethod
     def normalize_text(value: Any) -> str:
@@ -55,6 +67,26 @@ class P115TransferService:
         return clean_url
 
     @staticmethod
+    def _extract_115_payload(url: str) -> Tuple[str, str]:
+        clean_url = str(url or "").strip()
+        if not clean_url:
+            return "", ""
+        try:
+            from p115client.util import share_extract_payload
+
+            payload = share_extract_payload(clean_url) or {}
+            return str(payload.get("share_code") or "").strip(), str(payload.get("receive_code") or "").strip()
+        except Exception:
+            parsed = urlparse(clean_url)
+            share_code = ""
+            match = re.search(r"/s/([^/?#]+)", parsed.path or "")
+            if match:
+                share_code = match.group(1).strip()
+            query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+            receive_code = str(query.get("password") or query.get("receive_code") or query.get("pwd") or "").strip()
+            return share_code, receive_code
+
+    @staticmethod
     def jsonable(value: Any) -> Any:
         if value is None:
             return None
@@ -78,6 +110,59 @@ class P115TransferService:
             except Exception:
                 pass
         return datetime.now()
+
+    @staticmethod
+    def _safe_int(value: Any, default: int = -1) -> int:
+        try:
+            return int(value)
+        except Exception:
+            return default
+
+    @staticmethod
+    def _response_error(resp: Any) -> str:
+        if not isinstance(resp, dict):
+            return str(resp or "")
+        for key in ("error", "message", "msg", "errno"):
+            value = resp.get(key)
+            if value not in (None, ""):
+                return str(value)
+        return str(resp)
+
+    @classmethod
+    def _is_already_saved_message(cls, value: Any) -> bool:
+        text = cls.normalize_text(value)
+        return any(
+            marker in text
+            for marker in (
+                "已经转存",
+                "已转存",
+                "已经保存",
+                "已保存",
+                "already",
+                "exist",
+            )
+        )
+
+    @staticmethod
+    def _response_ok(resp: Any) -> bool:
+        if not isinstance(resp, dict):
+            return False
+        if resp.get("state") is True:
+            return True
+        if resp.get("code") in (0, "0") and resp.get("state") not in (False, 0):
+            return True
+        if resp.get("errno") in (0, "0") and resp.get("state") not in (False, 0):
+            return True
+        return False
+
+    @staticmethod
+    def _p115_request_kwargs(*, app: bool = False) -> Dict[str, Any]:
+        try:
+            from app.plugins.p115strmhelper.core.config import configer
+
+            return configer.get_ios_ua_app(app=app) or {}
+        except Exception:
+            return {}
 
     @staticmethod
     def _resolve_servicer_from_loaded_plugin() -> Tuple[Optional[Any], Optional[str]]:
@@ -110,6 +195,40 @@ class P115TransferService:
             except Exception:
                 continue
         return None, "P115StrmHelper 运行态已加载，但未找到 service.servicer"
+
+    def _get_loaded_p115_client(self) -> Tuple[Optional[Any], str]:
+        servicer, helper_error = self._resolve_servicer_from_loaded_plugin()
+        if not servicer:
+            return None, helper_error or "P115StrmHelper 未加载"
+        client = getattr(servicer, "client", None)
+        if not client:
+            return None, "P115StrmHelper 未登录 115 或客户端不可用"
+        return client, "p115strmhelper_client"
+
+    def _get_cookie_p115_client(self) -> Tuple[Optional[Any], str]:
+        if not self.cookie:
+            return None, "未配置独立 115 Cookie"
+        try:
+            from p115client import P115Client
+
+            return P115Client(
+                self.cookie,
+                check_for_relogin=False,
+                ensure_cookies=False,
+                console_qrcode=False,
+            ), "direct_cookie"
+        except Exception as exc:
+            return None, f"独立 115 Cookie 初始化失败: {exc}"
+
+    def get_direct_client(self) -> Tuple[Optional[Any], str, str]:
+        client, source = self._get_cookie_p115_client()
+        if client:
+            return client, source, ""
+        cookie_error = source
+        client, source = self._get_loaded_p115_client()
+        if client:
+            return client, source, ""
+        return None, "none", source or cookie_error
 
     @classmethod
     def _import_servicer_fallback(cls) -> Tuple[Optional[Any], Optional[str]]:
@@ -144,10 +263,136 @@ class P115TransferService:
         return helper, None
 
     def health(self) -> Tuple[bool, Dict[str, Any], str]:
+        direct_client, direct_source, direct_error = self.get_direct_client()
+        direct_ready = direct_client is not None
         helper, helper_error = self.get_share_helper()
-        if helper_error or not helper:
-            return False, {"helper_ready": False, "message": helper_error or "P115StrmHelper 不可用"}, helper_error or "P115StrmHelper 不可用"
-        return True, {"helper_ready": True, "message": "success"}, ""
+        helper_ready = bool(helper and not helper_error)
+        ready = direct_ready or helper_ready
+        message = "" if ready else direct_error or helper_error or "115 转存不可用"
+        return ready, {
+            "ready": ready,
+            "direct_ready": direct_ready,
+            "direct_source": direct_source if direct_ready else "",
+            "direct_message": "" if direct_ready else direct_error,
+            "helper_ready": helper_ready,
+            "helper_message": "" if helper_ready else helper_error,
+            "message": message or "success",
+        }, message
+
+    def _get_or_create_path_cid(self, client: Any, path: str) -> int:
+        target_path = self.normalize_pan_path(path) or "/"
+        if target_path == "/":
+            return 0
+        get_kwargs = self._p115_request_kwargs(app=False)
+        mkdir_kwargs = self._p115_request_kwargs(app=True)
+        try:
+            resp = client.fs_dir_getid(target_path, **get_kwargs)
+            pid = self._safe_int(resp.get("id") if isinstance(resp, dict) else None, -1)
+            if pid > 0:
+                return pid
+        except Exception:
+            pass
+
+        try:
+            resp = client.fs_makedirs_app(target_path, pid=0, **mkdir_kwargs)
+            cid = self._safe_int(resp.get("cid") if isinstance(resp, dict) else None, -1)
+            if cid >= 0:
+                return cid
+            if self._response_ok(resp):
+                cid = self._safe_int((resp.get("data") or {}).get("cid") if isinstance(resp.get("data"), dict) else None, -1)
+                if cid >= 0:
+                    return cid
+            raise RuntimeError(self._response_error(resp))
+        except Exception as exc:
+            raise RuntimeError(f"无法创建或定位 115 目录 {target_path}: {exc}") from exc
+
+    def transfer_share_direct(
+        self,
+        *,
+        url: str = "",
+        access_code: str = "",
+        path: str = "",
+        trigger: str = "Agent资源官",
+    ) -> Tuple[bool, Dict[str, Any], str]:
+        transfer_path = self.normalize_pan_path(path) or self.default_target_path or "/待整理"
+        share_url = self.ensure_115_share_url(url or "", access_code or "")
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": False,
+            "trigger": trigger,
+            "strategy": "direct",
+            "path": transfer_path,
+            "url": share_url,
+            "message": "",
+            "data": {},
+        }
+        if not share_url:
+            result["message"] = "没有可用于 115 转存的分享链接"
+            return False, result, result["message"]
+        if not self.is_115_share_url(share_url):
+            result["message"] = "当前链接不是 115 分享链接，无法直接转存到 115"
+            return False, result, result["message"]
+
+        share_code, receive_code = self._extract_115_payload(share_url)
+        if not share_code or not receive_code:
+            result["message"] = "解析 115 分享链接失败，缺少分享码或提取码"
+            return False, result, result["message"]
+
+        client, source, client_error = self.get_direct_client()
+        if not client:
+            result["message"] = client_error or "没有可用的 115 直转客户端"
+            result["data"] = {"direct_source": source}
+            return False, result, result["message"]
+
+        try:
+            parent_id = self._get_or_create_path_cid(client, transfer_path)
+        except Exception as exc:
+            result["message"] = str(exc)
+            result["data"] = {"direct_source": source}
+            return False, result, result["message"]
+
+        payload = {
+            "share_code": share_code,
+            "receive_code": receive_code,
+            "file_id": 0,
+            "cid": int(parent_id),
+            "is_check": 0,
+        }
+        try:
+            resp = client.share_receive(payload, **self._p115_request_kwargs(app=False))
+        except Exception as exc:
+            result["message"] = f"调用 115 直转接口失败: {exc}"
+            result["data"] = {"direct_source": source, "parent_id": parent_id}
+            return False, result, result["message"]
+
+        if not self._response_ok(resp):
+            result["message"] = self._response_error(resp) or "115 直转失败"
+            result["data"] = {
+                "direct_source": source,
+                "parent_id": parent_id,
+                "raw": self.jsonable(resp),
+            }
+            if self._is_already_saved_message(result["message"]):
+                result["ok"] = True
+                result["message"] = "115 直转已存在"
+                return True, result, result["message"]
+            return False, result, result["message"]
+
+        result.update(
+            {
+                "ok": True,
+                "message": "115 直转成功",
+                "data": {
+                    "direct_source": source,
+                    "share_code": share_code,
+                    "receive_code": receive_code,
+                    "save_parent": transfer_path,
+                    "parent_id": parent_id,
+                    "raw": self.jsonable(resp),
+                },
+            }
+        )
+        return True, result, result["message"]
 
     def transfer_share(
         self,
@@ -175,9 +420,21 @@ class P115TransferService:
             result["message"] = "当前链接不是 115 分享链接，无法直接转存到 115"
             return False, result, result["message"]
 
+        if self.prefer_direct:
+            direct_ok, direct_result, direct_message = self.transfer_share_direct(
+                url=share_url,
+                access_code=access_code,
+                path=transfer_path,
+                trigger=trigger,
+            )
+            if direct_ok:
+                return True, direct_result, direct_message
+            result["data"]["direct_fallback"] = direct_result
+
         helper, helper_error = self.get_share_helper()
         if helper_error or not helper:
-            result["message"] = helper_error or "P115StrmHelper 不可用"
+            direct_error = ((result.get("data") or {}).get("direct_fallback") or {}).get("message")
+            result["message"] = helper_error or direct_error or "P115StrmHelper 不可用"
             return False, result, result["message"]
 
         try:
@@ -197,6 +454,16 @@ class P115TransferService:
                     error_message = self.normalize_text(transfer_result[2])
                 elif len(transfer_result) > 1:
                     error_message = self.normalize_text(transfer_result[1])
+            if self._is_already_saved_message(error_message):
+                result.update(
+                    {
+                        "ok": True,
+                        "strategy": "p115strmhelper",
+                        "message": "115 转存已存在",
+                        "data": {"raw": self.jsonable(transfer_result)},
+                    }
+                )
+                return True, result, result["message"]
             result["message"] = error_message or "115 转存失败"
             result["data"] = {"raw": self.jsonable(transfer_result)}
             return False, result, result["message"]
@@ -207,6 +474,7 @@ class P115TransferService:
         result.update(
             {
                 "ok": True,
+                "strategy": "p115strmhelper",
                 "message": "115 转存成功",
                 "data": {
                     "media_info": self.jsonable(media_info),
