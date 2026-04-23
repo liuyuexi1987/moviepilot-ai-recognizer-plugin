@@ -43,7 +43,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.7"
+    plugin_version = "0.1.8"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -198,6 +198,88 @@ class AgentResourceOfficer(_PluginBase):
                 return "影巢 OpenAPI 签到当前需要 Premium 用户；非 Premium 用户仍建议继续使用 HDHiveDailySign 网页签到链路。"
             return f"影巢 OpenAPI 的{capability}接口当前需要 Premium 用户。"
         return text or f"影巢 {capability} 接口调用失败"
+
+    @staticmethod
+    def _is_hdhive_premium_limited(message: str) -> bool:
+        text = str(message or "").strip()
+        lowered = text.lower()
+        return "premium" in lowered or "仅对 premium 用户开放" in text
+
+    @staticmethod
+    def _read_json_file(path: Path) -> Optional[Dict[str, Any]]:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        return data if isinstance(data, dict) else None
+
+    @classmethod
+    def _hdhive_daily_sign_config_paths(cls) -> List[Path]:
+        return [
+            Path("/config/plugins/hdhivedailysign.json"),
+            Path("/Applications/Dockge/moviepilotv2/config/plugins/hdhivedailysign.json"),
+        ]
+
+    @classmethod
+    def _hdhive_daily_sign_user_info_paths(cls) -> List[Path]:
+        return [
+            Path("/config/logs/plugins/hdhivedailysign_user_info.json"),
+            Path("/Applications/Dockge/moviepilotv2/config/logs/plugins/hdhivedailysign_user_info.json"),
+        ]
+
+    @classmethod
+    def _load_hdhive_daily_sign_config(cls) -> Dict[str, Any]:
+        for path in cls._hdhive_daily_sign_config_paths():
+            if not path.exists():
+                continue
+            data = cls._read_json_file(path)
+            if data:
+                return data
+        return {}
+
+    @classmethod
+    def _load_hdhive_daily_sign_user_info(cls) -> Dict[str, Any]:
+        for path in cls._hdhive_daily_sign_user_info_paths():
+            if not path.exists():
+                continue
+            data = cls._read_json_file(path)
+            if data:
+                return data
+        return {}
+
+    @classmethod
+    def _build_hdhive_account_snapshot(cls, snapshot: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(snapshot, dict) or not snapshot:
+            return {}
+        return {
+            "id": snapshot.get("id"),
+            "nickname": snapshot.get("nickname"),
+            "username": snapshot.get("nickname"),
+            "avatar_url": snapshot.get("avatar_url"),
+            "created_at": snapshot.get("created_at"),
+            "is_vip": False,
+            "source": "hdhivedailysign_snapshot",
+            "user_meta": {
+                "points": snapshot.get("points"),
+                "signin_days_total": snapshot.get("signin_days_total"),
+            },
+            "warnings_nums": snapshot.get("warnings_nums"),
+        }
+
+    @classmethod
+    def _extract_hdhive_account_fields(cls, payload: Dict[str, Any]) -> Dict[str, Any]:
+        data = payload if isinstance(payload, dict) else {}
+        meta = data.get("user_meta") if isinstance(data.get("user_meta"), dict) else {}
+        return {
+            "nickname": data.get("nickname") or data.get("username") or "—",
+            "points": meta.get("points", data.get("points", "—")),
+            "signin_days_total": meta.get("signin_days_total", data.get("signin_days_total", "—")),
+            "is_vip": bool(data.get("is_vip")),
+        }
+
+    def _get_hdhive_fallback_cookie(self) -> str:
+        config = self._load_hdhive_daily_sign_config()
+        return self._clean_text(config.get("cookie"))
 
     def _build_config(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         config = {
@@ -464,23 +546,31 @@ class AgentResourceOfficer(_PluginBase):
         if not self._hdhive_api_key:
             return "影巢 API Key 未配置"
         service = self._ensure_hdhive_service()
-        account_ok, account_result, _account_message = service.fetch_me()
+        account_ok, account_result, account_message = service.fetch_me()
         quota_ok, quota_result, _quota_message = service.fetch_quota()
         usage_ok, usage_result, _usage_message = service.fetch_usage_today()
 
         account = account_result.get("data") or {}
-        user_meta = account.get("user_meta") or {}
+        account_source = "hdhive_openapi"
+        if not account_ok and self._is_hdhive_premium_limited(account_message):
+            fallback_account = self._build_hdhive_account_snapshot(self._load_hdhive_daily_sign_user_info())
+            if fallback_account:
+                account = fallback_account
+                account_ok = True
+                account_source = "hdhivedailysign_snapshot"
+        account_fields = self._extract_hdhive_account_fields(account)
         quota = quota_result.get("data") or {}
         usage = usage_result.get("data") or {}
 
         return (
             f"影巢账号：{'可用' if account_ok else '异常'}"
-            f"\n昵称：{account.get('nickname') or account.get('username') or '—'}"
-            f"\n积分：{user_meta.get('points', '—')}"
-            f"\nVIP：{'是' if account.get('is_vip') else '否'}"
-            f"\n累计签到：{user_meta.get('signin_days_total', '—')}"
+            f"\n昵称：{account_fields.get('nickname', '—')}"
+            f"\n积分：{account_fields.get('points', '—')}"
+            f"\nVIP：{'是' if account_fields.get('is_vip') else '否'}"
+            f"\n累计签到：{account_fields.get('signin_days_total', '—')}"
             f"\n今日剩余配额：{quota.get('endpoint_remaining', '—')}"
             f"\n今日总调用：{usage.get('total_calls', '—')}"
+            f"\n账号来源：{'网页快照' if account_source == 'hdhivedailysign_snapshot' else 'OpenAPI'}"
         )
 
     def get_page(self) -> List[dict]:
@@ -821,6 +911,14 @@ class AgentResourceOfficer(_PluginBase):
         service = self._ensure_hdhive_service()
         account_ok, result, account_message = service.fetch_me()
         if not account_ok:
+            if self._is_hdhive_premium_limited(account_message):
+                fallback_account = self._build_hdhive_account_snapshot(self._load_hdhive_daily_sign_user_info())
+                if fallback_account:
+                    return {
+                        "success": True,
+                        "message": "当前返回的是 HDHiveDailySign 保存的网页用户快照",
+                        "data": fallback_account,
+                    }
             return {"success": False, "message": self._friendly_hdhive_error(account_message, "账号"), "data": result}
         return {"success": True, "message": result.get("message") or "success", "data": result.get("data") or {}}
 
@@ -838,6 +936,28 @@ class AgentResourceOfficer(_PluginBase):
             trigger="Agent资源官 API",
         )
         if not checkin_ok:
+            if self._is_hdhive_premium_limited(result.get("message") or checkin_message):
+                fallback_cookie = self._get_hdhive_fallback_cookie()
+                if fallback_cookie:
+                    fallback_ok, fallback_result, fallback_message = service.perform_web_checkin_with_fallback(
+                        cookie_string=fallback_cookie,
+                        is_gambler=bool(body.get("is_gambler")),
+                        trigger="Agent资源官 网页兜底",
+                    )
+                    if fallback_ok:
+                        return {
+                            "success": True,
+                            "message": fallback_result.get("message") or fallback_message or "签到成功",
+                            "data": fallback_result,
+                        }
+                    return {
+                        "success": False,
+                        "message": f"影巢 OpenAPI 签到受 Premium 限制，且网页兜底签到失败：{fallback_result.get('message') or fallback_message}",
+                        "data": {
+                            "openapi": result,
+                            "web_fallback": fallback_result,
+                        },
+                    }
             return {
                 "success": False,
                 "message": self._friendly_hdhive_error(result.get("message") or checkin_message, "checkin"),
