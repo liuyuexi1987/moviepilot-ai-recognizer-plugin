@@ -76,6 +76,7 @@
 
 - `AgentResourceOfficer`
   负责“统一接住智能体 / Agent Tool / API 的资源请求 -> 分流到影巢、115、夸克执行层”
+  影巢候选已支持分页，以及按需 `详情` / `审查` 补主演
 - `FeishuCommandBridgeLong`
   负责“在飞书里触发 115 整理、STRM 生成、命令桥接”
 - `HdhiveOpenApi`

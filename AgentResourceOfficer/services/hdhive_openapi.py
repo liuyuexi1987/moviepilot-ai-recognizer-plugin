@@ -170,7 +170,7 @@ class HDHiveOpenApiService:
         keyword = self.normalize_text(keyword)
         media_type = self.normalize_text(media_type).lower() or "movie"
         year = self.normalize_text(year)
-        candidate_limit = min(20, max(1, self.safe_int(candidate_limit, 10)))
+        candidate_limit = min(50, max(1, self.safe_int(candidate_limit, 10)))
 
         if not keyword:
             return False, {"message": "keyword 不能为空", "query": {"keyword": "", "media_type": media_type}}, "keyword 不能为空"
