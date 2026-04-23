@@ -46,7 +46,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.6"
+    plugin_version = "0.1.7"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -303,6 +303,41 @@ class AIRecognizerEnhancer(_PluginBase):
             "remaining_count": len(rows),
             "removed_sample": removed_sample,
             "removed_sample_index": index,
+        }
+
+    def _remove_failed_samples(self, sample_indexes: List[Any], limit: int = 1000) -> Dict[str, Any]:
+        rows = self._read_failed_samples(limit=max(1, min(limit, 1000)))
+        if not rows:
+            return {"removed": False, "message": "暂无失败样本", "removed_count": 0, "remaining_count": 0}
+        normalized_indexes = sorted(
+            {self._safe_int(index, -1) for index in (sample_indexes or []) if self._safe_int(index, -1) >= 0},
+            reverse=True,
+        )
+        valid_indexes = [index for index in normalized_indexes if index < len(rows)]
+        if not valid_indexes:
+            return {
+                "removed": False,
+                "message": "没有可移除的有效样本索引",
+                "removed_count": 0,
+                "remaining_count": len(rows),
+            }
+        removed_samples: List[Dict[str, Any]] = []
+        for index in valid_indexes:
+            removed_samples.append(dict(rows[index] or {}))
+            del rows[index]
+        if rows:
+            rows.reverse()
+            self._write_failed_samples(rows)
+        else:
+            self._clear_failed_samples()
+        removed_samples.reverse()
+        return {
+            "removed": True,
+            "message": "success",
+            "removed_count": len(valid_indexes),
+            "remaining_count": len(rows),
+            "removed_sample_indexes": sorted(valid_indexes),
+            "removed_samples": removed_samples,
         }
 
     def _resolve_failed_sample(
@@ -796,6 +831,85 @@ AI 识别增强结果：
             },
         }
 
+    def _replay_failed_samples(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        body = dict(body or {})
+        requested_indexes = body.get("sample_indexes")
+        limit = max(1, min(self._safe_int(body.get("limit"), 10), 50))
+        current_samples = self._inject_sample_indices(self._read_failed_samples(limit=200))
+        if not current_samples:
+            return {"success": False, "message": "暂无失败样本"}
+        if isinstance(requested_indexes, list) and requested_indexes:
+            selected_indexes = []
+            seen = set()
+            for raw in requested_indexes:
+                idx = self._safe_int(raw, -1)
+                if idx < 0 or idx >= len(current_samples) or idx in seen:
+                    continue
+                seen.add(idx)
+                selected_indexes.append(idx)
+        else:
+            selected_indexes = [sample.get("sample_index", 0) for sample in current_samples[:limit]]
+        if not selected_indexes:
+            return {"success": False, "message": "没有可复查的有效样本索引"}
+
+        replay_results: List[Dict[str, Any]] = []
+        resolved_indexes: List[int] = []
+        for sample_index in selected_indexes:
+            replay = self._replay_failed_sample(
+                {
+                    "sample_index": sample_index,
+                    "remove_if_resolved": False,
+                }
+            )
+            if not replay.get("success"):
+                replay_results.append(
+                    {
+                        "sample_index": sample_index,
+                        "success": False,
+                        "message": replay.get("message", "复查失败"),
+                    }
+                )
+                continue
+            data = replay.get("data") or {}
+            replay_results.append(
+                {
+                    "sample_index": sample_index,
+                    "success": True,
+                    "resolved": bool(data.get("resolved")),
+                    "resolved_by_identifiers": bool(data.get("resolved_by_identifiers")),
+                    "resolved_by_recognizer": bool(data.get("resolved_by_recognizer")),
+                    "source_sample": data.get("source_sample"),
+                    "target": data.get("target"),
+                    "identifier_preview": data.get("identifier_preview"),
+                    "recognize_result": data.get("recognize_result"),
+                }
+            )
+            if data.get("resolved"):
+                resolved_indexes.append(sample_index)
+
+        removal_result = None
+        if body.get("remove_if_resolved") and resolved_indexes:
+            removal_result = self._remove_failed_samples(resolved_indexes, limit=1000)
+
+        success_count = sum(1 for item in replay_results if item.get("success"))
+        resolved_count = sum(1 for item in replay_results if item.get("resolved"))
+        unresolved_count = success_count - resolved_count
+        failed_count = len(replay_results) - success_count
+        return {
+            "success": True,
+            "message": "success",
+            "data": {
+                "requested_count": len(selected_indexes),
+                "success_count": success_count,
+                "resolved_count": resolved_count,
+                "unresolved_count": unresolved_count,
+                "failed_count": failed_count,
+                "sample_removed_count": int((removal_result or {}).get("removed_count") or 0),
+                "sample_removal_result": removal_result,
+                "results": replay_results,
+            },
+        }
+
     def _build_exact_identifier_fallback(self, title: str, target: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         target_name = str((target or {}).get("name") or "").strip()
         tmdb_id = self._safe_int((target or {}).get("tmdb_id"), 0)
@@ -1179,6 +1293,15 @@ AI 识别增强结果：
             return {"success": False, "message": "插件未启用"}
         return self._replay_failed_sample(body)
 
+    async def api_replay_failed_samples(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        return self._replay_failed_samples(body)
+
     async def api_suggest_identifiers_from_sample(self, request: Request):
         body = await request.json()
         body["use_latest_sample"] = True if body.get("use_latest_sample") is None else body.get("use_latest_sample")
@@ -1300,6 +1423,12 @@ AI 识别增强结果：
                 "endpoint": self.api_replay_failed_sample,
                 "methods": ["POST"],
                 "summary": "按当前识别词和当前识别器复查某条失败样本，并可在确认修复后自动出队",
+            },
+            {
+                "path": "/replay_failed_samples",
+                "endpoint": self.api_replay_failed_samples,
+                "methods": ["POST"],
+                "summary": "批量复查失败样本，并可在确认修复后批量出队",
             },
             {
                 "path": "/apply_suggested_identifier",
