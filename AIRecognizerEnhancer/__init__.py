@@ -46,7 +46,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.4"
+    plugin_version = "0.1.5"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -60,6 +60,7 @@ class AIRecognizerEnhancer(_PluginBase):
     _max_retries = 2
     _save_failed_samples = True
     _max_failed_samples = 200
+    _auto_remove_applied_sample = True
     _systemconfig: Optional[SystemConfigOper] = None
 
     def init_plugin(self, config: Optional[Dict[str, Any]] = None):
@@ -71,6 +72,7 @@ class AIRecognizerEnhancer(_PluginBase):
         self._max_retries = max(1, min(5, self._safe_int(config.get("max_retries"), 2)))
         self._save_failed_samples = bool(config.get("save_failed_samples", True))
         self._max_failed_samples = max(20, min(1000, self._safe_int(config.get("max_failed_samples"), 200)))
+        self._auto_remove_applied_sample = bool(config.get("auto_remove_applied_sample", True))
         self._systemconfig = SystemConfigOper()
         self._register_events()
 
@@ -273,6 +275,35 @@ class AIRecognizerEnhancer(_PluginBase):
         if sample_path.exists():
             sample_path.unlink()
         return len(rows)
+
+    def _remove_failed_sample(self, sample_index: Optional[Any], limit: int = 1000) -> Dict[str, Any]:
+        rows = self._read_failed_samples(limit=max(1, min(limit, 1000)))
+        if not rows:
+            return {"removed": False, "message": "暂无失败样本", "removed_count": 0}
+        index = self._safe_int(sample_index, 0)
+        if index < 0:
+            index = 0
+        if index >= len(rows):
+            return {
+                "removed": False,
+                "message": f"失败样本索引超出范围，当前共有 {len(rows)} 条",
+                "removed_count": 0,
+            }
+        removed_sample = dict(rows[index] or {})
+        del rows[index]
+        if rows:
+            rows.reverse()
+            self._write_failed_samples(rows)
+        else:
+            self._clear_failed_samples()
+        return {
+            "removed": True,
+            "message": "success",
+            "removed_count": 1,
+            "remaining_count": len(rows),
+            "removed_sample": removed_sample,
+            "removed_sample_index": index,
+        }
 
     def _resolve_failed_sample(
         self,
@@ -1053,6 +1084,20 @@ AI 识别增强结果：
             },
         }
 
+    async def api_remove_failed_sample(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        result = self._remove_failed_sample(body.get("sample_index"), limit=1000)
+        if not result.get("removed"):
+            return {"success": False, "message": result.get("message", "移除失败"), "data": result}
+        return {
+            "success": True,
+            "message": "success",
+            "data": result,
+        }
+
     async def api_suggest_identifiers_from_sample(self, request: Request):
         body = await request.json()
         body["use_latest_sample"] = True if body.get("use_latest_sample") is None else body.get("use_latest_sample")
@@ -1086,14 +1131,23 @@ AI 识别增强结果：
             return {"success": False, "message": f"建议索引超出范围，当前共有 {len(suggestions)} 条"}
         chosen = suggestions[suggestion_index]
         applied = self._append_custom_identifiers(chosen.get("lines") or [])
+        should_remove_sample = bool(
+            self._auto_remove_applied_sample if body.get("remove_sample") is None else body.get("remove_sample")
+        )
+        removal_result = None
+        source_sample = data.get("source_sample") or {}
+        if should_remove_sample and source_sample.get("sample_index") is not None:
+            removal_result = self._remove_failed_sample(source_sample.get("sample_index"), limit=1000)
         return {
             "success": True,
             "message": "success",
             "data": {
                 "chosen_suggestion": chosen,
                 "apply_result": applied,
-                "source_sample_index": ((data.get("source_sample") or {}).get("sample_index")),
-                "source_sample": data.get("source_sample"),
+                "source_sample_index": source_sample.get("sample_index"),
+                "source_sample": source_sample,
+                "sample_removed": bool(removal_result and removal_result.get("removed")),
+                "sample_removal_result": removal_result,
                 "target": data.get("target"),
             },
         }
@@ -1155,10 +1209,16 @@ AI 识别增强结果：
                 "summary": "清空失败样本文件",
             },
             {
+                "path": "/remove_failed_sample",
+                "endpoint": self.api_remove_failed_sample,
+                "methods": ["POST"],
+                "summary": "按索引移除单条失败样本",
+            },
+            {
                 "path": "/apply_suggested_identifier",
                 "endpoint": self.api_apply_suggested_identifier,
                 "methods": ["POST"],
-                "summary": "直接把最近失败样本或指定样本生成的建议规则写入 CustomIdentifiers",
+                "summary": "直接把最近失败样本或指定样本生成的建议规则写入 CustomIdentifiers，并按需移除该样本",
             },
         ]
 
@@ -1181,6 +1241,7 @@ AI 识别增强结果：
                             f"\n请求超时：{self._request_timeout} 秒"
                             f"\n失败样本上限：{self._max_failed_samples} 条"
                             f"\n失败样本：{failed_samples_count} 条"
+                            f"\n写入后自动移除样本：{'是' if self._auto_remove_applied_sample else '否'}"
                             f"\n系统自定义识别词：{custom_identifiers_count} 条"
                             "\n\n当前会在 Chain NameRecognize 阶段回写 name/year/season/episode，供 MoviePilot 继续原生二次识别。"
                             "\n并且已经支持把失败样本进一步生成为 CustomIdentifiers 建议，再按需追加写入系统配置。"
@@ -1332,6 +1393,24 @@ AI 识别增强结果：
                             }
                         ],
                     },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "auto_remove_applied_sample",
+                                            "label": "写入识别词后自动移除对应失败样本",
+                                        },
+                                    }
+                                ],
+                            }
+                        ],
+                    },
                 ],
             }
         ]
@@ -1343,4 +1422,5 @@ AI 识别增强结果：
             "max_retries": 2,
             "save_failed_samples": True,
             "max_failed_samples": 200,
+            "auto_remove_applied_sample": True,
         }
