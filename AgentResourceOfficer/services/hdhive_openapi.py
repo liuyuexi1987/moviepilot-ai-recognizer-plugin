@@ -1,5 +1,9 @@
 from datetime import datetime
+import base64
+import json
+import re
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 import requests
@@ -17,6 +21,9 @@ except Exception:
 
 class HDHiveOpenApiService:
     """Reusable HDHive execution layer for Agent资源官."""
+
+    _signin_action_name = "checkIn"
+    _signin_router_tree = ["", {"children": ["(app)", {"children": ["__PAGE__", {}, None, None]}, None, None]}, None, None, True]
 
     def __init__(
         self,
@@ -375,3 +382,330 @@ class HDHiveOpenApiService:
             "data": data or {},
         }
         return ok, result, message
+
+    @staticmethod
+    def parse_cookie_string(cookie_str: Optional[str]) -> Dict[str, str]:
+        cookies: Dict[str, str] = {}
+        if not cookie_str:
+            return cookies
+        for cookie_item in str(cookie_str).split(";"):
+            if "=" in cookie_item:
+                name, value = cookie_item.strip().split("=", 1)
+                cookies[name] = value
+        return cookies
+
+    @staticmethod
+    def _decode_token_user_id(token: str) -> str:
+        if not token or "." not in token:
+            return ""
+        try:
+            payload = token.split(".", 2)[1]
+            padding = "=" * (-len(payload) % 4)
+            decoded = base64.urlsafe_b64decode(payload + padding).decode("utf-8", "ignore")
+            data = json.loads(decoded)
+            return str(data.get("user_id") or data.get("sub") or data.get("id") or "").strip()
+        except Exception:
+            return ""
+
+    @classmethod
+    def _build_signin_tree_header(cls) -> str:
+        return quote(json.dumps(cls._signin_router_tree, separators=(",", ":")))
+
+    @staticmethod
+    def _build_signin_action_body(is_gambler: bool) -> str:
+        return json.dumps([bool(is_gambler)], separators=(",", ":"))
+
+    @staticmethod
+    def _normalize_response_text(text: str) -> str:
+        if not text:
+            return ""
+        if "ä½" in text or "å·²" in text or "ç­¾å°" in text:
+            try:
+                return text.encode("latin1", errors="ignore").decode("utf-8", errors="ignore")
+            except Exception:
+                return text
+        return text
+
+    @classmethod
+    def _extract_signin_action_id_from_chunk(cls, chunk_text: str) -> str:
+        if not chunk_text:
+            return ""
+        patterns = [
+            rf'createServerReference[\s\S]{{0,120}}?\("([a-f0-9]{{32,}})"[\s\S]{{0,1200}}?"{re.escape(cls._signin_action_name)}"',
+            rf'([a-f0-9]{{32,}}).{{0,240}}?"{re.escape(cls._signin_action_name)}"',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, chunk_text, re.S)
+            if match:
+                return match.group(1)
+        return ""
+
+    @classmethod
+    def _parse_signin_action_response(cls, text: str) -> Tuple[bool, str]:
+        text = cls._normalize_response_text(text)
+        if not text:
+            return False, "签到响应为空"
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or ":" not in line:
+                continue
+            _, payload = line.split(":", 1)
+            try:
+                data = json.loads(payload)
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            if isinstance(data.get("response"), dict):
+                data = data["response"]
+            error = data.get("error")
+            if isinstance(error, dict):
+                message = cls._normalize_response_text(error.get("description") or error.get("message") or "签到失败")
+                if "已经签到" in message or "签到过" in message or "明天再来" in message:
+                    return True, message
+                return False, message
+            message = cls._normalize_response_text(data.get("message") or data.get("description"))
+            success = data.get("success")
+            if message:
+                if success is False:
+                    return False, message
+                if "已经签到" in message or "签到过" in message or "明天再来" in message:
+                    return True, message
+                return True, message
+        return False, "签到响应格式异常"
+
+    def _discover_signin_action_id(self, cookies: Dict[str, str], token: str, referer: str) -> str:
+        headers = {
+            "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Origin": self.base_url,
+            "Referer": referer,
+            "Authorization": f"Bearer {token}",
+        }
+        try:
+            home_resp = requests.get(
+                url=f"{self.base_url}/",
+                headers=headers,
+                cookies=cookies,
+                proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+                timeout=self.timeout,
+                verify=False,
+            )
+        except Exception:
+            return ""
+        if home_resp.status_code != 200:
+            return ""
+        html = home_resp.text or ""
+        chunk_paths = list(dict.fromkeys(re.findall(r'/_next/static/chunks/[A-Za-z0-9._-]+\.js', html)))
+        for chunk_path in chunk_paths:
+            try:
+                chunk_resp = requests.get(
+                    url=f"{self.base_url}{chunk_path}",
+                    headers={
+                        "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
+                        "Accept": "application/javascript,text/javascript,*/*;q=0.1",
+                        "Connection": "close",
+                    },
+                    proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+                    timeout=min(self.timeout, 20),
+                    verify=False,
+                )
+            except Exception:
+                continue
+            if chunk_resp.status_code != 200:
+                continue
+            action_id = self._extract_signin_action_id_from_chunk(chunk_resp.text or "")
+            if action_id:
+                return action_id
+        return ""
+
+    def perform_legacy_web_checkin(
+        self,
+        *,
+        cookie_string: str,
+        is_gambler: bool = False,
+        trigger: str = "网页兜底",
+    ) -> Tuple[bool, Dict[str, Any], str]:
+        cookies = self.parse_cookie_string(cookie_string)
+        token = str(cookies.get("token") or "").strip()
+        csrf_token = str(cookies.get("csrf_access_token") or "").strip()
+        if not cookies or not token:
+            result = {
+                "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ok": False,
+                "status_code": 400,
+                "trigger": trigger,
+                "is_gambler": bool(is_gambler),
+                "status": "签到失败",
+                "message": "缺少可用的影巢网页 Cookie",
+                "data": {},
+                "source": "hdhive_web_legacy",
+            }
+            return False, result, result["message"]
+
+        user_id = self._decode_token_user_id(token)
+        referer = f"{self.base_url}/user/{user_id}" if user_id else f"{self.base_url}/"
+        headers = {
+            "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
+            "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json",
+            "Origin": self.base_url,
+            "Referer": referer,
+            "Authorization": f"Bearer {token}",
+        }
+        if csrf_token:
+            headers["X-CSRF-TOKEN"] = csrf_token
+
+        payload = {"is_gambler": True} if is_gambler else {}
+        try:
+            response = requests.post(
+                url=f"{self.base_url}/api/customer/user/checkin",
+                headers=headers,
+                cookies=cookies,
+                json=payload,
+                timeout=self.timeout,
+                proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+                verify=False,
+            )
+        except Exception as exc:
+            result = {
+                "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ok": False,
+                "status_code": 0,
+                "trigger": trigger,
+                "is_gambler": bool(is_gambler),
+                "status": "签到失败",
+                "message": f"网页签到请求异常: {exc}",
+                "data": {},
+                "source": "hdhive_web_legacy",
+            }
+            return False, result, result["message"]
+
+        try:
+            body = response.json()
+        except Exception:
+            body = {}
+
+        message = ""
+        if isinstance(body, dict):
+            message = str(body.get("description") or body.get("message") or body.get("code") or "").strip()
+        if not message:
+            message = str(response.text or f"HTTP {response.status_code}").strip()[:200]
+
+        lowered = message.lower()
+        already_signed = "已经签到" in message or "签到过" in message or "明天再来" in message
+        success = bool(response.status_code < 400 and (not isinstance(body, dict) or body.get("success") is not False))
+        if already_signed:
+            success = True
+
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": success,
+            "status_code": response.status_code,
+            "trigger": trigger,
+            "is_gambler": bool(is_gambler),
+            "status": "今日已签到" if already_signed else "签到成功" if success else "签到失败",
+            "message": message or ("签到成功" if success else f"HTTP {response.status_code}"),
+            "data": body if isinstance(body, dict) else {},
+            "source": "hdhive_web_legacy",
+        }
+        return success, result, result["message"]
+
+    def perform_web_checkin_with_fallback(
+        self,
+        *,
+        cookie_string: str,
+        is_gambler: bool = False,
+        trigger: str = "网页兜底",
+    ) -> Tuple[bool, Dict[str, Any], str]:
+        legacy_ok, legacy_result, legacy_message = self.perform_legacy_web_checkin(
+            cookie_string=cookie_string,
+            is_gambler=is_gambler,
+            trigger=trigger,
+        )
+        if legacy_ok:
+            return legacy_ok, legacy_result, legacy_message
+
+        cookies = self.parse_cookie_string(cookie_string)
+        token = str(cookies.get("token") or "").strip()
+        csrf_token = str(cookies.get("csrf_access_token") or "").strip()
+        if not cookies or not token:
+            return legacy_ok, legacy_result, legacy_message
+
+        user_id = self._decode_token_user_id(token)
+        referer = f"{self.base_url}/user/{user_id}" if user_id else f"{self.base_url}/"
+        action_id = self._discover_signin_action_id(cookies, token, referer)
+        if not action_id:
+            return legacy_ok, legacy_result, legacy_message
+
+        headers = {
+            "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
+            "Accept": "text/x-component",
+            "Content-Type": "text/plain;charset=UTF-8",
+            "Origin": self.base_url,
+            "Referer": f"{self.base_url}/",
+            "Authorization": f"Bearer {token}",
+            "next-action": action_id,
+            "next-router-state-tree": self._build_signin_tree_header(),
+        }
+        if csrf_token:
+            headers["x-csrf-token"] = csrf_token
+
+        try:
+            response = requests.post(
+                url=f"{self.base_url}/",
+                headers=headers,
+                cookies=cookies,
+                data=self._build_signin_action_body(is_gambler),
+                proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+                timeout=self.timeout,
+                verify=False,
+            )
+        except Exception as exc:
+            return False, {
+                "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ok": False,
+                "status_code": 0,
+                "trigger": trigger,
+                "is_gambler": bool(is_gambler),
+                "status": "签到失败",
+                "message": f"Next Action 签到请求异常: {exc}",
+                "data": {},
+                "source": "hdhive_web_next_action",
+            }, f"Next Action 签到请求异常: {exc}"
+
+        redirect_target = str(response.headers.get("x-action-redirect") or response.headers.get("Location") or "").strip()
+        if "/login" in redirect_target:
+            message = "影巢网页 Cookie 已失效，请先在 HDHiveDailySign 中更新 Cookie 或重新自动登录"
+            result = {
+                "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ok": False,
+                "status_code": response.status_code,
+                "trigger": trigger,
+                "is_gambler": bool(is_gambler),
+                "status": "签到失败",
+                "message": message,
+                "data": {"redirect": redirect_target},
+                "source": "hdhive_web_next_action",
+            }
+            return False, result, message
+
+        response_text = ""
+        try:
+            response_text = response.content.decode("utf-8", errors="ignore")
+        except Exception:
+            response_text = response.text or ""
+        success, message = self._parse_signin_action_response(response_text)
+        result = {
+            "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ok": success,
+            "status_code": response.status_code,
+            "trigger": trigger,
+            "is_gambler": bool(is_gambler),
+            "status": "今日已签到" if "已经签到" in message or "签到过" in message or "明天再来" in message else "签到成功" if success else "签到失败",
+            "message": message,
+            "data": {},
+            "source": "hdhive_web_next_action",
+        }
+        return success, result, message
