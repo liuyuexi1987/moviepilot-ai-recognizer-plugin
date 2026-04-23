@@ -1,5 +1,6 @@
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -45,7 +46,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.3"
+    plugin_version = "0.1.4"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
@@ -322,6 +323,121 @@ class AIRecognizerEnhancer(_PluginBase):
             "verified_tmdb_id": verified.get("tmdb_id"),
             "inferred_target": inferred_target,
             "can_auto_suggest": bool(inferred_target["name"]),
+        }
+
+    @staticmethod
+    def _normalize_reason_tag(reason: Any) -> str:
+        text = str(reason or "").strip()
+        if not text:
+            return "unknown"
+        if ":" in text:
+            return text.split(":", 1)[0].strip() or "unknown"
+        return text
+
+    @staticmethod
+    def _sample_group_key(summary: Dict[str, Any]) -> str:
+        target = summary.get("inferred_target") or {}
+        title = (
+            str(target.get("name") or "").strip()
+            or str(summary.get("verified_title") or "").strip()
+            or str(summary.get("guess_name") or "").strip()
+            or str(summary.get("title") or "").strip()
+        )
+        media_type = str(target.get("media_type") or "unknown").strip().lower()
+        season = int(target.get("season") or 0)
+        episode = int(target.get("episode") or 0)
+        return json.dumps(
+            {
+                "title": title.lower(),
+                "media_type": media_type,
+                "season": season,
+                "episode": episode,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
+    @staticmethod
+    def _sample_display_name(summary: Dict[str, Any]) -> str:
+        target = summary.get("inferred_target") or {}
+        title = (
+            str(target.get("name") or "").strip()
+            or str(summary.get("verified_title") or "").strip()
+            or str(summary.get("guess_name") or "").strip()
+            or str(summary.get("title") or "").strip()
+        )
+        if not title:
+            return "未命名样本"
+        media_type = str(target.get("media_type") or "").strip().lower()
+        season = int(target.get("season") or 0)
+        episode = int(target.get("episode") or 0)
+        suffix = ""
+        if media_type == "tv" and (season or episode):
+            suffix = f" S{season:02d}E{episode:02d}"
+        return f"{title}{suffix}"
+
+    def _build_sample_insights(self, samples: List[Dict[str, Any]], top: int = 10) -> Dict[str, Any]:
+        summaries = [self._summarize_sample(sample) for sample in samples]
+        reason_counter = Counter()
+        title_counter = Counter()
+        group_counter = Counter()
+        for summary in summaries:
+            reason_counter[self._normalize_reason_tag(summary.get("reason"))] += 1
+            title_counter[self._sample_display_name(summary)] += 1
+            group_counter[self._sample_group_key(summary)] += 1
+
+        actionable: List[Dict[str, Any]] = []
+        for summary in summaries:
+            duplicate_count = group_counter[self._sample_group_key(summary)]
+            priority_reasons: List[str] = []
+            score = 0
+            if duplicate_count >= 2:
+                score += min(duplicate_count, 5)
+                priority_reasons.append(f"同类样本重复出现 {duplicate_count} 次")
+            if summary.get("verified_tmdb_id"):
+                score += 3
+                priority_reasons.append("已有 TMDB 命中")
+            if summary.get("can_auto_suggest"):
+                score += 2
+                priority_reasons.append("可直接生成识别词")
+            confidence = self._safe_float(summary.get("guess_confidence"), 0.0)
+            if 0 < confidence < self._confidence_threshold:
+                gap = round(self._confidence_threshold - confidence, 2)
+                score += 1
+                priority_reasons.append(f"距注入阈值还差 {gap}")
+            row = dict(summary)
+            row["duplicate_count"] = duplicate_count
+            row["priority_score"] = score
+            row["priority_reasons"] = priority_reasons
+            actionable.append(row)
+
+        actionable.sort(
+            key=lambda item: (
+                -int(item.get("priority_score") or 0),
+                -int(item.get("duplicate_count") or 0),
+                -self._safe_float(item.get("guess_confidence"), 0.0),
+                int(item.get("sample_index") or 0),
+            )
+        )
+
+        repeated_groups = [
+            {"title": name, "count": count}
+            for name, count in title_counter.most_common(top)
+            if count >= 2
+        ]
+
+        return {
+            "total_count": len(summaries),
+            "reason_counts": [
+                {"reason": reason, "count": count}
+                for reason, count in reason_counter.most_common(top)
+            ],
+            "top_titles": [
+                {"title": title, "count": count}
+                for title, count in title_counter.most_common(top)
+            ],
+            "repeated_groups": repeated_groups,
+            "priority_samples": actionable[:top],
         }
 
     def _build_body_from_sample(self, body: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], str]:
@@ -885,6 +1001,21 @@ AI 识别增强结果：
             },
         }
 
+    async def api_sample_insights(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        limit = self._safe_int(request.query_params.get("limit"), 50)
+        limit = max(1, min(limit, 200))
+        top = self._safe_int(request.query_params.get("top"), 10)
+        top = max(1, min(top, 20))
+        samples = self._inject_sample_indices(self._read_failed_samples(limit=limit))
+        insights = self._build_sample_insights(samples, top=top)
+        return {
+            "success": True,
+            "data": insights,
+        }
+
     async def api_suggest_identifiers(self, request: Request):
         body = await request.json()
         ok, message = self._check_api_access(request, body)
@@ -992,6 +1123,12 @@ AI 识别增强结果：
                 "endpoint": self.api_sample_worklist,
                 "methods": ["GET"],
                 "summary": "返回适合智能体使用的失败样本摘要列表",
+            },
+            {
+                "path": "/sample_insights",
+                "endpoint": self.api_sample_insights,
+                "methods": ["GET"],
+                "summary": "汇总失败样本原因、重复问题和优先处理样本",
             },
             {
                 "path": "/suggest_identifiers",
