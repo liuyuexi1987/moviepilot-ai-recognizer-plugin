@@ -160,7 +160,19 @@
 ## 暂不迁入的内容
 
 - PT 搜索/订阅工作流仍保持在旧桥接插件，后续单独评估
-- 与 `P115StrmHelper` 的兼容性问题不在首期重构内处理
+- `P115StrmHelper` 仍作为 115 落地执行层保留，不直接并入 `Agent资源官`
+
+## P115StrmHelper 兼容补丁
+
+新版 MoviePilot 移除了旧版 `TransferOverwriteCheck` 事件时，部分 `P115StrmHelper` 版本会因为导入 `TransferOverwriteCheckEventData` 失败而无法加载，进而导致 115 自动转存不可用。
+
+仓库提供了幂等补丁脚本：
+
+```bash
+MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
+```
+
+补丁只跳过缺失事件的注册，不改动 `P115StrmHelper` 的分享转存主流程。运行环境已验证 `AgentResourceOfficer` 的 `p115/health` 可返回 `p115_helper_ready=true`。
 
 ## 首个里程碑
 

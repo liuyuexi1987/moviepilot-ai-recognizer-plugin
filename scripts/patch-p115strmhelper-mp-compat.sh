@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+container="${MP_CONTAINER:-moviepilot-v2}"
+plugin_file="/app/app/plugins/p115strmhelper/__init__.py"
+tmp_dir="$(mktemp -d)"
+local_file="${tmp_dir}/p115strmhelper_init.py"
+
+cleanup() {
+  rm -rf "${tmp_dir}"
+}
+trap cleanup EXIT
+
+echo "P115StrmHelper compatibility patch"
+echo "container: ${container}"
+
+docker exec "${container}" test -f "${plugin_file}"
+docker cp "${container}:${plugin_file}" "${local_file}"
+
+if grep -q "_optional_event_register(_TRANSFER_OVERWRITE_CHECK_EVENT)" "${local_file}"; then
+  echo "already patched"
+else
+  python3 - "${local_file}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+text = text.replace("    TransferOverwriteCheckEventData,\n", "")
+
+marker = "from app.schemas.types import ChainEventType\n"
+compat = '''from app.schemas.types import ChainEventType
+
+_TRANSFER_OVERWRITE_CHECK_EVENT = getattr(ChainEventType, "TransferOverwriteCheck", None)
+try:
+    from app.schemas import TransferOverwriteCheckEventData
+except Exception:
+    class TransferOverwriteCheckEventData:
+        pass
+
+
+def _optional_event_register(event_type):
+    if event_type is None:
+        def decorator(func):
+            return func
+        return decorator
+    return eventmanager.register(event_type)
+'''
+
+if marker not in text:
+    raise SystemExit("cannot find ChainEventType import marker")
+text = text.replace(marker, compat, 1)
+
+old = "@eventmanager.register(ChainEventType.TransferOverwriteCheck)"
+new = "@_optional_event_register(_TRANSFER_OVERWRITE_CHECK_EVENT)"
+if old not in text:
+    raise SystemExit("cannot find TransferOverwriteCheck decorator")
+text = text.replace(old, new, 1)
+
+path.write_text(text)
+PY
+fi
+
+docker cp "${local_file}" "${container}:${plugin_file}"
+docker exec "${container}" /opt/venv/bin/python -m py_compile "${plugin_file}"
+
+echo "patched and syntax check passed"
+echo "restart MoviePilot, then verify AgentResourceOfficer /p115/health"

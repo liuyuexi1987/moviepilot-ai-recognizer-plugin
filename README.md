@@ -98,6 +98,12 @@
 
 也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
 
+如果升级 MoviePilot 后 `P115StrmHelper` 因旧事件导入失败无法加载，可以使用仓库里的兼容脚本恢复：
+
+```bash
+MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
+```
+
 ## 和智能体怎么配合
 
 这套仓库现在更推荐的做法不是让智能体自己写临时脚本、自己拼接口，而是：
