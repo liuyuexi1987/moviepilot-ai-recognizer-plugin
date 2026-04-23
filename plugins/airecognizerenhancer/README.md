@@ -18,7 +18,7 @@
 - 用 MP 当前 LLM 结构化判断标题、年份、类型、季集
 - 把识别结果回写到 `name/year/season/episode`
 - 交回 MoviePilot 原生链路继续二次识别
-- 提供 `/health`、`/recognize`、`/failed_samples`、`/sample_worklist`、`/sample_insights`、`/suggest_identifiers`、`/suggest_identifiers_from_sample`、`/apply_identifiers`、`/apply_suggested_identifier`、`/clear_failed_samples` 十个 API
+- 提供 `/health`、`/recognize`、`/failed_samples`、`/sample_worklist`、`/sample_insights`、`/suggest_identifiers`、`/suggest_identifiers_from_sample`、`/apply_identifiers`、`/apply_suggested_identifier`、`/remove_failed_sample`、`/clear_failed_samples` 十一个 API
 - 可选保存低置信度样本，并对重复样本自动去重、限制保留上限，再继续做样本洞察和 MoviePilot 原生自定义识别词建议
 
 ## 当前接口
@@ -40,7 +40,9 @@
 - `POST /api/v1/plugin/AIRecognizerEnhancer/apply_identifiers`
   将确认后的规则追加写入系统 `CustomIdentifiers`
 - `POST /api/v1/plugin/AIRecognizerEnhancer/apply_suggested_identifier`
-  直接把最近失败样本或指定样本生成的建议规则写入系统 `CustomIdentifiers`
+  直接把最近失败样本或指定样本生成的建议规则写入系统 `CustomIdentifiers`，并按需自动移除该样本
+- `POST /api/v1/plugin/AIRecognizerEnhancer/remove_failed_sample`
+  按索引移除单条失败样本
 - `POST /api/v1/plugin/AIRecognizerEnhancer/clear_failed_samples`
   清空失败样本文件
 
@@ -58,6 +60,6 @@
 
 ## 当前状态
 
-- `0.1.4` 已补上失败样本洞察，可自动归纳重复问题、失败原因和优先处理样本
+- `0.1.5` 已补上失败样本出队动作，写入识别词后可自动移除对应样本，也支持手动按索引移除单条样本
 - 方向已切到 MP 内置 LLM 本地兜底
 - 还会继续补提示词、样本分析和识别词建议
