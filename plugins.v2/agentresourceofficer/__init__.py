@@ -52,7 +52,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.13"
+    plugin_version = "0.1.14"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1261,6 +1261,7 @@ class AgentResourceOfficer(_PluginBase):
     @staticmethod
     def _parse_assistant_text(text: str) -> Dict[str, str]:
         raw = str(text or "").strip()
+        compact = re.sub(r"\s+", "", raw).lower()
         share_url = AgentResourceOfficer._extract_first_url(raw)
         remain = raw.replace(share_url, " ").strip() if share_url else raw
         mode, query = AgentResourceOfficer._normalize_search_prefix(remain)
@@ -1273,7 +1274,35 @@ class AgentResourceOfficer(_PluginBase):
             "keyword": query or remain,
             "type": "",
             "year": "",
+            "action": "",
+            "client_type": "",
         }
+        if compact in {
+            "115登录",
+            "115扫码",
+            "扫码115",
+            "登录115",
+            "115login",
+            "115qrcode",
+            "p115login",
+            "p115qrcode",
+        }:
+            options["action"] = "p115_qrcode_start"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "检查115登录",
+            "115登录状态",
+            "115状态",
+            "检查115扫码",
+            "检查扫码",
+            "115check",
+            "check115login",
+            "p115check",
+        }:
+            options["action"] = "p115_qrcode_check"
+            options["mode"] = ""
+            options["keyword"] = ""
         for token in remain.split():
             item = token.strip()
             if not item:
@@ -1293,6 +1322,9 @@ class AgentResourceOfficer(_PluginBase):
                     continue
                 if key in {"year", "年份"} and value:
                     options["year"] = value.strip()
+                    continue
+                if key in {"client_type", "client", "客户端"} and value:
+                    options["client_type"] = P115TransferService.normalize_qrcode_client_type(value)
                     continue
             if item.startswith("/") and not options["path"]:
                 options["path"] = AgentResourceOfficer._resolve_pan_path_value(item)
@@ -2051,6 +2083,87 @@ class AgentResourceOfficer(_PluginBase):
                 })
             )
             return pick_result
+
+        assistant_action = self._clean_text(parsed.get("action"))
+        if assistant_action == "p115_qrcode_start":
+            client_type = P115TransferService.normalize_qrcode_client_type(
+                parsed.get("client_type") or self._p115_client_type
+            )
+            qr_ok, data, qr_message = self._ensure_p115_service().create_qrcode_login(client_type=client_type)
+            if not qr_ok:
+                return {"success": False, "message": f"115 扫码二维码生成失败：{qr_message}"}
+            self._save_session(
+                cache_key,
+                {
+                    "kind": "assistant_p115_login",
+                    "stage": "qrcode",
+                    "client_type": client_type,
+                    "uid": self._clean_text(data.get("uid")),
+                    "time": self._clean_text(data.get("time")),
+                    "sign": self._clean_text(data.get("sign")),
+                },
+            )
+            return {
+                "success": True,
+                "message": (
+                    "115 扫码二维码已生成\n"
+                    f"客户端：{client_type}\n"
+                    "请使用 115 App 扫码确认后，再回复：检查115登录"
+                ),
+                "data": {
+                    "action": "p115_qrcode_start",
+                    "ok": True,
+                    "session_id": cache_key,
+                    "qrcode": data.get("qrcode"),
+                    "uid": data.get("uid"),
+                    "time": data.get("time"),
+                    "sign": data.get("sign"),
+                    "client_type": client_type,
+                },
+            }
+        if assistant_action == "p115_qrcode_check":
+            state = self._load_session(cache_key)
+            if not state or str(state.get("kind") or "").strip() != "assistant_p115_login":
+                return {"success": False, "message": "没有待检查的 115 登录会话，请先回复：115登录"}
+            client_type = P115TransferService.normalize_qrcode_client_type(
+                state.get("client_type") or parsed.get("client_type") or self._p115_client_type
+            )
+            qr_ok, data, qr_message = self._ensure_p115_service().check_qrcode_login(
+                uid=self._clean_text(state.get("uid")),
+                time_value=self._clean_text(state.get("time")),
+                sign=self._clean_text(state.get("sign")),
+                client_type=client_type,
+            )
+            if qr_ok and data.get("status") == "success":
+                cookie = self._clean_text(data.pop("cookie"))
+                if cookie:
+                    self._p115_cookie = cookie
+                    self._p115_client_type = client_type
+                    self._apply_runtime_config({
+                        "p115_cookie": cookie,
+                        "p115_client_type": client_type,
+                    })
+                    data["cookie_saved"] = True
+                    data["cookie_mode"] = "client_cookie"
+                    self._save_session(cache_key, {**state, "stage": "success", "client_type": client_type})
+            if not qr_ok:
+                return {
+                    "success": False,
+                    "message": f"115 扫码状态：{qr_message}",
+                    "data": {"action": "p115_qrcode_check", "ok": False, **data},
+                }
+            status = self._clean_text(data.get("status"))
+            message_text = "\n".join([
+                "115 扫码状态",
+                f"状态：{status or 'unknown'}",
+                f"结果：{qr_message}",
+                "如果还没确认登录，请在 115 App 里点确认后再次回复：检查115登录" if status in {"waiting", "scanned"} else "",
+            ]).strip()
+            return {
+                "success": True,
+                "message": message_text,
+                "data": {"action": "p115_qrcode_check", "ok": True, **data},
+            }
 
         if parsed.get("url"):
             provider = "quark" if self._is_quark_url(parsed["url"]) else "115" if self._is_115_url(parsed["url"]) else "unknown"
