@@ -139,7 +139,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.5.24"
+    plugin_version = "0.5.25"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
@@ -840,6 +840,7 @@ class FeishuCommandBridgeLong(_PluginBase):
 
     def health(self):
         return {
+            "plugin_version": self.plugin_version,
             "enabled": self._enabled,
             "running": _runtime.is_running(),
             "allow_all": self._allow_all,
@@ -1887,6 +1888,20 @@ class FeishuCommandBridgeLong(_PluginBase):
         }
 
     @staticmethod
+    def _is_p115_assistant_text(text: str) -> bool:
+        compact = re.sub(r"\s+", "", str(text or "")).lower()
+        return compact in {
+            "115帮助",
+            "115任务",
+            "继续115任务",
+            "取消115任务",
+        }
+
+    @classmethod
+    def _is_forced_aro_smart_text(cls, text: str) -> bool:
+        return cls._is_p115_qrcode_start_text(text) or cls._is_p115_qrcode_check_text(text) or cls._is_p115_assistant_text(text)
+
+    @staticmethod
     def _detect_share_kind(url: str) -> str:
         host = (urlparse(url).hostname or "").lower().strip(".")
         if host.endswith("quark.cn"):
@@ -2056,6 +2071,8 @@ class FeishuCommandBridgeLong(_PluginBase):
     @staticmethod
     def _strip_search_prefix(text: str) -> Tuple[str, str]:
         raw = str(text or "").strip()
+        if FeishuCommandBridgeLong._is_forced_aro_smart_text(raw):
+            return "", raw
         mappings = [
             ("1搜索", "pansou"),
             ("2搜索", "hdhive"),
@@ -2141,6 +2158,9 @@ class FeishuCommandBridgeLong(_PluginBase):
 
     def _requires_agent_resource_officer(self) -> bool:
         return self._normalize_execution_backend(self._execution_backend) == "agent_resource_officer"
+
+    def _has_agent_resource_officer(self) -> bool:
+        return self._get_running_plugin("AgentResourceOfficer") is not None
 
     def _call_local_json_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Tuple[bool, Dict[str, Any], str]:
         query = {"apikey": settings.API_TOKEN}
@@ -2316,7 +2336,7 @@ class FeishuCommandBridgeLong(_PluginBase):
         )
 
     def _should_force_aro_for_p115_login(self, text: str) -> bool:
-        return self._is_p115_qrcode_start_text(text) or self._is_p115_qrcode_check_text(text)
+        return self._is_forced_aro_smart_text(text)
 
     def _call_hdhive_search_by_tmdb(
         self,
@@ -2943,6 +2963,19 @@ class FeishuCommandBridgeLong(_PluginBase):
         keyword = parsed["keyword"]
         media_type = parsed["type"]
         year = parsed["year"]
+
+        # Keep 115 direct-link handling on the new ARO path so pending-task,
+        # login-resume and cancellation all stay in the same session chain.
+        if share_url and self._detect_share_kind(share_url) == "115" and self._has_agent_resource_officer():
+            ok, payload, message = self._call_aro_assistant_route(cache_key, arg)
+            data = payload.get("data") or {}
+            text = str(message or "处理失败").strip()
+            return ok, text, {
+                "action": data.get("action") or "assistant_route",
+                "ok": ok,
+                "message": text,
+                "result": data,
+            }
 
         if share_url:
             share_kind = self._detect_share_kind(share_url)

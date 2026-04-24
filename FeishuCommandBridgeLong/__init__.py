@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 import traceback
+from base64 import b64decode
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode, urlparse
@@ -138,7 +139,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.5.17"
+    plugin_version = "0.5.25"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
@@ -215,6 +216,15 @@ class FeishuCommandBridgeLong(_PluginBase):
             "夸克=/quark_save\n"
             "链接=/smart_entry\n"
             "处理=/smart_entry\n"
+            "115登录=/smart_entry\n"
+            "115扫码=/smart_entry\n"
+            "检查115登录=/smart_entry\n"
+            "115登录状态=/smart_entry\n"
+            "115状态=/smart_entry\n"
+            "115帮助=/smart_entry\n"
+            "115任务=/smart_entry\n"
+            "继续115任务=/smart_entry\n"
+            "取消115任务=/smart_entry\n"
             "选择=/smart_pick\n"
             "详情=/smart_pick\n"
             "审查=/smart_pick\n"
@@ -764,6 +774,41 @@ class FeishuCommandBridgeLong(_PluginBase):
                                                     {
                                                         "component": "div",
                                                         "props": {"class": "text-body-2 py-1"},
+                                                        "text": "115登录",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "115帮助",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "检查115登录",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "115任务",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "继续115任务",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "取消115任务",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "链接 https://115cdn.com/s/xxxx path=/待整理",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
                                                         "text": "下载资源 1",
                                                     },
                                                     {
@@ -795,6 +840,7 @@ class FeishuCommandBridgeLong(_PluginBase):
 
     def health(self):
         return {
+            "plugin_version": self.plugin_version,
             "enabled": self._enabled,
             "running": _runtime.is_running(),
             "allow_all": self._allow_all,
@@ -1775,10 +1821,17 @@ class FeishuCommandBridgeLong(_PluginBase):
         receive_chat_id: str,
         receive_open_id: str,
     ) -> None:
-        ok, text, _ = self._execute_smart_entry(
+        ok, text, data = self._execute_smart_entry(
             arg=arg,
             cache_key=self._cache_key(receive_chat_id, receive_open_id),
         )
+        result = data.get("result") or {}
+        if data.get("action") == "p115_qrcode_start":
+            self._reply_qrcode_data_url_if_needed(
+                receive_chat_id=receive_chat_id,
+                receive_open_id=receive_open_id,
+                data_url=str(result.get("qrcode") or ""),
+            )
         self._reply_if_needed(
             receive_chat_id=receive_chat_id,
             receive_open_id=receive_open_id,
@@ -1805,6 +1858,48 @@ class FeishuCommandBridgeLong(_PluginBase):
     def _extract_first_url(text: str) -> str:
         match = re.search(r"https?://[^\s<>\"']+", str(text or ""))
         return match.group(0).rstrip(".,);]") if match else ""
+
+    @staticmethod
+    def _is_p115_qrcode_start_text(text: str) -> bool:
+        compact = re.sub(r"\s+", "", str(text or "")).lower()
+        return compact in {
+            "115登录",
+            "115扫码",
+            "扫码115",
+            "登录115",
+            "115login",
+            "115qrcode",
+            "p115login",
+            "p115qrcode",
+        }
+
+    @staticmethod
+    def _is_p115_qrcode_check_text(text: str) -> bool:
+        compact = re.sub(r"\s+", "", str(text or "")).lower()
+        return compact in {
+            "检查115登录",
+            "115登录状态",
+            "115状态",
+            "检查115扫码",
+            "检查扫码",
+            "115check",
+            "check115login",
+            "p115check",
+        }
+
+    @staticmethod
+    def _is_p115_assistant_text(text: str) -> bool:
+        compact = re.sub(r"\s+", "", str(text or "")).lower()
+        return compact in {
+            "115帮助",
+            "115任务",
+            "继续115任务",
+            "取消115任务",
+        }
+
+    @classmethod
+    def _is_forced_aro_smart_text(cls, text: str) -> bool:
+        return cls._is_p115_qrcode_start_text(text) or cls._is_p115_qrcode_check_text(text) or cls._is_p115_assistant_text(text)
 
     @staticmethod
     def _detect_share_kind(url: str) -> str:
@@ -1976,6 +2071,8 @@ class FeishuCommandBridgeLong(_PluginBase):
     @staticmethod
     def _strip_search_prefix(text: str) -> Tuple[str, str]:
         raw = str(text or "").strip()
+        if FeishuCommandBridgeLong._is_forced_aro_smart_text(raw):
+            return "", raw
         mappings = [
             ("1搜索", "pansou"),
             ("2搜索", "hdhive"),
@@ -2061,6 +2158,9 @@ class FeishuCommandBridgeLong(_PluginBase):
 
     def _requires_agent_resource_officer(self) -> bool:
         return self._normalize_execution_backend(self._execution_backend) == "agent_resource_officer"
+
+    def _has_agent_resource_officer(self) -> bool:
+        return self._get_running_plugin("AgentResourceOfficer") is not None
 
     def _call_local_json_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Tuple[bool, Dict[str, Any], str]:
         query = {"apikey": settings.API_TOKEN}
@@ -2234,6 +2334,9 @@ class FeishuCommandBridgeLong(_PluginBase):
                 "action": action,
             },
         )
+
+    def _should_force_aro_for_p115_login(self, text: str) -> bool:
+        return self._is_forced_aro_smart_text(text)
 
     def _call_hdhive_search_by_tmdb(
         self,
@@ -2768,6 +2871,15 @@ class FeishuCommandBridgeLong(_PluginBase):
         return "\n".join(lines)
 
     @staticmethod
+    def _format_115_error_text(message: str) -> str:
+        text = str(message or "").strip()
+        if not text:
+            return "115 转存失败：未知错误"
+        if text.startswith("115 转存失败") or text.startswith("影巢解锁成功，但 115 转存失败"):
+            return text
+        return f"115 转存失败：{text}"
+
+    @staticmethod
     def _compact_115_result(result: Dict[str, Any]) -> Dict[str, Any]:
         compact = {
             "ok": bool(result.get("ok")),
@@ -2824,6 +2936,16 @@ class FeishuCommandBridgeLong(_PluginBase):
         arg: str,
         cache_key: str,
     ) -> Tuple[bool, str, Dict[str, Any]]:
+        if self._should_force_aro_for_p115_login(arg):
+            ok, payload, message = self._call_aro_assistant_route(cache_key, arg)
+            data = payload.get("data") or {}
+            text = str(message or "处理失败").strip()
+            return ok, text, {
+                "action": data.get("action") or "assistant_route",
+                "ok": ok,
+                "message": text,
+                "result": data,
+            }
         if self._should_use_agent_resource_officer():
             ok, payload, message = self._call_aro_assistant_route(cache_key, arg)
             data = payload.get("data") or {}
@@ -2841,6 +2963,19 @@ class FeishuCommandBridgeLong(_PluginBase):
         keyword = parsed["keyword"]
         media_type = parsed["type"]
         year = parsed["year"]
+
+        # Keep 115 direct-link handling on the new ARO path so pending-task,
+        # login-resume and cancellation all stay in the same session chain.
+        if share_url and self._detect_share_kind(share_url) == "115" and self._has_agent_resource_officer():
+            ok, payload, message = self._call_aro_assistant_route(cache_key, arg)
+            data = payload.get("data") or {}
+            text = str(message or "处理失败").strip()
+            return ok, text, {
+                "action": data.get("action") or "assistant_route",
+                "ok": ok,
+                "message": text,
+                "result": data,
+            }
 
         if share_url:
             share_kind = self._detect_share_kind(share_url)
@@ -2873,7 +3008,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                     f"目录：{result.get('path') or final_path}\n"
                     f"结果：{result.get('message') or 'success'}"
                     if ok
-                    else f"115 转存失败：{message or '未知错误'}"
+                    else self._format_115_error_text(message)
                 )
                 return ok, text, {
                     "action": "transfer_115",
@@ -3301,7 +3436,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                     final_path,
                 )
                 if not ok:
-                    return False, f"115 转存失败：{message or '未知错误'}", {
+                    return False, self._format_115_error_text(message), {
                         "action": "transfer_115",
                         "ok": False,
                         "message": message or "transfer failed",
@@ -3852,6 +3987,93 @@ class FeishuCommandBridgeLong(_PluginBase):
             logger.error(
                 f"[FeishuCommandBridge] reply failed: "
                 f"status={response.status_code} body={data}"
+            )
+
+    def _upload_image_to_feishu(self, image_bytes: bytes, file_name: str = "qrcode.png") -> Optional[str]:
+        if not image_bytes or not self._app_id or not self._app_secret:
+            return None
+        access_token = self._get_tenant_access_token()
+        if not access_token:
+            return None
+        headers = {"Authorization": f"Bearer {access_token}"}
+        response = RequestUtils(headers=headers).post(
+            url="https://open.feishu.cn/open-apis/im/v1/images",
+            data={"image_type": "message"},
+            files={"image": (file_name, image_bytes, "image/png")},
+        )
+        if response is None:
+            logger.error("[FeishuCommandBridge] 上传飞书图片失败：无响应")
+            return None
+        try:
+            data = response.json()
+        except Exception:
+            data = {}
+        if response.status_code != 200 or data.get("code") not in (0, None):
+            logger.error(
+                f"[FeishuCommandBridge] 上传飞书图片失败: status={response.status_code} body={data}"
+            )
+            return None
+        return str(((data.get("data") or {}).get("image_key")) or "").strip() or None
+
+    def _reply_image_if_needed(
+        self,
+        receive_chat_id: str,
+        receive_open_id: str,
+        image_key: str,
+    ) -> None:
+        if not image_key or not self._reply_enabled or not self._app_id or not self._app_secret:
+            return
+        receive_id_type = self._reply_receive_id_type
+        receive_id = receive_chat_id if receive_id_type == "chat_id" else receive_open_id
+        if not receive_id:
+            return
+        access_token = self._get_tenant_access_token()
+        if not access_token:
+            return
+        url = f"https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type={receive_id_type}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json; charset=utf-8",
+        }
+        payload = {
+            "receive_id": receive_id,
+            "msg_type": "image",
+            "content": json.dumps({"image_key": image_key}, ensure_ascii=False),
+        }
+        response = RequestUtils(headers=headers).post(url=url, json=payload)
+        if response is None:
+            logger.error("[FeishuCommandBridge] 发送飞书图片失败：无响应")
+            return
+        try:
+            data = response.json()
+        except Exception:
+            data = {}
+        if response.status_code != 200 or data.get("code") not in (0, None):
+            logger.error(
+                f"[FeishuCommandBridge] 发送飞书图片失败: status={response.status_code} body={data}"
+            )
+
+    def _reply_qrcode_data_url_if_needed(
+        self,
+        receive_chat_id: str,
+        receive_open_id: str,
+        data_url: str,
+    ) -> None:
+        text = str(data_url or "").strip()
+        if not text.startswith("data:image/") or ";base64," not in text:
+            return
+        _, _, payload = text.partition(";base64,")
+        try:
+            image_bytes = b64decode(payload)
+        except Exception as exc:
+            logger.error(f"[FeishuCommandBridge] 解码二维码图片失败：{exc}")
+            return
+        image_key = self._upload_image_to_feishu(image_bytes=image_bytes, file_name="p115-qrcode.png")
+        if image_key:
+            self._reply_image_if_needed(
+                receive_chat_id=receive_chat_id,
+                receive_open_id=receive_open_id,
+                image_key=image_key,
             )
 
     def _get_tenant_access_token(self) -> Optional[str]:

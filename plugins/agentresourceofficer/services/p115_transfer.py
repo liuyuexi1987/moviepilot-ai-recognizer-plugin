@@ -4,6 +4,7 @@ import sys
 from base64 import b64encode
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from zoneinfo import ZoneInfo
@@ -63,6 +64,19 @@ class P115TransferService:
         if not text.startswith("/"):
             text = f"/{text}"
         return text.rstrip("/") or "/"
+
+    @staticmethod
+    def _ensure_helper_import_paths() -> None:
+        candidate_dirs = [
+            "/app/app/plugins",
+            "/config/plugins",
+        ]
+        for base in candidate_dirs:
+            path = Path(base)
+            if path.exists():
+                text = str(path)
+                if text not in sys.path:
+                    sys.path.append(text)
 
     @staticmethod
     def is_115_share_url(url: str) -> bool:
@@ -222,10 +236,18 @@ class P115TransferService:
     @staticmethod
     def _p115_request_kwargs(*, app: bool = False) -> Dict[str, Any]:
         try:
+            P115TransferService._ensure_helper_import_paths()
             from app.plugins.p115strmhelper.core.config import configer
 
             return configer.get_ios_ua_app(app=app) or {}
         except Exception:
+            try:
+                P115TransferService._ensure_helper_import_paths()
+                from p115strmhelper.core.config import configer
+
+                return configer.get_ios_ua_app(app=app) or {}
+            except Exception:
+                pass
             return {}
 
     @staticmethod
@@ -252,6 +274,7 @@ class P115TransferService:
 
         for module_name in module_names:
             try:
+                self._ensure_helper_import_paths()
                 module = sys.modules.get(module_name) or importlib.import_module(module_name)
                 servicer = getattr(module, "servicer", None)
                 if servicer is not None:
@@ -388,6 +411,7 @@ class P115TransferService:
             "p115strmhelper.service",
         ]:
             try:
+                cls._ensure_helper_import_paths()
                 service_module = importlib.import_module(module_name)
                 servicer = getattr(service_module, "servicer", None)
                 if servicer is not None:
