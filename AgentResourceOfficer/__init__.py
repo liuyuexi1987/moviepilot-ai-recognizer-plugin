@@ -54,9 +54,9 @@ class _JsonRequestShim:
 
 class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
-    plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
+    plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.26"
+    plugin_version = "0.1.27"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -713,7 +713,7 @@ class AgentResourceOfficer(_PluginBase):
                     {
                         "component": "VCardText",
                         "text": (
-                            "Agent资源官正在重构中，当前已经接入夸克执行层，以及影巢的基础搜索/解锁服务骨架。"
+                            "Agent资源官 已接入影巢搜索/解锁、115 扫码登录与转存、夸克转存，以及统一智能入口。"
                             f"\n当前夸克配置状态：{quark_ready}"
                             f"\n默认目录：{self._quark_default_path}"
                             f"\n当前影巢配置状态：{hdhive_ready}"
@@ -723,6 +723,8 @@ class AgentResourceOfficer(_PluginBase):
                             f"\n115 扫码客户端：{self._p115_client_type_title(self._p115_client_type)}"
                             f"\n115 运行状态：{'可用' if p115_health_ok else '待修复'}"
                             f"\n115 扫码接口：/p115/qrcode  /p115/qrcode/check"
+                            "\n统一智能入口：/assistant/route  /assistant/pick"
+                            "\n原生 Agent Tool：影巢会话搜索/选择、115 扫码、115 待任务查看/继续/取消、通用分享路由"
                             "\n\n已支持的影巢用户态 API：/hdhive/account /hdhive/checkin /hdhive/quota /hdhive/usage_today /hdhive/weekly_free_quota"
                             f"\n115 Cookie 判定：{cookie_state.get('message') or '当前会话可直接用于 115 直转'}"
                             f"\n\n{hdhive_summary}"
@@ -753,7 +755,7 @@ class AgentResourceOfficer(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "当前版本仍属于重构阶段，但已经开始承接夸克执行层，以及影巢基础搜索/解锁 API。后续会继续迁入签到、会话选择和飞书入口。",
+                                            "text": "当前版本已经接通影巢搜索/解锁、115 扫码登录与待任务续跑、夸克转存、统一智能入口，以及 MP 原生 Agent Tool。这里主要配置默认目录、影巢 OpenAPI 和夸克会话。",
                                         },
                                     }
                                 ],
@@ -771,7 +773,7 @@ class AgentResourceOfficer(_PluginBase):
                                         "component": "VSwitch",
                                         "props": {
                                             "model": "enabled",
-                                            "label": "启用骨架插件",
+                                            "label": "启用插件",
                                         },
                                     }
                                 ],
