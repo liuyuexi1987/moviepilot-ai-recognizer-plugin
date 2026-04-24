@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.24`
+- 当前版本：`0.1.25`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -68,7 +68,7 @@
 - 登录成功后会直接回显 115 可用状态、默认目录和当前会话来源
 - 智能入口与原生 Agent Tool 新增 `115状态` 查询
 - 智能入口新增 `115帮助`，状态回执会附带下一步建议
-- 待继续的 115 任务已支持持久化保存、状态摘要、手动继续、手动取消，并已下沉为原生 Agent Tool
+- 待继续的 115 任务已支持持久化保存、状态摘要、手动继续、手动取消，并已下沉为原生 Agent Tool 和标准 API
 - 影巢候选已支持新主线分页、`详情` / `审查` 按需补主演，飞书切 `auto` 时也能复用
 - 影巢部分用户态接口受站点 Premium 权限限制；账号信息会优先回退到 `HDHiveDailySign` 的网页快照，签到会优先尝试 `HDHiveDailySign` 现有 Cookie 做网页兜底
 - `115` 自动转存已具备轻量直转层：可优先使用扫码得到的 115 客户端会话，或复用已加载的 115 客户端直接调用分享转存接口；直转失败时再回退 `P115StrmHelper`
@@ -95,6 +95,10 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode`
 - `GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode/check`
 - `POST /api/v1/plugin/AgentResourceOfficer/p115/transfer`
+- `GET /api/v1/plugin/AgentResourceOfficer/p115/pending`
+- `POST /api/v1/plugin/AgentResourceOfficer/p115/pending`
+- `POST /api/v1/plugin/AgentResourceOfficer/p115/pending/resume`
+- `POST /api/v1/plugin/AgentResourceOfficer/p115/pending/cancel`
 - `GET /api/v1/plugin/AgentResourceOfficer/hdhive/health`
 - `GET /api/v1/plugin/AgentResourceOfficer/hdhive/account`
 - `POST /api/v1/plugin/AgentResourceOfficer/hdhive/checkin`

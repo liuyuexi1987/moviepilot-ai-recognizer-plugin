@@ -56,7 +56,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.24"
+    plugin_version = "0.1.25"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -371,6 +371,15 @@ class AgentResourceOfficer(_PluginBase):
             return False, "API Token 无效"
         return True, ""
 
+    async def _request_payload(self, request: Request) -> Dict[str, Any]:
+        if str(getattr(request, "method", "") or "").upper() == "GET":
+            return {}
+        try:
+            data = await request.json()
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
     def _ensure_quark_service(self) -> QuarkTransferService:
         if self._quark_service is None:
             self._quark_service = QuarkTransferService(
@@ -601,6 +610,24 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_p115_transfer,
                 "methods": ["POST"],
                 "summary": "通过 Agent资源官 执行 115 分享转存",
+            },
+            {
+                "path": "/p115/pending",
+                "endpoint": self.api_p115_pending,
+                "methods": ["GET", "POST"],
+                "summary": "查看指定会话中待继续的 115 任务",
+            },
+            {
+                "path": "/p115/pending/resume",
+                "endpoint": self.api_p115_pending_resume,
+                "methods": ["POST"],
+                "summary": "继续执行指定会话中待处理的 115 任务",
+            },
+            {
+                "path": "/p115/pending/cancel",
+                "endpoint": self.api_p115_pending_cancel,
+                "methods": ["POST"],
+                "summary": "取消指定会话中待处理的 115 任务",
             },
             {
                 "path": "/share/route",
@@ -1448,6 +1475,23 @@ class AgentResourceOfficer(_PluginBase):
             lines.append(f"最近错误：{last_error}")
         lines.append("可用命令：继续115任务 / 取消115任务")
         return "\n".join(lines)
+
+    def _pending_p115_public_data(self, state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        pending = dict((state or {}).get("pending_p115") or {})
+        if not self._clean_text(pending.get("share_url")):
+            return {"has_pending": False}
+        return {
+            "has_pending": True,
+            "title": self._clean_text(pending.get("title")) or "未命名任务",
+            "target_path": self._clean_text(pending.get("target_path")) or self._p115_default_path,
+            "source": self._clean_text(pending.get("source")) or "unknown",
+            "created_at": self._safe_int(pending.get("created_at"), 0),
+            "created_at_text": self._format_unix_time(pending.get("created_at")),
+            "last_attempt_at": self._safe_int(pending.get("last_attempt_at"), 0),
+            "last_attempt_at_text": self._format_unix_time(pending.get("last_attempt_at")),
+            "retry_count": max(0, self._safe_int(pending.get("retry_count"), 0)),
+            "last_error": self._clean_text(pending.get("last_error")),
+        }
 
     def _session_key_for_tool(self, session: str = "default") -> str:
         clean_session = self._clean_text(session) or "default"
@@ -2370,6 +2414,113 @@ class AgentResourceOfficer(_PluginBase):
                 "data": result,
             }
         return {"success": True, "message": transfer_message, "data": result}
+
+    async def api_p115_pending(self, request: Request):
+        body = await self._request_payload(request)
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        session = self._clean_text(
+            body.get("session")
+            or body.get("session_id")
+            or request.query_params.get("session")
+            or request.query_params.get("session_id")
+            or "default"
+        )
+        session_id = self._session_key_for_tool(session)
+        state = self._load_session(session_id) or {}
+        summary = self._pending_p115_summary(state)
+        data = self._pending_p115_public_data(state)
+        data["session_id"] = session_id
+        return {
+            "success": True,
+            "message": summary or "当前没有待继续的 115 任务。",
+            "data": data,
+        }
+
+    async def api_p115_pending_resume(self, request: Request):
+        body = await self._request_payload(request)
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        session = self._clean_text(
+            body.get("session")
+            or body.get("session_id")
+            or request.query_params.get("session")
+            or request.query_params.get("session_id")
+            or "default"
+        )
+        session_id = self._session_key_for_tool(session)
+        state = self._load_session(session_id) or {}
+        if not self._pending_p115_summary(state):
+            return {
+                "success": False,
+                "message": "当前没有待继续的 115 任务。",
+                "data": {"session_id": session_id, "has_pending": False},
+            }
+        if not self._p115_status_snapshot().get("ready"):
+            return {
+                "success": False,
+                "message": f"{self._pending_p115_summary(state)}\n当前 115 还不可用，请先完成 115 登录。",
+                "data": {"session_id": session_id, **self._pending_p115_public_data(state)},
+            }
+        resume_ok, resume_message, resume_data = self._execute_pending_p115_share(
+            session_id=session_id,
+            state=state,
+            trigger="Agent资源官 API 手动继续 115 任务",
+        )
+        message_text = "已手动继续 115 任务"
+        if resume_message:
+            message_text = f"{message_text}\n{resume_message}"
+        if not resume_ok:
+            message_text = f"{message_text}\n任务仍未成功，保留待继续状态。"
+        return {
+            "success": resume_ok,
+            "message": message_text,
+            "data": {
+                "session_id": session_id,
+                "result": resume_data,
+                "pending": self._pending_p115_public_data(self._load_session(session_id) or {}),
+            },
+        }
+
+    async def api_p115_pending_cancel(self, request: Request):
+        body = await self._request_payload(request)
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        session = self._clean_text(
+            body.get("session")
+            or body.get("session_id")
+            or request.query_params.get("session")
+            or request.query_params.get("session_id")
+            or "default"
+        )
+        session_id = self._session_key_for_tool(session)
+        state = self._load_session(session_id) or {}
+        summary = self._pending_p115_summary(state)
+        if not summary:
+            return {
+                "success": True,
+                "message": "当前没有待取消的 115 任务。",
+                "data": {"session_id": session_id, "has_pending": False},
+            }
+        pending_data = self._pending_p115_public_data(state)
+        self._clear_pending_p115_share(session_id)
+        return {
+            "success": True,
+            "message": f"{summary}\n已取消并清除这次待继续的 115 任务。",
+            "data": {"session_id": session_id, "cancelled": True, "pending": pending_data},
+        }
 
     async def api_hdhive_unlock_and_route(self, request: Request):
         body = await request.json()
