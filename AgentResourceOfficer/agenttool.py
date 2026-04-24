@@ -6,6 +6,8 @@ from app.agent.tools.base import MoviePilotTool
 from app.core.plugin import PluginManager
 
 from .schemas import (
+    AssistantPickToolInput,
+    AssistantRouteToolInput,
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
     P115CancelPendingToolInput,
@@ -80,6 +82,57 @@ class ShareRouteTool(MoviePilotTool):
         return await plugin.tool_route_share(
             share_url=url,
             access_code=access_code,
+            target_path=path,
+        )
+
+
+class AssistantRouteTool(MoviePilotTool):
+    name: str = "agent_resource_officer_smart_entry"
+    description: str = "Use the unified Agent资源官 smart entry for HDHive search, PanSou search, 115 login, or direct 115/Quark share links."
+    args_schema: Type[BaseModel] = AssistantRouteToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        text = kwargs.get("text", "")
+        return f"正在通过 Agent资源官 统一入口处理：{text}"
+
+    async def run(self, text: str, session: str = "default", path: str = None, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_route(
+            text=text,
+            session=session,
+            target_path=path,
+        )
+
+
+class AssistantPickTool(MoviePilotTool):
+    name: str = "agent_resource_officer_smart_pick"
+    description: str = "Continue the unified Agent资源官 smart-entry session by choosing an item, requesting details, or moving to the next page."
+    args_schema: Type[BaseModel] = AssistantPickToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        session = kwargs.get("session", "default")
+        choice = kwargs.get("choice", 0)
+        action = kwargs.get("action", "")
+        tail = f"动作 {action}" if action else f"选择 {choice}"
+        return f"正在继续 Agent资源官 统一会话：{session}，{tail}"
+
+    async def run(
+        self,
+        session: str = "default",
+        choice: int = 0,
+        action: str = None,
+        path: str = None,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_pick(
+            session=session,
+            index=choice,
+            action=action,
             target_path=path,
         )
 

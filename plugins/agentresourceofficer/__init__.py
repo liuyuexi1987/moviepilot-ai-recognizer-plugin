@@ -30,6 +30,8 @@ from .services.hdhive_openapi import HDHiveOpenApiService
 from .services.p115_transfer import P115TransferService
 from .services.quark_transfer import QuarkTransferService
 from .agenttool import (
+    AssistantPickTool,
+    AssistantRouteTool,
     HDHiveSearchSessionTool,
     HDHiveSessionPickTool,
     P115CancelPendingTool,
@@ -52,11 +54,17 @@ class _JsonRequestShim:
         return self._body
 
 
+class _RequestContextShim:
+    def __init__(self, headers: Optional[Dict[str, Any]] = None, query_params: Optional[Dict[str, Any]] = None) -> None:
+        self.headers = headers or {}
+        self.query_params = query_params or {}
+
+
 class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.27"
+    plugin_version = "0.1.28"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -199,6 +207,8 @@ class AgentResourceOfficer(_PluginBase):
 
     def get_agent_tools(self) -> List[type]:
         return [
+            AssistantRouteTool,
+            AssistantPickTool,
             HDHiveSearchSessionTool,
             HDHiveSessionPickTool,
             ShareRouteTool,
@@ -2209,6 +2219,43 @@ class AgentResourceOfficer(_PluginBase):
             return f"115 转存成功\n目录：{result.get('path') or self._p115_default_path}"
 
         return "当前链接不是可识别的 115 / 夸克分享链接"
+
+    async def tool_assistant_route(self, text: str, session: str = "default", target_path: str = "") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_route(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "text": self._clean_text(text),
+                    "session": self._clean_text(session) or "default",
+                    "path": self._clean_text(target_path),
+                },
+            )
+        )
+        return str(result.get("message") or "处理完成")
+
+    async def tool_assistant_pick(
+        self,
+        session: str = "default",
+        index: int = 0,
+        action: str = "",
+        target_path: str = "",
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_pick(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "session": self._clean_text(session) or "default",
+                    "choice": index,
+                    "action": self._clean_text(action),
+                    "path": self._clean_text(target_path),
+                },
+            )
+        )
+        return str(result.get("message") or "继续处理完成")
 
     async def tool_p115_qrcode_start(self, client_type: str = "alipaymini") -> str:
         if not self._enabled:

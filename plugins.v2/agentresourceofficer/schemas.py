@@ -23,6 +23,19 @@ class ShareRouteToolInput(BaseModel):
     access_code: Optional[str] = Field(default=None, description="提取码，可选")
 
 
+class AssistantRouteToolInput(BaseModel):
+    text: str = Field(..., description="统一智能入口文本，例如 盘搜搜索 片名、影巢搜索 片名、115登录 或直接粘贴 115/夸克分享链接")
+    session: Optional[str] = Field(default="default", description="会话标识，用于关联后续选择、115 待任务与扫码续跑")
+    path: Optional[str] = Field(default=None, description="可选目标目录，不填则按当前模式使用默认目录")
+
+
+class AssistantPickToolInput(BaseModel):
+    session: Optional[str] = Field(default="default", description="会话标识，需与上一步统一智能入口保持一致")
+    choice: int = Field(default=0, description="选择的编号，从 1 开始；详情或翻页时可为 0")
+    action: Optional[str] = Field(default=None, description="可选动作：detail/details/review/详情/审查 或 next/n/下一页")
+    path: Optional[str] = Field(default=None, description="可选目标目录，不填则沿用会话目录")
+
+
 class P115QRCodeStartToolInput(BaseModel):
     client_type: Optional[str] = Field(default="alipaymini", description="115 扫码客户端类型，默认 alipaymini")
 
