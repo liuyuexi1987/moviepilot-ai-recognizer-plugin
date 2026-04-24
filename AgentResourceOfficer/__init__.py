@@ -34,6 +34,7 @@ from .agenttool import (
     HDHiveSessionPickTool,
     P115QRCodeCheckTool,
     P115QRCodeStartTool,
+    P115StatusTool,
     ShareRouteTool,
 )
 
@@ -52,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.15"
+    plugin_version = "0.1.16"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -197,6 +198,7 @@ class AgentResourceOfficer(_PluginBase):
             ShareRouteTool,
             P115QRCodeStartTool,
             P115QRCodeCheckTool,
+            P115StatusTool,
         ]
 
     @staticmethod
@@ -1326,8 +1328,6 @@ class AgentResourceOfficer(_PluginBase):
             options["keyword"] = ""
         elif compact in {
             "检查115登录",
-            "115登录状态",
-            "115状态",
             "检查115扫码",
             "检查扫码",
             "115check",
@@ -1335,6 +1335,17 @@ class AgentResourceOfficer(_PluginBase):
             "p115check",
         }:
             options["action"] = "p115_qrcode_check"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "115登录状态",
+            "115状态",
+            "查看115状态",
+            "115健康",
+            "115status",
+            "p115status",
+        }:
+            options["action"] = "p115_status"
             options["mode"] = ""
             options["keyword"] = ""
         for token in remain.split():
@@ -1898,6 +1909,11 @@ class AgentResourceOfficer(_PluginBase):
             lines.append(f"cookie_keys: {', '.join(data.get('cookie_keys') or [])}")
         return "\n".join(lines)
 
+    async def tool_p115_status(self) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_p115_status_summary()
+
     async def api_p115_health(self, request: Request):
         ok, message = self._check_api_access(request)
         if not ok:
@@ -2121,6 +2137,18 @@ class AgentResourceOfficer(_PluginBase):
             return pick_result
 
         assistant_action = self._clean_text(parsed.get("action"))
+        if assistant_action == "p115_status":
+            summary = self._format_p115_status_summary()
+            return {
+                "success": True,
+                "message": summary,
+                "data": {
+                    "action": "p115_status",
+                    "ok": True,
+                    "status_summary": summary,
+                    "status": self._p115_status_snapshot(),
+                },
+            }
         if assistant_action == "p115_qrcode_start":
             client_type = P115TransferService.normalize_qrcode_client_type(
                 parsed.get("client_type") or self._p115_client_type
@@ -2160,7 +2188,21 @@ class AgentResourceOfficer(_PluginBase):
         if assistant_action == "p115_qrcode_check":
             state = self._load_session(cache_key)
             if not state or str(state.get("kind") or "").strip() != "assistant_p115_login":
-                return {"success": False, "message": "没有待检查的 115 登录会话，请先回复：115登录"}
+                summary = self._format_p115_status_summary()
+                return {
+                    "success": True,
+                    "message": (
+                        "没有待检查的 115 登录会话。\n"
+                        f"{summary}\n"
+                        "如需重新扫码登录，请回复：115登录"
+                    ),
+                    "data": {
+                        "action": "p115_qrcode_check",
+                        "ok": True,
+                        "status_summary": summary,
+                        "status": self._p115_status_snapshot(),
+                    },
+                }
             client_type = P115TransferService.normalize_qrcode_client_type(
                 state.get("client_type") or parsed.get("client_type") or self._p115_client_type
             )

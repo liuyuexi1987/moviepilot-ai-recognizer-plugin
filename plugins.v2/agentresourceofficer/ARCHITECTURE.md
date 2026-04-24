@@ -176,7 +176,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 
 ## 115 轻量直转层
 
-`Agent资源官` 从 `0.1.15` 开始支持 115 分享链接轻量直转 + 扫码会话登录：
+`Agent资源官` 从 `0.1.16` 开始支持 115 分享链接轻量直转 + 扫码会话登录：
 
 - 支持生成和轮询 `p115client` 同款 115 扫码二维码，拿到 `UID / CID / SEID / KID` 这类客户端会话后自动写回插件配置
 - 配置扫码得到的 115 会话时，直接用该会话创建 115 客户端并调用 `share_receive`
@@ -217,3 +217,4 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - 原生 Agent Tool 直接发起和轮询 115 扫码登录
 - 智能入口 `assistant/route` 可直接理解 `115登录` / `检查115登录`
 - 扫码登录成功后可直接返回 115 运行状态摘要，便于飞书与 MP 智能助手继续执行
+- 智能入口与原生 Agent Tool 都可直接返回 `115状态` 摘要，不依赖是否存在待检查会话

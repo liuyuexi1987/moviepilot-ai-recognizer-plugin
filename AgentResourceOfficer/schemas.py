@@ -32,3 +32,7 @@ class P115QRCodeCheckToolInput(BaseModel):
     time: str = Field(..., description="上一步二维码返回的 time")
     sign: str = Field(..., description="上一步二维码返回的 sign")
     client_type: Optional[str] = Field(default="alipaymini", description="客户端类型，需与生成二维码时保持一致")
+
+
+class P115StatusToolInput(BaseModel):
+    pass

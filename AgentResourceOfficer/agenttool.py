@@ -10,6 +10,7 @@ from .schemas import (
     HDHiveSessionPickToolInput,
     P115QRCodeCheckToolInput,
     P115QRCodeStartToolInput,
+    P115StatusToolInput,
     ShareRouteToolInput,
 )
 
@@ -114,3 +115,18 @@ class P115QRCodeCheckTool(MoviePilotTool):
             sign=sign,
             client_type=client_type,
         )
+
+
+class P115StatusTool(MoviePilotTool):
+    name: str = "agent_resource_officer_p115_status"
+    description: str = "Show the current 115 transfer readiness, default target path, and current session source."
+    args_schema: Type[BaseModel] = P115StatusToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在通过 Agent资源官 查看 115 当前状态"
+
+    async def run(self, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_p115_status()
