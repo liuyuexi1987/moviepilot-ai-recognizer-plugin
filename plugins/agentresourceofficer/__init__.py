@@ -53,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.20"
+    plugin_version = "0.1.21"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1360,6 +1360,24 @@ class AgentResourceOfficer(_PluginBase):
         state.pop("pending_p115", None)
         self._save_session(session_id, state)
 
+    def _pending_p115_summary(self, state: Optional[Dict[str, Any]]) -> str:
+        pending = dict((state or {}).get("pending_p115") or {})
+        share_url = self._clean_text(pending.get("share_url"))
+        if not share_url:
+            return ""
+        title = self._clean_text(pending.get("title")) or "未命名任务"
+        target_path = self._clean_text(pending.get("target_path")) or self._p115_default_path
+        source = self._clean_text(pending.get("source")) or "unknown"
+        return "\n".join(
+            [
+                "待继续的 115 任务：",
+                f"资源：{title}",
+                f"目录：{target_path}",
+                f"来源：{source}",
+                "可用命令：继续115任务 / 取消115任务",
+            ]
+        )
+
     async def _resume_pending_p115_share(
         self,
         request: Request,
@@ -1381,7 +1399,15 @@ class AgentResourceOfficer(_PluginBase):
                 "apikey": self._extract_apikey(request, body),
             })
         )
-        self._clear_pending_p115_share(session_id)
+        if result.get("success"):
+            self._clear_pending_p115_share(session_id)
+        else:
+            current_state = self._load_session(session_id) or dict(state or {})
+            current_state["pending_p115"] = pending
+            if not current_state.get("kind"):
+                current_state["kind"] = "assistant_p115_pending"
+                current_state["stage"] = "pending_login"
+            self._save_session(session_id, current_state)
         return bool(result.get("success")), str(result.get("message") or "").strip(), result.get("data") or {}
 
     def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
@@ -1422,6 +1448,7 @@ class AgentResourceOfficer(_PluginBase):
             "4. 115登录",
             "5. 检查115登录",
             "6. 115状态",
+            "7. 继续115任务 / 取消115任务",
             self._format_p115_next_actions(status),
         ]
         return "\n".join(lines)
@@ -1488,6 +1515,27 @@ class AgentResourceOfficer(_PluginBase):
             "p115help",
         }:
             options["action"] = "p115_help"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "继续115任务",
+            "重试115任务",
+            "继续115转存",
+            "重试115转存",
+            "continue115",
+            "resume115",
+        }:
+            options["action"] = "p115_resume"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "取消115任务",
+            "取消115转存",
+            "清除115任务",
+            "cancel115",
+            "clear115",
+        }:
+            options["action"] = "p115_cancel"
             options["mode"] = ""
             options["keyword"] = ""
         for token in remain.split():
@@ -2281,6 +2329,7 @@ class AgentResourceOfficer(_PluginBase):
         text = self._clean_text(body.get("text") or body.get("query") or body.get("message") or "")
         parsed = self._parse_assistant_text(text)
         cache_key = self._assistant_session_id(session)
+        state = self._load_session(cache_key) or {}
         target_path = parsed.get("path") or ""
         route_action = self._normalize_pick_action(text)
         if route_action:
@@ -2298,6 +2347,9 @@ class AgentResourceOfficer(_PluginBase):
         assistant_action = self._clean_text(parsed.get("action"))
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()
+            pending_summary = self._pending_p115_summary(state)
+            if pending_summary:
+                summary = f"{summary}\n{pending_summary}"
             return {
                 "success": True,
                 "message": summary,
@@ -2310,6 +2362,9 @@ class AgentResourceOfficer(_PluginBase):
             }
         if assistant_action == "p115_status":
             summary = self._format_p115_status_summary()
+            pending_summary = self._pending_p115_summary(state)
+            if pending_summary:
+                summary = f"{summary}\n{pending_summary}"
             return {
                 "success": True,
                 "message": summary,
@@ -2320,8 +2375,53 @@ class AgentResourceOfficer(_PluginBase):
                     "status": self._p115_status_snapshot(),
                 },
             }
+        if assistant_action == "p115_resume":
+            pending_summary = self._pending_p115_summary(state)
+            if not pending_summary:
+                summary = self._format_p115_status_summary()
+                return {
+                    "success": False,
+                    "message": f"当前没有待继续的 115 任务。\n{summary}",
+                    "data": {"action": "p115_resume", "ok": False},
+                }
+            if not self._p115_status_snapshot().get("ready"):
+                return {
+                    "success": False,
+                    "message": f"{pending_summary}\n当前 115 还不可用，请先回复：115登录",
+                    "data": {"action": "p115_resume", "ok": False},
+                }
+            resume_ok, resume_message, resume_data = await self._resume_pending_p115_share(
+                request,
+                body,
+                session_id=cache_key,
+                state=state,
+            )
+            message_text = "已手动继续 115 任务"
+            if resume_message:
+                message_text = f"{message_text}\n{resume_message}"
+            if not resume_ok:
+                message_text = f"{message_text}\n任务仍未成功，保留待继续状态。"
+            return {
+                "success": resume_ok,
+                "message": message_text,
+                "data": {"action": "p115_resume", "ok": resume_ok, "result": resume_data},
+            }
+        if assistant_action == "p115_cancel":
+            pending_summary = self._pending_p115_summary(state)
+            if not pending_summary:
+                return {
+                    "success": True,
+                    "message": "当前没有待取消的 115 任务。",
+                    "data": {"action": "p115_cancel", "ok": True},
+                }
+            self._clear_pending_p115_share(cache_key)
+            return {
+                "success": True,
+                "message": f"{pending_summary}\n已取消并清除这次待继续的 115 任务。",
+                "data": {"action": "p115_cancel", "ok": True},
+            }
         if assistant_action == "p115_qrcode_start":
-            previous_state = self._load_session(cache_key) or {}
+            previous_state = state
             client_type = P115TransferService.normalize_qrcode_client_type(
                 parsed.get("client_type") or self._p115_client_type
             )
@@ -2363,9 +2463,28 @@ class AgentResourceOfficer(_PluginBase):
                 },
             }
         if assistant_action == "p115_qrcode_check":
-            state = self._load_session(cache_key)
             if not state or str(state.get("kind") or "").strip() != "assistant_p115_login":
+                pending_summary = self._pending_p115_summary(state)
+                if pending_summary and self._p115_status_snapshot().get("ready"):
+                    resume_ok, resume_message, resume_data = await self._resume_pending_p115_share(
+                        request,
+                        body,
+                        session_id=cache_key,
+                        state=state,
+                    )
+                    message_text = "没有待检查的扫码会话，但检测到待继续的 115 任务。"
+                    if resume_message:
+                        message_text = f"{message_text}\n{resume_message}"
+                    if not resume_ok:
+                        message_text = f"{message_text}\n任务仍未成功，继续保留待处理状态。"
+                    return {
+                        "success": resume_ok,
+                        "message": message_text,
+                        "data": {"action": "p115_qrcode_check", "ok": resume_ok, "result": resume_data},
+                    }
                 summary = self._format_p115_status_summary()
+                if pending_summary:
+                    summary = f"{summary}\n{pending_summary}"
                 return {
                     "success": True,
                     "message": (
@@ -2426,6 +2545,8 @@ class AgentResourceOfficer(_PluginBase):
                     lines.append(resume_message)
                     data["resume_ok"] = resume_ok
                     data["resume_result"] = resume_data
+                    if not resume_ok:
+                        lines.append("任务仍未成功，已继续保留待处理状态。")
             elif status in {"waiting", "scanned"}:
                 lines.append("如果还没确认登录，请在 115 App 里点确认后再次回复：检查115登录")
             message_text = "\n".join(line for line in lines if line).strip()
