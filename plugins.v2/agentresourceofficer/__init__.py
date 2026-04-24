@@ -53,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.16"
+    plugin_version = "0.1.17"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1272,6 +1272,17 @@ class AgentResourceOfficer(_PluginBase):
             "cookie_mode": self._clean_text((result.get("cookie_state") or {}).get("mode")),
         }
 
+    def _format_p115_next_actions(self) -> str:
+        return "\n".join(
+            [
+                "下一步建议：",
+                "1. 回复：115登录",
+                "2. 登录完成后可回复：115状态",
+                f"3. 可直接发送 115 链接转存到 {self._p115_default_path}",
+                "4. 也可以继续发：影巢搜索 片名",
+            ]
+        )
+
     def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
         status = self._p115_status_snapshot()
         lines = [
@@ -1292,6 +1303,7 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("当前会话：复用 115 助手客户端")
         if status.get("message") and not status.get("ready"):
             lines.append(f"详情：{status.get('message')}")
+        lines.append(self._format_p115_next_actions())
         return "\n".join(lines)
 
     @staticmethod
@@ -1346,6 +1358,16 @@ class AgentResourceOfficer(_PluginBase):
             "p115status",
         }:
             options["action"] = "p115_status"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "115帮助",
+            "115命令",
+            "115使用",
+            "115help",
+            "p115help",
+        }:
+            options["action"] = "p115_help"
             options["mode"] = ""
             options["keyword"] = ""
         for token in remain.split():
@@ -2137,6 +2159,18 @@ class AgentResourceOfficer(_PluginBase):
             return pick_result
 
         assistant_action = self._clean_text(parsed.get("action"))
+        if assistant_action == "p115_help":
+            summary = self._format_p115_status_summary(title="115 使用帮助")
+            return {
+                "success": True,
+                "message": summary,
+                "data": {
+                    "action": "p115_help",
+                    "ok": True,
+                    "status_summary": summary,
+                    "status": self._p115_status_snapshot(),
+                },
+            }
         if assistant_action == "p115_status":
             summary = self._format_p115_status_summary()
             return {
