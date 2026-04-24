@@ -21,3 +21,14 @@ class ShareRouteToolInput(BaseModel):
     url: str = Field(..., description="115 或夸克分享链接")
     path: Optional[str] = Field(default=None, description="目标目录")
     access_code: Optional[str] = Field(default=None, description="提取码，可选")
+
+
+class P115QRCodeStartToolInput(BaseModel):
+    client_type: Optional[str] = Field(default="alipaymini", description="115 扫码客户端类型，默认 alipaymini")
+
+
+class P115QRCodeCheckToolInput(BaseModel):
+    uid: str = Field(..., description="上一步二维码返回的 uid")
+    time: str = Field(..., description="上一步二维码返回的 time")
+    sign: str = Field(..., description="上一步二维码返回的 sign")
+    client_type: Optional[str] = Field(default="alipaymini", description="客户端类型，需与生成二维码时保持一致")

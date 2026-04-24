@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.12",
+    "version": "0.1.13",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.13": "新增 115 扫码登录原生 Agent Tool，智能助手可直接发起二维码并轮询登录状态。",
       "0.1.12": "115 直转层新增 p115client 同款扫码登录接口与会话校验，默认不再推荐网页版 Cookie。",
       "0.1.11": "新增 115 独立直转执行层，可优先使用独立 Cookie 或已加载客户端直接转存分享链接，失败时再回退 P115StrmHelper。",
       "0.1.10": "补齐 P115StrmHelper 新版 MoviePilot 兼容补丁说明与复现脚本，115 健康检查已验证可用。",

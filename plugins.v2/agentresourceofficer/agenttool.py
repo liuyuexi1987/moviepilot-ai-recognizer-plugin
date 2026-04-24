@@ -8,6 +8,8 @@ from app.core.plugin import PluginManager
 from .schemas import (
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
+    P115QRCodeCheckToolInput,
+    P115QRCodeStartToolInput,
     ShareRouteToolInput,
 )
 
@@ -75,4 +77,40 @@ class ShareRouteTool(MoviePilotTool):
             share_url=url,
             access_code=access_code,
             target_path=path,
+        )
+
+
+class P115QRCodeStartTool(MoviePilotTool):
+    name: str = "agent_resource_officer_p115_qrcode_start"
+    description: str = "Generate a 115 login QR code using the p115client-compatible client session flow."
+    args_schema: Type[BaseModel] = P115QRCodeStartToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        client_type = kwargs.get("client_type", "alipaymini")
+        return f"正在通过 Agent资源官 生成 115 扫码二维码：{client_type}"
+
+    async def run(self, client_type: str = "alipaymini", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_p115_qrcode_start(client_type=client_type)
+
+
+class P115QRCodeCheckTool(MoviePilotTool):
+    name: str = "agent_resource_officer_p115_qrcode_check"
+    description: str = "Check the status of a previous 115 QR-code login and save the client session when login succeeds."
+    args_schema: Type[BaseModel] = P115QRCodeCheckToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在通过 Agent资源官 检查 115 扫码状态"
+
+    async def run(self, uid: str, time: str, sign: str, client_type: str = "alipaymini", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_p115_qrcode_check(
+            uid=uid,
+            time_value=time,
+            sign=sign,
+            client_type=client_type,
         )

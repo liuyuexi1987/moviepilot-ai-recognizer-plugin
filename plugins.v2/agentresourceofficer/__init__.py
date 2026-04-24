@@ -29,7 +29,13 @@ from app.plugins import _PluginBase
 from .services.hdhive_openapi import HDHiveOpenApiService
 from .services.p115_transfer import P115TransferService
 from .services.quark_transfer import QuarkTransferService
-from .agenttool import HDHiveSearchSessionTool, HDHiveSessionPickTool, ShareRouteTool
+from .agenttool import (
+    HDHiveSearchSessionTool,
+    HDHiveSessionPickTool,
+    P115QRCodeCheckTool,
+    P115QRCodeStartTool,
+    ShareRouteTool,
+)
 
 
 class _JsonRequestShim:
@@ -46,7 +52,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.12"
+    plugin_version = "0.1.13"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -185,7 +191,13 @@ class AgentResourceOfficer(_PluginBase):
         return self._enabled
 
     def get_agent_tools(self) -> List[type]:
-        return [HDHiveSearchSessionTool, HDHiveSessionPickTool, ShareRouteTool]
+        return [
+            HDHiveSearchSessionTool,
+            HDHiveSessionPickTool,
+            ShareRouteTool,
+            P115QRCodeStartTool,
+            P115QRCodeCheckTool,
+        ]
 
     @staticmethod
     def _reload_agent_tools() -> None:
@@ -1764,6 +1776,60 @@ class AgentResourceOfficer(_PluginBase):
             return f"115 转存成功\n目录：{result.get('path') or self._p115_default_path}"
 
         return "当前链接不是可识别的 115 / 夸克分享链接"
+
+    async def tool_p115_qrcode_start(self, client_type: str = "alipaymini") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        final_client_type = P115TransferService.normalize_qrcode_client_type(client_type or self._p115_client_type)
+        qr_ok, data, qr_message = self._ensure_p115_service().create_qrcode_login(client_type=final_client_type)
+        if not qr_ok:
+            return f"115 扫码二维码生成失败：{qr_message}"
+        return (
+            "115 扫码二维码已生成\n"
+            f"client_type: {data.get('client_type')}\n"
+            f"uid: {data.get('uid')}\n"
+            f"time: {data.get('time')}\n"
+            f"sign: {data.get('sign')}\n"
+            f"qrcode: {data.get('qrcode')}\n"
+            "下一步：调用 agent_resource_officer_p115_qrcode_check，并传入 uid、time、sign 和 client_type"
+        )
+
+    async def tool_p115_qrcode_check(
+        self,
+        uid: str,
+        time_value: str,
+        sign: str,
+        client_type: str = "alipaymini",
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        qr_ok, data, qr_message = self._ensure_p115_service().check_qrcode_login(
+            uid=self._clean_text(uid),
+            time_value=self._clean_text(time_value),
+            sign=self._clean_text(sign),
+            client_type=P115TransferService.normalize_qrcode_client_type(client_type or self._p115_client_type),
+        )
+        if qr_ok and data.get("status") == "success":
+            cookie = self._clean_text(data.pop("cookie"))
+            if cookie:
+                self._p115_cookie = cookie
+                self._p115_client_type = P115TransferService.normalize_qrcode_client_type(client_type or self._p115_client_type)
+                self._apply_runtime_config({
+                    "p115_cookie": cookie,
+                    "p115_client_type": self._p115_client_type,
+                })
+                data["cookie_saved"] = True
+        status = self._clean_text(data.get("status"))
+        lines = [
+            "115 扫码状态",
+            f"status: {status or 'unknown'}",
+            f"message: {qr_message}",
+        ]
+        if data.get("cookie_saved"):
+            lines.append("cookie_saved: true")
+        if data.get("cookie_keys"):
+            lines.append(f"cookie_keys: {', '.join(data.get('cookie_keys') or [])}")
+        return "\n".join(lines)
 
     async def api_p115_health(self, request: Request):
         ok, message = self._check_api_access(request)
