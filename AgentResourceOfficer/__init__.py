@@ -53,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.19"
+    plugin_version = "0.1.20"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1320,6 +1320,70 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("建议：先回复 115登录，扫码成功后再重试当前操作。")
         return "\n".join(lines)
 
+    @staticmethod
+    def _format_p115_resume_hint(title: str = "") -> str:
+        clean_title = str(title or "").strip()
+        prefix = f"已记住这次 115 任务（{clean_title}）。" if clean_title else "已记住这次 115 任务。"
+        return f"{prefix}\n登录成功后回复：检查115登录，我会自动继续处理。"
+
+    def _save_pending_p115_share(
+        self,
+        session_id: str,
+        *,
+        share_url: str,
+        access_code: str = "",
+        target_path: str = "",
+        source: str = "",
+        title: str = "",
+    ) -> None:
+        clean_url = self._clean_text(share_url)
+        if not clean_url:
+            return
+        state = self._load_session(session_id) or {}
+        state["pending_p115"] = {
+            "kind": "share_route",
+            "share_url": clean_url,
+            "access_code": self._clean_text(access_code),
+            "target_path": target_path or self._p115_default_path,
+            "source": self._clean_text(source),
+            "title": self._clean_text(title),
+        }
+        if not state.get("kind"):
+            state["kind"] = "assistant_p115_pending"
+            state["stage"] = "pending_login"
+        self._save_session(session_id, state)
+
+    def _clear_pending_p115_share(self, session_id: str) -> None:
+        state = self._load_session(session_id)
+        if not state or "pending_p115" not in state:
+            return
+        state.pop("pending_p115", None)
+        self._save_session(session_id, state)
+
+    async def _resume_pending_p115_share(
+        self,
+        request: Request,
+        body: Dict[str, Any],
+        *,
+        session_id: str,
+        state: Dict[str, Any],
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        pending = dict((state or {}).get("pending_p115") or {})
+        share_url = self._clean_text(pending.get("share_url"))
+        if not share_url:
+            return False, "", {}
+        result = await self.api_share_route(
+            _JsonRequestShim(request, {
+                "url": share_url,
+                "access_code": pending.get("access_code") or "",
+                "path": pending.get("target_path") or self._p115_default_path,
+                "trigger": "Agent资源官 115 登录后自动继续",
+                "apikey": self._extract_apikey(request, body),
+            })
+        )
+        self._clear_pending_p115_share(session_id)
+        return bool(result.get("success")), str(result.get("message") or "").strip(), result.get("data") or {}
+
     def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
         status = self._p115_status_snapshot()
         lines = [
@@ -1350,6 +1414,7 @@ class AgentResourceOfficer(_PluginBase):
             "115 使用帮助",
             f"当前状态：{'可用' if status.get('ready') else '待登录/待修复'}",
             f"默认目录：{final_path}",
+            "如果 115 转存因登录问题失败，我会记住这次任务；扫码成功后回复 检查115登录，会自动继续执行。",
             "常用示例：",
             f"1. 链接 https://115cdn.com/s/xxxx path={final_path}",
             "2. 影巢搜索 蜘蛛侠",
@@ -2256,6 +2321,7 @@ class AgentResourceOfficer(_PluginBase):
                 },
             }
         if assistant_action == "p115_qrcode_start":
+            previous_state = self._load_session(cache_key) or {}
             client_type = P115TransferService.normalize_qrcode_client_type(
                 parsed.get("client_type") or self._p115_client_type
             )
@@ -2265,6 +2331,7 @@ class AgentResourceOfficer(_PluginBase):
             self._save_session(
                 cache_key,
                 {
+                    **previous_state,
                     "kind": "assistant_p115_login",
                     "stage": "qrcode",
                     "client_type": client_type,
@@ -2273,12 +2340,16 @@ class AgentResourceOfficer(_PluginBase):
                     "sign": self._clean_text(data.get("sign")),
                 },
             )
+            pending_text = ""
+            if (previous_state.get("pending_p115") or {}).get("share_url"):
+                pending_text = "\n检测到有待继续的 115 任务，登录成功后我会自动继续执行。"
             return {
                 "success": True,
                 "message": (
                     "115 扫码二维码已生成\n"
                     f"客户端：{client_type}\n"
                     "请使用 115 App 扫码确认后，再回复：检查115登录"
+                    f"{pending_text}"
                 ),
                 "data": {
                     "action": "p115_qrcode_start",
@@ -2344,6 +2415,17 @@ class AgentResourceOfficer(_PluginBase):
             ]
             if data.get("cookie_saved"):
                 lines.append(self._format_p115_status_summary(title="115 登录完成"))
+                resume_ok, resume_message, resume_data = await self._resume_pending_p115_share(
+                    request,
+                    body,
+                    session_id=cache_key,
+                    state=state,
+                )
+                if resume_message:
+                    lines.append("已自动继续刚才未完成的 115 任务")
+                    lines.append(resume_message)
+                    data["resume_ok"] = resume_ok
+                    data["resume_result"] = resume_data
             elif status in {"waiting", "scanned"}:
                 lines.append("如果还没确认登录，请在 115 App 里点确认后再次回复：检查115登录")
             message_text = "\n".join(line for line in lines if line).strip()
@@ -2364,13 +2446,28 @@ class AgentResourceOfficer(_PluginBase):
                     "apikey": self._extract_apikey(request, body),
                 })
             )
+            if provider == "115":
+                if result.get("success"):
+                    self._clear_pending_p115_share(cache_key)
+                else:
+                    self._save_pending_p115_share(
+                        cache_key,
+                        share_url=parsed["url"],
+                        access_code=parsed.get("access_code") or "",
+                        target_path=target_path or self._p115_default_path,
+                        source="assistant_link",
+                    )
             return {
                 "success": bool(result.get("success")),
                 "message": (
                     f"{'夸克' if provider == 'quark' else '115' if provider == '115' else '分享'}转存已完成\n目录："
                     f"{((result.get('data') or {}).get('result') or {}).get('target_path') or ((result.get('data') or {}).get('result') or {}).get('path') or target_path or '-'}"
                     if result.get("success")
-                    else str(result.get("message") or "处理失败")
+                    else (
+                        f"{str(result.get('message') or '处理失败')}\n{self._format_p115_resume_hint()}"
+                        if provider == "115"
+                        else str(result.get("message") or "处理失败")
+                    )
                 ),
                 "data": {
                     "action": "share_route",
@@ -2508,7 +2605,26 @@ class AgentResourceOfficer(_PluginBase):
                 })
             )
             if not route_result.get("success"):
+                if self._is_115_url(share_url):
+                    self._save_pending_p115_share(
+                        cache_key,
+                        share_url=share_url,
+                        access_code=access_code,
+                        target_path=final_path,
+                        source="assistant_pansou_pick",
+                        title=selected.get("note") or "",
+                    )
+                    return {
+                        "success": False,
+                        "message": (
+                            f"{str(route_result.get('message') or '转存失败')}\n"
+                            f"{self._format_p115_resume_hint(selected.get('note') or '')}"
+                        ),
+                        "data": route_result.get("data") or {},
+                    }
                 return {"success": False, "message": str(route_result.get('message') or '转存失败'), "data": route_result.get("data") or {}}
+            if self._is_115_url(share_url):
+                self._clear_pending_p115_share(cache_key)
             provider = ((route_result.get("data") or {}).get("provider") or "").lower()
             result_payload = (route_result.get("data") or {}).get("result") or {}
             directory = (result_payload.get("result") or {}).get("target_path") or (result_payload.get("result") or {}).get("path") or final_path
@@ -2601,6 +2717,22 @@ class AgentResourceOfficer(_PluginBase):
                 target_path=final_path,
             )
             if not route_ok:
+                route = dict((route_result or {}).get("route") or {})
+                share_url = self._clean_text(route.get("share_url"))
+                if self._is_115_url(share_url) or self._clean_text(route.get("provider")) == "115":
+                    self._save_pending_p115_share(
+                        cache_key,
+                        share_url=share_url,
+                        access_code=route.get("access_code") or "",
+                        target_path=route.get("target_path") or final_path,
+                        source="assistant_hdhive_unlock",
+                        title=resource.get("title") or resource.get("matched_title") or "",
+                    )
+                    return {
+                        "success": False,
+                        "message": f"{route_message}\n{self._format_p115_resume_hint(resource.get('title') or resource.get('matched_title') or '')}",
+                        "data": route_result,
+                    }
                 return {"success": False, "message": route_message, "data": route_result}
             return {
                 "success": True,
