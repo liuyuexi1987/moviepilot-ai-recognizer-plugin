@@ -53,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.22"
+    plugin_version = "0.1.23"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -85,6 +85,7 @@ class AgentResourceOfficer(_PluginBase):
     _candidate_actor_cache: Dict[str, List[str]] = {}
     _candidate_actor_cache_lock = threading.Lock()
     _session_store_key = "assistant_session_cache"
+    _session_retention_seconds = 7 * 24 * 60 * 60
 
     @staticmethod
     def _extract_first_url(text: str) -> str:
@@ -1243,6 +1244,8 @@ class AgentResourceOfficer(_PluginBase):
             data: Dict[str, Dict[str, Any]] = {}
             for session_id, payload in (self._session_cache or {}).items():
                 session = dict(payload or {})
+                if self._is_session_expired(session):
+                    continue
                 if session.get("pending_p115") or str(session.get("kind") or "").strip() == "assistant_p115_login":
                     data[session_id] = session
             self.save_data(key=self._session_store_key, value=data)
@@ -1254,10 +1257,30 @@ class AgentResourceOfficer(_PluginBase):
             restored = self.get_data(self._session_store_key) or {}
             if isinstance(restored, dict):
                 for session_id, payload in restored.items():
-                    if isinstance(payload, dict):
+                    if isinstance(payload, dict) and not self._is_session_expired(payload):
                         self._session_cache[str(session_id)] = dict(payload)
         except Exception:
             pass
+
+    def _is_session_expired(self, payload: Optional[Dict[str, Any]]) -> bool:
+        session = dict(payload or {})
+        updated_at = self._safe_int(session.get("updated_at"), 0)
+        if updated_at <= 0:
+            return False
+        return (int(time.time()) - updated_at) > self._session_retention_seconds
+
+    @staticmethod
+    def _format_unix_time(value: Any) -> str:
+        try:
+            timestamp = int(value)
+        except Exception:
+            return ""
+        if timestamp <= 0:
+            return ""
+        try:
+            return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
+        except Exception:
+            return ""
 
     @staticmethod
     def _group_resource_preview(items: List[Dict[str, Any]], per_group: int = 6) -> List[Dict[str, Any]]:
@@ -1359,11 +1382,14 @@ class AgentResourceOfficer(_PluginBase):
         target_path: str = "",
         source: str = "",
         title: str = "",
+        last_error: str = "",
     ) -> None:
         clean_url = self._clean_text(share_url)
         if not clean_url:
             return
         state = self._load_session(session_id) or {}
+        previous = dict(state.get("pending_p115") or {})
+        now = int(time.time())
         state["pending_p115"] = {
             "kind": "share_route",
             "share_url": clean_url,
@@ -1371,6 +1397,10 @@ class AgentResourceOfficer(_PluginBase):
             "target_path": target_path or self._p115_default_path,
             "source": self._clean_text(source),
             "title": self._clean_text(title),
+            "created_at": self._safe_int(previous.get("created_at"), now) or now,
+            "last_attempt_at": now,
+            "retry_count": max(0, self._safe_int(previous.get("retry_count"), 0)),
+            "last_error": self._clean_text(last_error) or self._clean_text(previous.get("last_error")),
         }
         if not state.get("kind"):
             state["kind"] = "assistant_p115_pending"
@@ -1392,15 +1422,26 @@ class AgentResourceOfficer(_PluginBase):
         title = self._clean_text(pending.get("title")) or "未命名任务"
         target_path = self._clean_text(pending.get("target_path")) or self._p115_default_path
         source = self._clean_text(pending.get("source")) or "unknown"
-        return "\n".join(
-            [
-                "待继续的 115 任务：",
-                f"资源：{title}",
-                f"目录：{target_path}",
-                f"来源：{source}",
-                "可用命令：继续115任务 / 取消115任务",
-            ]
-        )
+        created_at = self._format_unix_time(pending.get("created_at"))
+        last_attempt_at = self._format_unix_time(pending.get("last_attempt_at"))
+        retry_count = max(0, self._safe_int(pending.get("retry_count"), 0))
+        last_error = self._clean_text(pending.get("last_error"))
+        lines = [
+            "待继续的 115 任务：",
+            f"资源：{title}",
+            f"目录：{target_path}",
+            f"来源：{source}",
+        ]
+        if created_at:
+            lines.append(f"首次记录：{created_at}")
+        if last_attempt_at:
+            lines.append(f"最近尝试：{last_attempt_at}")
+        if retry_count:
+            lines.append(f"重试次数：{retry_count}")
+        if last_error:
+            lines.append(f"最近错误：{last_error}")
+        lines.append("可用命令：继续115任务 / 取消115任务")
+        return "\n".join(lines)
 
     async def _resume_pending_p115_share(
         self,
@@ -1427,6 +1468,9 @@ class AgentResourceOfficer(_PluginBase):
             self._clear_pending_p115_share(session_id)
         else:
             current_state = self._load_session(session_id) or dict(state or {})
+            pending["retry_count"] = max(0, self._safe_int(pending.get("retry_count"), 0)) + 1
+            pending["last_attempt_at"] = int(time.time())
+            pending["last_error"] = str(result.get("message") or "").strip()
             current_state["pending_p115"] = pending
             if not current_state.get("kind"):
                 current_state["kind"] = "assistant_p115_pending"
@@ -2624,6 +2668,7 @@ class AgentResourceOfficer(_PluginBase):
                         access_code=parsed.get("access_code") or "",
                         target_path=target_path or self._p115_default_path,
                         source="assistant_link",
+                        last_error=str(result.get("message") or ""),
                     )
             return {
                 "success": bool(result.get("success")),
@@ -2781,6 +2826,7 @@ class AgentResourceOfficer(_PluginBase):
                         target_path=final_path,
                         source="assistant_pansou_pick",
                         title=selected.get("note") or "",
+                        last_error=str(route_result.get("message") or ""),
                     )
                     return {
                         "success": False,
@@ -2895,6 +2941,7 @@ class AgentResourceOfficer(_PluginBase):
                         target_path=route.get("target_path") or final_path,
                         source="assistant_hdhive_unlock",
                         title=resource.get("title") or resource.get("matched_title") or "",
+                        last_error=route_message,
                     )
                     return {
                         "success": False,
