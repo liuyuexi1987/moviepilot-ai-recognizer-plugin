@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.31`
+- 当前版本：`0.1.32`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -315,3 +315,12 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/pick
 ```text
 GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP API Token
 ```
+
+从 `0.1.32` 开始，`assistant/route` 与 `assistant/pick` 的 `data` 会统一附带：
+
+- `session`
+- `session_id`
+- `session_state`
+- `next_actions`
+
+这样外部智能体拿到回执后，就可以直接根据结构化字段判断当前阶段、可选编号、建议动作和待继续的 115 任务，不必再解析长文本提示。

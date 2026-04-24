@@ -68,7 +68,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.31"
+    plugin_version = "0.1.32"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1871,6 +1871,17 @@ class AgentResourceOfficer(_PluginBase):
                 "assistant/session",
                 "assistant/session/clear",
             ],
+            "response_envelope": {
+                "fields": [
+                    "action",
+                    "ok",
+                    "session",
+                    "session_id",
+                    "session_state",
+                    "next_actions",
+                ],
+                "description": "assistant/route 与 assistant/pick 返回的 data 中会统一附带当前会话状态和建议下一步动作，上层智能体可直接按结构化字段继续编排。",
+            },
             "agent_tools": [
                 "agent_resource_officer_capabilities",
                 "agent_resource_officer_help",
@@ -1902,8 +1913,24 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
             "smart_pick 字段：session / choice / action / path",
             "smart_pick 动作：detail / next_page",
+            "统一回执字段：action / ok / session / session_id / session_state / next_actions",
         ]
         return "\n".join(lines)
+
+    def _assistant_response_data(
+        self,
+        *,
+        session: str,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        payload = dict(data or {})
+        session_name = self._clean_text(session) or "default"
+        session_state = self._assistant_session_public_data(session=session_name)
+        payload["session"] = session_name
+        payload["session_id"] = session_state.get("session_id") or self._assistant_session_id(session_name)
+        payload["session_state"] = session_state
+        payload["next_actions"] = session_state.get("suggested_actions") or []
+        return payload
 
     def _merge_assistant_structured_input(self, body: Dict[str, Any], parsed: Dict[str, str]) -> Dict[str, str]:
         merged = dict(parsed or {})
@@ -3084,11 +3111,11 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": True,
                 "message": summary,
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "assistant_help",
                     "ok": True,
                     "status_summary": summary,
-                },
+                }),
             }
 
         assistant_action = self._clean_text(parsed.get("action"))
@@ -3097,11 +3124,11 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": True,
                 "message": summary,
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "assistant_help",
                     "ok": True,
                     "status_summary": summary,
-                },
+                }),
             }
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()
@@ -3111,12 +3138,12 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": True,
                 "message": summary,
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "p115_help",
                     "ok": True,
                     "status_summary": summary,
                     "status": self._p115_status_snapshot(),
-                },
+                }),
             }
         if assistant_action == "p115_status":
             summary = self._format_p115_status_summary()
@@ -3126,12 +3153,12 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": True,
                 "message": summary,
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "p115_status",
                     "ok": True,
                     "status_summary": summary,
                     "status": self._p115_status_snapshot(),
-                },
+                }),
             }
         if assistant_action == "p115_pending":
             pending_summary = self._pending_p115_summary(state)
@@ -3139,12 +3166,12 @@ class AgentResourceOfficer(_PluginBase):
                 return {
                     "success": True,
                     "message": "当前没有待继续的 115 任务。",
-                    "data": {"action": "p115_pending", "ok": True},
+                    "data": self._assistant_response_data(session=session, data={"action": "p115_pending", "ok": True}),
                 }
             return {
                 "success": True,
                 "message": pending_summary,
-                "data": {"action": "p115_pending", "ok": True},
+                "data": self._assistant_response_data(session=session, data={"action": "p115_pending", "ok": True}),
             }
         if assistant_action == "p115_resume":
             pending_summary = self._pending_p115_summary(state)
@@ -3153,13 +3180,13 @@ class AgentResourceOfficer(_PluginBase):
                 return {
                     "success": False,
                     "message": f"当前没有待继续的 115 任务。\n{summary}",
-                    "data": {"action": "p115_resume", "ok": False},
+                    "data": self._assistant_response_data(session=session, data={"action": "p115_resume", "ok": False}),
                 }
             if not self._p115_status_snapshot().get("ready"):
                 return {
                     "success": False,
                     "message": f"{pending_summary}\n当前 115 还不可用，请先回复：115登录",
-                    "data": {"action": "p115_resume", "ok": False},
+                    "data": self._assistant_response_data(session=session, data={"action": "p115_resume", "ok": False}),
                 }
             resume_ok, resume_message, resume_data = await self._resume_pending_p115_share(
                 request,
@@ -3175,7 +3202,7 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": resume_ok,
                 "message": message_text,
-                "data": {"action": "p115_resume", "ok": resume_ok, "result": resume_data},
+                "data": self._assistant_response_data(session=session, data={"action": "p115_resume", "ok": resume_ok, "result": resume_data}),
             }
         if assistant_action == "p115_cancel":
             pending_summary = self._pending_p115_summary(state)
@@ -3183,13 +3210,13 @@ class AgentResourceOfficer(_PluginBase):
                 return {
                     "success": True,
                     "message": "当前没有待取消的 115 任务。",
-                    "data": {"action": "p115_cancel", "ok": True},
+                    "data": self._assistant_response_data(session=session, data={"action": "p115_cancel", "ok": True}),
                 }
             self._clear_pending_p115_share(cache_key)
             return {
                 "success": True,
                 "message": f"{pending_summary}\n已取消并清除这次待继续的 115 任务。",
-                "data": {"action": "p115_cancel", "ok": True},
+                "data": self._assistant_response_data(session=session, data={"action": "p115_cancel", "ok": True}),
             }
         if assistant_action == "p115_qrcode_start":
             previous_state = state
@@ -3222,16 +3249,15 @@ class AgentResourceOfficer(_PluginBase):
                     "请使用 115 App 扫码确认后，再回复：检查115登录"
                     f"{pending_text}"
                 ),
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "p115_qrcode_start",
                     "ok": True,
-                    "session_id": cache_key,
                     "qrcode": data.get("qrcode"),
                     "uid": data.get("uid"),
                     "time": data.get("time"),
                     "sign": data.get("sign"),
                     "client_type": client_type,
-                },
+                }),
             }
         if assistant_action == "p115_qrcode_check":
             if not state or str(state.get("kind") or "").strip() != "assistant_p115_login":
@@ -3251,7 +3277,7 @@ class AgentResourceOfficer(_PluginBase):
                     return {
                         "success": resume_ok,
                         "message": message_text,
-                        "data": {"action": "p115_qrcode_check", "ok": resume_ok, "result": resume_data},
+                        "data": self._assistant_response_data(session=session, data={"action": "p115_qrcode_check", "ok": resume_ok, "result": resume_data}),
                     }
                 summary = self._format_p115_status_summary()
                 if pending_summary:
@@ -3264,10 +3290,12 @@ class AgentResourceOfficer(_PluginBase):
                         "如需重新扫码登录，请回复：115登录"
                     ),
                     "data": {
-                        "action": "p115_qrcode_check",
-                        "ok": True,
-                        "status_summary": summary,
-                        "status": self._p115_status_snapshot(),
+                        **self._assistant_response_data(session=session, data={
+                            "action": "p115_qrcode_check",
+                            "ok": True,
+                            "status_summary": summary,
+                            "status": self._p115_status_snapshot(),
+                        }),
                     },
                 }
             client_type = P115TransferService.normalize_qrcode_client_type(
@@ -3295,7 +3323,7 @@ class AgentResourceOfficer(_PluginBase):
                 return {
                     "success": False,
                     "message": f"115 扫码状态：{qr_message}",
-                    "data": {"action": "p115_qrcode_check", "ok": False, **data},
+                    "data": self._assistant_response_data(session=session, data={"action": "p115_qrcode_check", "ok": False, **data}),
                 }
             status = self._clean_text(data.get("status"))
             lines = [
@@ -3324,7 +3352,7 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": True,
                 "message": message_text,
-                "data": {"action": "p115_qrcode_check", "ok": True, **data},
+                "data": self._assistant_response_data(session=session, data={"action": "p115_qrcode_check", "ok": True, **data}),
             }
 
         if parsed.get("url"):
@@ -3362,12 +3390,12 @@ class AgentResourceOfficer(_PluginBase):
                         else str(result.get("message") or "处理失败")
                     )
                 ),
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "share_route",
                     "ok": bool(result.get("success")),
                     "provider": provider,
                     "result": result.get("data") or {},
-                },
+                }),
             }
 
         mode = parsed.get("mode") or "hdhive"
@@ -3402,12 +3430,11 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": True,
                 "message": text_message,
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "pansou_search",
                     "ok": True,
-                    "session_id": cache_key,
                     "items": items,
-                },
+                }),
             }
 
         service = self._ensure_hdhive_service()
@@ -3438,12 +3465,11 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": True,
             "message": text_message,
-            "data": {
+            "data": self._assistant_response_data(session=session, data={
                 "action": "hdhive_candidates",
                 "ok": True,
-                "session_id": cache_key,
                 "candidates": candidates,
-            },
+            }),
         }
 
     async def api_assistant_pick(self, request: Request):
@@ -3514,9 +3540,13 @@ class AgentResourceOfficer(_PluginBase):
                             f"{str(route_result.get('message') or '转存失败')}\n"
                             f"{self._format_p115_resume_hint(selected.get('note') or '')}"
                         ),
-                        "data": route_result.get("data") or {},
+                        "data": self._assistant_response_data(session=session, data=route_result.get("data") or {}),
                     }
-                return {"success": False, "message": str(route_result.get('message') or '转存失败'), "data": route_result.get("data") or {}}
+                return {
+                    "success": False,
+                    "message": str(route_result.get('message') or '转存失败'),
+                    "data": self._assistant_response_data(session=session, data=route_result.get("data") or {}),
+                }
             if self._is_115_url(share_url):
                 self._clear_pending_p115_share(cache_key)
             provider = ((route_result.get("data") or {}).get("provider") or "").lower()
@@ -3528,7 +3558,11 @@ class AgentResourceOfficer(_PluginBase):
                 f"类型：{provider or selected.get('channel') or '-'}",
                 f"目录：{directory or '-'}",
             ])
-            return {"success": True, "message": text_message, "data": {"action": "share_route", "ok": True}}
+            return {
+                "success": True,
+                "message": text_message,
+                "data": self._assistant_response_data(session=session, data={"action": "share_route", "ok": True}),
+            }
 
         if kind == "assistant_hdhive":
             stage = str(state.get("stage") or "").strip()
@@ -3547,13 +3581,12 @@ class AgentResourceOfficer(_PluginBase):
                     return {
                         "success": True,
                         "message": self._format_candidate_lines(enriched, page=current_page, page_size=page_size),
-                        "data": {
+                        "data": self._assistant_response_data(session=session, data={
                             "action": "hdhive_candidates_detail",
                             "ok": True,
-                            "session_id": cache_key,
                             "page": current_page,
                             "candidates": enriched,
-                        },
+                        }),
                     }
                 if action == "next_page":
                     total_pages = max(1, (len(candidates) + page_size - 1) // page_size)
@@ -3564,13 +3597,12 @@ class AgentResourceOfficer(_PluginBase):
                     return {
                         "success": True,
                         "message": self._format_candidate_lines(candidates, page=next_page, page_size=page_size),
-                        "data": {
+                        "data": self._assistant_response_data(session=session, data={
                             "action": "hdhive_candidates_next_page",
                             "ok": True,
-                            "session_id": cache_key,
                             "page": next_page,
                             "total_pages": total_pages,
-                        },
+                        }),
                     }
                 if index > len(candidates):
                     return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(candidates)} 之间的数字。"}
@@ -3595,12 +3627,12 @@ class AgentResourceOfficer(_PluginBase):
                 return {
                     "success": True,
                     "message": self._format_resource_lines(preview, candidate),
-                    "data": {
+                    "data": self._assistant_response_data(session=session, data={
                         "action": "hdhive_search",
                         "ok": True,
                         "selected_candidate": candidate,
                         "resources": preview,
-                    },
+                    }),
                 }
             resources = state.get("resources") or []
             if index > len(resources):
@@ -3626,18 +3658,22 @@ class AgentResourceOfficer(_PluginBase):
                     return {
                         "success": False,
                         "message": f"{route_message}\n{self._format_p115_resume_hint(resource.get('title') or resource.get('matched_title') or '')}",
-                        "data": route_result,
+                        "data": self._assistant_response_data(session=session, data=route_result),
                     }
-                return {"success": False, "message": route_message, "data": route_result}
+                return {
+                    "success": False,
+                    "message": route_message,
+                    "data": self._assistant_response_data(session=session, data=route_result),
+                }
             return {
                 "success": True,
                 "message": self._format_route_result(route_result),
-                "data": {
+                "data": self._assistant_response_data(session=session, data={
                     "action": "hdhive_unlock",
                     "ok": True,
                     "selected_resource": resource,
                     "result": route_result,
-                },
+                }),
             }
 
         return {"success": False, "message": f"当前会话阶段不支持继续选择：{kind or 'unknown'}"}
@@ -3651,7 +3687,7 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": True,
             "message": self._format_assistant_capabilities_text(),
-            "data": self._assistant_capabilities_public_data(),
+            "data": self._assistant_response_data(session="default", data=self._assistant_capabilities_public_data()),
         }
 
     async def api_assistant_session_state(self, request: Request):
@@ -3704,7 +3740,7 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": True,
             "message": f"已清理会话：{session}",
-            "data": {"session": session, "session_id": session_id, "cleared": True},
+            "data": self._assistant_response_data(session=session, data={"cleared": True}),
         }
 
     async def api_session_hdhive_search(self, request: Request):
