@@ -9,6 +9,8 @@ from .schemas import (
     AssistantHelpToolInput,
     AssistantPickToolInput,
     AssistantRouteToolInput,
+    AssistantSessionClearToolInput,
+    AssistantSessionStateToolInput,
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
     P115CancelPendingToolInput,
@@ -151,6 +153,38 @@ class AssistantHelpTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_help(session=session)
+
+
+class AssistantSessionStateTool(MoviePilotTool):
+    name: str = "agent_resource_officer_session_state"
+    description: str = "Inspect the current Agent资源官 assistant session, including stage, current page, selected candidate, and pending 115 task."
+    args_schema: Type[BaseModel] = AssistantSessionStateToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        session = kwargs.get("session", "default")
+        return f"正在查看 Agent资源官 会话状态：{session}"
+
+    async def run(self, session: str = "default", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_session_state(session=session)
+
+
+class AssistantSessionClearTool(MoviePilotTool):
+    name: str = "agent_resource_officer_session_clear"
+    description: str = "Clear the current Agent资源官 assistant session cache."
+    args_schema: Type[BaseModel] = AssistantSessionClearToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        session = kwargs.get("session", "default")
+        return f"正在清理 Agent资源官 会话：{session}"
+
+    async def run(self, session: str = "default", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_session_clear(session=session)
 
 
 class P115QRCodeStartTool(MoviePilotTool):

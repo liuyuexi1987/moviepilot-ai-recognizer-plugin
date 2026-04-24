@@ -40,6 +40,14 @@ class AssistantHelpToolInput(BaseModel):
     session: Optional[str] = Field(default="default", description="可选会话标识；如该会话存在待继续的 115 任务，帮助里会附带任务摘要")
 
 
+class AssistantSessionStateToolInput(BaseModel):
+    session: Optional[str] = Field(default="default", description="会话标识；不填则查看 default 会话当前状态")
+
+
+class AssistantSessionClearToolInput(BaseModel):
+    session: Optional[str] = Field(default="default", description="会话标识；不填则清理 default 会话")
+
+
 class P115QRCodeStartToolInput(BaseModel):
     client_type: Optional[str] = Field(default="alipaymini", description="115 扫码客户端类型，默认 alipaymini")
 

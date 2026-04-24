@@ -33,6 +33,8 @@ from .agenttool import (
     AssistantHelpTool,
     AssistantPickTool,
     AssistantRouteTool,
+    AssistantSessionClearTool,
+    AssistantSessionStateTool,
     HDHiveSearchSessionTool,
     HDHiveSessionPickTool,
     P115CancelPendingTool,
@@ -65,7 +67,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.29"
+    plugin_version = "0.1.30"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -211,6 +213,8 @@ class AgentResourceOfficer(_PluginBase):
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
+            AssistantSessionStateTool,
+            AssistantSessionClearTool,
             HDHiveSearchSessionTool,
             HDHiveSessionPickTool,
             ShareRouteTool,
@@ -658,6 +662,18 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_pick,
                 "methods": ["POST"],
                 "summary": "统一智能入口的按编号继续执行",
+            },
+            {
+                "path": "/assistant/session",
+                "endpoint": self.api_assistant_session_state,
+                "methods": ["GET", "POST"],
+                "summary": "查看统一智能入口当前会话状态与建议动作",
+            },
+            {
+                "path": "/assistant/session/clear",
+                "endpoint": self.api_assistant_session_clear,
+                "methods": ["POST"],
+                "summary": "清理统一智能入口当前会话缓存",
             },
             {
                 "path": "/session/hdhive/search",
@@ -1507,6 +1523,169 @@ class AgentResourceOfficer(_PluginBase):
             "last_error": self._clean_text(pending.get("last_error")),
         }
 
+    def _assistant_session_public_data(self, session: str = "default") -> Dict[str, Any]:
+        session_name = self._clean_text(session) or "default"
+        session_id = self._assistant_session_id(session_name)
+        state = self._load_session(session_id) or {}
+        if not state:
+            return {
+                "has_session": False,
+                "session": session_name,
+                "session_id": session_id,
+                "suggested_actions": ["smart_entry"],
+            }
+
+        kind = self._clean_text(state.get("kind"))
+        stage = self._clean_text(state.get("stage"))
+        target_path = self._clean_text(state.get("target_path"))
+        payload: Dict[str, Any] = {
+            "has_session": True,
+            "session": session_name,
+            "session_id": session_id,
+            "kind": kind,
+            "stage": stage,
+            "updated_at": self._safe_int(state.get("updated_at"), 0),
+            "updated_at_text": self._format_unix_time(state.get("updated_at")),
+            "target_path": target_path,
+            "keyword": self._clean_text(state.get("keyword")),
+            "media_type": self._clean_text(state.get("media_type")),
+            "year": self._clean_text(state.get("year")),
+            "pending_p115": self._pending_p115_public_data(state),
+            "suggested_actions": [],
+        }
+
+        if kind == "assistant_pansou":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "channel": self._clean_text(item.get("channel")),
+                        "title": self._clean_text(item.get("note")),
+                        "source": self._clean_text(item.get("source")),
+                    }
+                    for idx, item in enumerate(items[:6])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["smart_pick.choice", "session_clear"],
+            })
+        elif kind == "assistant_hdhive":
+            if stage == "candidate":
+                candidates = state.get("candidates") or []
+                current_page = max(1, self._safe_int(state.get("page"), 1))
+                page_size = max(1, self._safe_int(state.get("page_size"), self._hdhive_candidate_page_size))
+                total_pages = max(1, (len(candidates) + page_size - 1) // page_size) if candidates else 1
+                start = (current_page - 1) * page_size
+                end = start + page_size
+                payload.update({
+                    "page": current_page,
+                    "page_size": page_size,
+                    "total_candidates": len(candidates),
+                    "total_pages": total_pages,
+                    "candidates_preview": [
+                        {
+                            "index": start + idx + 1,
+                            "tmdb_id": self._clean_text(item.get("tmdb_id")),
+                            "title": self._clean_text(item.get("title")),
+                            "year": self._clean_text(item.get("year")),
+                            "media_type": self._clean_text(item.get("media_type")),
+                            "actors": item.get("actors") or [],
+                        }
+                        for idx, item in enumerate(candidates[start:end])
+                        if isinstance(item, dict)
+                    ],
+                    "suggested_actions": ["smart_pick.choice", "smart_pick.action=详情", "smart_pick.action=下一页", "session_clear"],
+                })
+            elif stage == "resource":
+                resources = state.get("resources") or []
+                selected_candidate = dict(state.get("selected_candidate") or {})
+                payload.update({
+                    "selected_candidate": {
+                        "tmdb_id": self._clean_text(selected_candidate.get("tmdb_id")),
+                        "title": self._clean_text(selected_candidate.get("title")),
+                        "year": self._clean_text(selected_candidate.get("year")),
+                        "media_type": self._clean_text(selected_candidate.get("media_type")),
+                        "actors": selected_candidate.get("actors") or [],
+                    },
+                    "total_resources": len(resources),
+                    "resource_count_115": len([x for x in resources if str((x or {}).get("pan_type") or "").lower() == "115"]),
+                    "resource_count_quark": len([x for x in resources if str((x or {}).get("pan_type") or "").lower() == "quark"]),
+                    "resources_preview": [
+                        {
+                            "index": self._safe_int(item.get("pick_index"), idx + 1),
+                            "provider": self._clean_text(item.get("pan_type")),
+                            "title": self._clean_text(item.get("title") or item.get("matched_title")),
+                            "points": item.get("cost"),
+                            "quality": self._clean_text(item.get("quality")),
+                            "size": self._clean_text(item.get("size")),
+                        }
+                        for idx, item in enumerate(resources[:8])
+                        if isinstance(item, dict)
+                    ],
+                    "suggested_actions": ["smart_pick.choice", "session_clear"],
+                })
+        elif kind == "assistant_p115_login":
+            payload.update({
+                "client_type": self._clean_text(state.get("client_type")) or self._p115_client_type,
+                "has_qrcode_session": bool(self._clean_text(state.get("uid")) and self._clean_text(state.get("time")) and self._clean_text(state.get("sign"))),
+                "suggested_actions": ["smart_entry.text=检查115登录", "p115_status", "session_clear"],
+            })
+        else:
+            payload["suggested_actions"] = ["smart_entry", "session_clear"]
+        return payload
+
+    def _format_assistant_session_summary(self, session: str = "default") -> str:
+        data = self._assistant_session_public_data(session=session)
+        if not data.get("has_session"):
+            return "\n".join([
+                "当前没有活跃会话。",
+                "可直接调用 smart_entry 发起新操作，例如：",
+                "1. text=盘搜搜索 大君夫人",
+                "2. text=影巢搜索 蜘蛛侠",
+                "3. text=链接 https://115cdn.com/s/xxxx path=/待整理",
+            ])
+
+        lines = [
+            "当前会话状态",
+            f"会话：{data.get('session')}",
+            f"类型：{data.get('kind') or '-'}",
+            f"阶段：{data.get('stage') or '-'}",
+        ]
+        if data.get("keyword"):
+            lines.append(f"关键词：{data.get('keyword')}")
+        if data.get("target_path"):
+            lines.append(f"目录：{data.get('target_path')}")
+        if data.get("updated_at_text"):
+            lines.append(f"最近更新：{data.get('updated_at_text')}")
+        if data.get("kind") == "assistant_pansou":
+            lines.append(f"结果数：{data.get('result_count') or 0}")
+            lines.append("下一步：调用 smart_pick，传入 choice=编号")
+        elif data.get("kind") == "assistant_hdhive" and data.get("stage") == "candidate":
+            lines.append(f"候选数：{data.get('total_candidates') or 0}")
+            lines.append(f"页码：{data.get('page')}/{data.get('total_pages')}")
+            lines.append("下一步：smart_pick 可传 choice=编号，或 action=详情 / 下一页")
+        elif data.get("kind") == "assistant_hdhive" and data.get("stage") == "resource":
+            selected = data.get("selected_candidate") or {}
+            if selected.get("title"):
+                lines.append(f"已选影片：{selected.get('title')} ({selected.get('year') or '-'})")
+            lines.append(f"资源数：{data.get('total_resources') or 0}")
+            lines.append("下一步：调用 smart_pick，传入 choice=资源编号")
+        elif data.get("kind") == "assistant_p115_login":
+            lines.append(f"扫码客户端：{data.get('client_type') or self._p115_client_type}")
+            lines.append("下一步：调用 smart_entry，传入 text=检查115登录")
+
+        pending = data.get("pending_p115") or {}
+        if pending.get("has_pending"):
+            lines.append("存在待继续的 115 任务")
+            lines.append(f"任务：{pending.get('title')}")
+            lines.append(f"待转目录：{pending.get('target_path')}")
+
+        actions = data.get("suggested_actions") or []
+        if actions:
+            lines.append("建议动作：" + " / ".join(str(item) for item in actions if item))
+        return "\n".join(lines)
+
     def _session_key_for_tool(self, session: str = "default") -> str:
         clean_session = self._clean_text(session) or "default"
         if clean_session.startswith("assistant::"):
@@ -2300,6 +2479,23 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_help_text(session=session)
+
+    async def tool_assistant_session_state(self, session: str = "default") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_session_summary(session=session)
+
+    async def tool_assistant_session_clear(self, session: str = "default") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        session_name = self._clean_text(session) or "default"
+        session_id = self._assistant_session_id(session_name)
+        existing = self._load_session(session_id)
+        if not existing:
+            return "当前没有需要清理的会话。"
+        self._session_cache.pop(session_id, None)
+        self._persist_relevant_sessions()
+        return f"已清理会话：{session_name}"
 
     async def tool_p115_qrcode_start(self, client_type: str = "alipaymini") -> str:
         if not self._enabled:
@@ -3299,6 +3495,59 @@ class AgentResourceOfficer(_PluginBase):
             }
 
         return {"success": False, "message": f"当前会话阶段不支持继续选择：{kind or 'unknown'}"}
+
+    async def api_assistant_session_state(self, request: Request):
+        body: Dict[str, Any] = {}
+        if request.method.upper() != "GET":
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+        ok, message = self._check_api_access(request, body or None)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        session = self._clean_text(
+            (body or {}).get("session")
+            or request.query_params.get("session")
+            or request.query_params.get("chat_id")
+            or request.query_params.get("user_id")
+            or "default"
+        )
+        summary = self._format_assistant_session_summary(session=session)
+        data = self._assistant_session_public_data(session=session)
+        return {"success": True, "message": summary, "data": data}
+
+    async def api_assistant_session_clear(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        session = self._clean_text(
+            body.get("session")
+            or body.get("chat_id")
+            or body.get("user_id")
+            or body.get("conversation_id")
+            or "default"
+        )
+        session_id = self._assistant_session_id(session)
+        existing = self._load_session(session_id)
+        if not existing:
+            return {
+                "success": True,
+                "message": "当前没有需要清理的会话。",
+                "data": {"session": session, "session_id": session_id, "cleared": False},
+            }
+        self._session_cache.pop(session_id, None)
+        self._persist_relevant_sessions()
+        return {
+            "success": True,
+            "message": f"已清理会话：{session}",
+            "data": {"session": session, "session_id": session_id, "cleared": True},
+        }
 
     async def api_session_hdhive_search(self, request: Request):
         body = await request.json()
