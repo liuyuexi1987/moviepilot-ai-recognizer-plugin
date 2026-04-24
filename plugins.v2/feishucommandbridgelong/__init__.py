@@ -139,7 +139,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.5.22"
+    plugin_version = "0.5.24"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
@@ -222,6 +222,7 @@ class FeishuCommandBridgeLong(_PluginBase):
             "115登录状态=/smart_entry\n"
             "115状态=/smart_entry\n"
             "115帮助=/smart_entry\n"
+            "115任务=/smart_entry\n"
             "继续115任务=/smart_entry\n"
             "取消115任务=/smart_entry\n"
             "选择=/smart_pick\n"
@@ -784,6 +785,11 @@ class FeishuCommandBridgeLong(_PluginBase):
                                                         "component": "div",
                                                         "props": {"class": "text-body-2 py-1"},
                                                         "text": "检查115登录",
+                                                    },
+                                                    {
+                                                        "component": "div",
+                                                        "props": {"class": "text-body-2 py-1"},
+                                                        "text": "115任务",
                                                     },
                                                     {
                                                         "component": "div",

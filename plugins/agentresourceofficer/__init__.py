@@ -53,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.21"
+    plugin_version = "0.1.22"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -84,6 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     _agent_tools_reloaded = False
     _candidate_actor_cache: Dict[str, List[str]] = {}
     _candidate_actor_cache_lock = threading.Lock()
+    _session_store_key = "assistant_session_cache"
 
     @staticmethod
     def _extract_first_url(text: str) -> str:
@@ -183,6 +184,7 @@ class AgentResourceOfficer(_PluginBase):
             cookie=self._p115_cookie,
             prefer_direct=self._p115_prefer_direct,
         )
+        self._restore_persisted_sessions()
         self._agent_tools_reloaded = False
 
     def get_state(self) -> bool:
@@ -1228,12 +1230,34 @@ class AgentResourceOfficer(_PluginBase):
         payload = dict(payload)
         payload["updated_at"] = int(time.time())
         self._session_cache[session_id] = payload
+        self._persist_relevant_sessions()
 
     def _load_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         session = self._session_cache.get(session_id)
         if not session:
             return None
         return dict(session)
+
+    def _persist_relevant_sessions(self) -> None:
+        try:
+            data: Dict[str, Dict[str, Any]] = {}
+            for session_id, payload in (self._session_cache or {}).items():
+                session = dict(payload or {})
+                if session.get("pending_p115") or str(session.get("kind") or "").strip() == "assistant_p115_login":
+                    data[session_id] = session
+            self.save_data(key=self._session_store_key, value=data)
+        except Exception:
+            pass
+
+    def _restore_persisted_sessions(self) -> None:
+        try:
+            restored = self.get_data(self._session_store_key) or {}
+            if isinstance(restored, dict):
+                for session_id, payload in restored.items():
+                    if isinstance(payload, dict):
+                        self._session_cache[str(session_id)] = dict(payload)
+        except Exception:
+            pass
 
     @staticmethod
     def _group_resource_preview(items: List[Dict[str, Any]], per_group: int = 6) -> List[Dict[str, Any]]:
@@ -1515,6 +1539,16 @@ class AgentResourceOfficer(_PluginBase):
             "p115help",
         }:
             options["action"] = "p115_help"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "115任务",
+            "待处理115",
+            "待继续115",
+            "115pending",
+            "p115pending",
+        }:
+            options["action"] = "p115_pending"
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
@@ -2374,6 +2408,19 @@ class AgentResourceOfficer(_PluginBase):
                     "status_summary": summary,
                     "status": self._p115_status_snapshot(),
                 },
+            }
+        if assistant_action == "p115_pending":
+            pending_summary = self._pending_p115_summary(state)
+            if not pending_summary:
+                return {
+                    "success": True,
+                    "message": "当前没有待继续的 115 任务。",
+                    "data": {"action": "p115_pending", "ok": True},
+                }
+            return {
+                "success": True,
+                "message": pending_summary,
+                "data": {"action": "p115_pending", "ok": True},
             }
         if assistant_action == "p115_resume":
             pending_summary = self._pending_p115_summary(state)
