@@ -36,3 +36,15 @@ class P115QRCodeCheckToolInput(BaseModel):
 
 class P115StatusToolInput(BaseModel):
     pass
+
+
+class P115PendingToolInput(BaseModel):
+    session: Optional[str] = Field(default="default", description="会话标识；不填则查看 default 会话")
+
+
+class P115ResumePendingToolInput(BaseModel):
+    session: Optional[str] = Field(default="default", description="会话标识；不填则继续 default 会话的待处理 115 任务")
+
+
+class P115CancelPendingToolInput(BaseModel):
+    session: Optional[str] = Field(default="default", description="会话标识；不填则取消 default 会话的待处理 115 任务")

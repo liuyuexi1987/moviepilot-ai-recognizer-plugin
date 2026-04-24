@@ -8,8 +8,11 @@ from app.core.plugin import PluginManager
 from .schemas import (
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
+    P115CancelPendingToolInput,
+    P115PendingToolInput,
     P115QRCodeCheckToolInput,
     P115QRCodeStartToolInput,
+    P115ResumePendingToolInput,
     P115StatusToolInput,
     ShareRouteToolInput,
 )
@@ -130,3 +133,48 @@ class P115StatusTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_p115_status()
+
+
+class P115PendingTool(MoviePilotTool):
+    name: str = "agent_resource_officer_p115_pending"
+    description: str = "Show the pending 115 transfer task for an assistant session, including target path, retry count, and last error."
+    args_schema: Type[BaseModel] = P115PendingToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在通过 Agent资源官 查看待继续的 115 任务"
+
+    async def run(self, session: str = "default", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_p115_pending(session=session)
+
+
+class P115ResumePendingTool(MoviePilotTool):
+    name: str = "agent_resource_officer_p115_resume_pending"
+    description: str = "Retry the pending 115 transfer task for an assistant session."
+    args_schema: Type[BaseModel] = P115ResumePendingToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在通过 Agent资源官 继续待处理的 115 任务"
+
+    async def run(self, session: str = "default", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_p115_resume(session=session)
+
+
+class P115CancelPendingTool(MoviePilotTool):
+    name: str = "agent_resource_officer_p115_cancel_pending"
+    description: str = "Cancel and clear the pending 115 transfer task for an assistant session."
+    args_schema: Type[BaseModel] = P115CancelPendingToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在通过 Agent资源官 取消待处理的 115 任务"
+
+    async def run(self, session: str = "default", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_p115_cancel(session=session)

@@ -32,8 +32,11 @@ from .services.quark_transfer import QuarkTransferService
 from .agenttool import (
     HDHiveSearchSessionTool,
     HDHiveSessionPickTool,
+    P115CancelPendingTool,
+    P115PendingTool,
     P115QRCodeCheckTool,
     P115QRCodeStartTool,
+    P115ResumePendingTool,
     P115StatusTool,
     ShareRouteTool,
 )
@@ -53,7 +56,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.23"
+    plugin_version = "0.1.24"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -202,6 +205,9 @@ class AgentResourceOfficer(_PluginBase):
             P115QRCodeStartTool,
             P115QRCodeCheckTool,
             P115StatusTool,
+            P115PendingTool,
+            P115ResumePendingTool,
+            P115CancelPendingTool,
         ]
 
     @staticmethod
@@ -1443,6 +1449,56 @@ class AgentResourceOfficer(_PluginBase):
         lines.append("可用命令：继续115任务 / 取消115任务")
         return "\n".join(lines)
 
+    def _session_key_for_tool(self, session: str = "default") -> str:
+        clean_session = self._clean_text(session) or "default"
+        if clean_session.startswith("assistant::"):
+            return clean_session
+        return self._assistant_session_id(clean_session)
+
+    def _execute_pending_p115_share(
+        self,
+        *,
+        session_id: str,
+        state: Dict[str, Any],
+        trigger: str,
+    ) -> Tuple[bool, str, Dict[str, Any]]:
+        pending = dict((state or {}).get("pending_p115") or {})
+        share_url = self._clean_text(pending.get("share_url"))
+        if not share_url:
+            return False, "", {}
+        target_path = self._clean_text(pending.get("target_path")) or self._p115_default_path
+        transfer_ok, result, transfer_message = self._ensure_p115_service().transfer_share(
+            url=share_url,
+            access_code=self._clean_text(pending.get("access_code")),
+            path=target_path,
+            trigger=trigger,
+        )
+        if transfer_ok:
+            self._clear_pending_p115_share(session_id)
+            message = "\n".join(
+                [
+                    "115 转存已完成",
+                    f"目录：{result.get('path') or target_path}",
+                    f"结果：{transfer_message or result.get('message') or 'success'}",
+                ]
+            )
+            return True, message, {"provider": "115", "result": result}
+
+        failure_message = self._format_p115_transfer_failure(
+            detail=transfer_message,
+            target_path=target_path,
+        )
+        current_state = self._load_session(session_id) or dict(state or {})
+        pending["retry_count"] = max(0, self._safe_int(pending.get("retry_count"), 0)) + 1
+        pending["last_attempt_at"] = int(time.time())
+        pending["last_error"] = failure_message
+        current_state["pending_p115"] = pending
+        if not current_state.get("kind"):
+            current_state["kind"] = "assistant_p115_pending"
+            current_state["stage"] = "pending_login"
+        self._save_session(session_id, current_state)
+        return False, failure_message, {"provider": "115", "result": result}
+
     async def _resume_pending_p115_share(
         self,
         request: Request,
@@ -1451,32 +1507,11 @@ class AgentResourceOfficer(_PluginBase):
         session_id: str,
         state: Dict[str, Any],
     ) -> Tuple[bool, str, Dict[str, Any]]:
-        pending = dict((state or {}).get("pending_p115") or {})
-        share_url = self._clean_text(pending.get("share_url"))
-        if not share_url:
-            return False, "", {}
-        result = await self.api_share_route(
-            _JsonRequestShim(request, {
-                "url": share_url,
-                "access_code": pending.get("access_code") or "",
-                "path": pending.get("target_path") or self._p115_default_path,
-                "trigger": "Agent资源官 115 登录后自动继续",
-                "apikey": self._extract_apikey(request, body),
-            })
+        return self._execute_pending_p115_share(
+            session_id=session_id,
+            state=state,
+            trigger="Agent资源官 115 登录后自动继续",
         )
-        if result.get("success"):
-            self._clear_pending_p115_share(session_id)
-        else:
-            current_state = self._load_session(session_id) or dict(state or {})
-            pending["retry_count"] = max(0, self._safe_int(pending.get("retry_count"), 0)) + 1
-            pending["last_attempt_at"] = int(time.time())
-            pending["last_error"] = str(result.get("message") or "").strip()
-            current_state["pending_p115"] = pending
-            if not current_state.get("kind"):
-                current_state["kind"] = "assistant_p115_pending"
-                current_state["stage"] = "pending_login"
-            self._save_session(session_id, current_state)
-        return bool(result.get("success")), str(result.get("message") or "").strip(), result.get("data") or {}
 
     def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
         status = self._p115_status_snapshot()
@@ -2188,6 +2223,42 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_p115_status_summary()
+
+    async def tool_p115_pending(self, session: str = "default") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        session_id = self._session_key_for_tool(session)
+        summary = self._pending_p115_summary(self._load_session(session_id))
+        return summary or "当前没有待继续的 115 任务。"
+
+    async def tool_p115_resume(self, session: str = "default") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        session_id = self._session_key_for_tool(session)
+        state = self._load_session(session_id) or {}
+        if not self._pending_p115_summary(state):
+            return "当前没有待继续的 115 任务。"
+        if not self._p115_status_snapshot().get("ready"):
+            return f"{self._pending_p115_summary(state)}\n当前 115 还不可用，请先完成 115 登录。"
+        resume_ok, resume_message, _ = self._execute_pending_p115_share(
+            session_id=session_id,
+            state=state,
+            trigger="Agent资源官 Agent Tool 手动继续 115 任务",
+        )
+        lines = ["已手动继续 115 任务", resume_message]
+        if not resume_ok:
+            lines.append("任务仍未成功，保留待继续状态。")
+        return "\n".join(line for line in lines if line)
+
+    async def tool_p115_cancel(self, session: str = "default") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        session_id = self._session_key_for_tool(session)
+        summary = self._pending_p115_summary(self._load_session(session_id))
+        if not summary:
+            return "当前没有待取消的 115 任务。"
+        self._clear_pending_p115_share(session_id)
+        return f"{summary}\n已取消并清除这次待继续的 115 任务。"
 
     async def api_p115_health(self, request: Request):
         ok, message = self._check_api_access(request)
