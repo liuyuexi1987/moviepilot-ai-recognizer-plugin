@@ -53,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.17"
+    plugin_version = "0.1.18"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1283,6 +1283,31 @@ class AgentResourceOfficer(_PluginBase):
             ]
         )
 
+    def _format_p115_transfer_failure(
+        self,
+        *,
+        detail: str = "",
+        target_path: str = "",
+        title: str = "115 转存失败",
+    ) -> str:
+        status = self._p115_status_snapshot()
+        final_path = target_path or status.get("default_target_path") or self._p115_default_path
+        clean_detail = self._clean_text(detail)
+        status_message = self._clean_text(status.get("message"))
+        lines = [title]
+        if clean_detail:
+            lines.append(f"原因：{clean_detail}")
+        if final_path:
+            lines.append(f"目标目录：{final_path}")
+        lines.append(f"当前状态：{'可用' if status.get('ready') else '待登录/待修复'}")
+        if status_message and status_message.lower() not in {"success", "ok"} and status_message != clean_detail:
+            lines.append(f"状态详情：{status_message}")
+        if status.get("ready"):
+            lines.append("建议：先回复 115状态 检查当前会话；如果还是失败，再回复 115登录 重新扫码。")
+        else:
+            lines.append("建议：先回复 115登录，扫码成功后再重试当前操作。")
+        return "\n".join(lines)
+
     def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
         status = self._p115_status_snapshot()
         lines = [
@@ -1723,7 +1748,11 @@ class AgentResourceOfficer(_PluginBase):
                 }
             )
             if not transfer_ok:
-                return False, route_result, f"影巢解锁成功，但 115 转存失败：{transfer_message}"
+                return False, route_result, self._format_p115_transfer_failure(
+                    detail=transfer_message,
+                    target_path=target_path or self._p115_default_path,
+                    title="影巢解锁成功，但 115 转存失败",
+                )
             return True, route_result, "success"
 
         route_result["route"]["message"] = "当前解锁结果未识别到可自动路由的 115 / 夸克链接"
@@ -1871,7 +1900,10 @@ class AgentResourceOfficer(_PluginBase):
                 trigger="Agent资源官 Agent Tool",
             )
             if not ok:
-                return f"115 转存失败：{message}"
+                return self._format_p115_transfer_failure(
+                    detail=message,
+                    target_path=self._clean_text(target_path) or self._p115_default_path,
+                )
             return f"115 转存成功\n目录：{result.get('path') or self._p115_default_path}"
 
         return "当前链接不是可识别的 115 / 夸克分享链接"
@@ -2037,7 +2069,14 @@ class AgentResourceOfficer(_PluginBase):
             trigger=trigger,
         )
         if not transfer_ok:
-            return {"success": False, "message": transfer_message, "data": result}
+            return {
+                "success": False,
+                "message": self._format_p115_transfer_failure(
+                    detail=transfer_message,
+                    target_path=target_path or self._p115_default_path,
+                ),
+                "data": result,
+            }
         return {"success": True, "message": transfer_message, "data": result}
 
     async def api_hdhive_unlock_and_route(self, request: Request):
@@ -2105,7 +2144,10 @@ class AgentResourceOfficer(_PluginBase):
             if not transfer_ok:
                 return {
                     "success": False,
-                    "message": f"115 转存失败：{transfer_message}",
+                    "message": self._format_p115_transfer_failure(
+                        detail=transfer_message,
+                        target_path=target_path or self._p115_default_path,
+                    ),
                     "data": {
                         "provider": "115",
                         "result": result,

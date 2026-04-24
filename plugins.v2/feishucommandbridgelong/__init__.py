@@ -139,7 +139,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
     plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
     plugin_icon = "https://raw.githubusercontent.com/jxxghp/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.5.19"
+    plugin_version = "0.5.20"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
@@ -2823,6 +2823,15 @@ class FeishuCommandBridgeLong(_PluginBase):
         return "\n".join(lines)
 
     @staticmethod
+    def _format_115_error_text(message: str) -> str:
+        text = str(message or "").strip()
+        if not text:
+            return "115 转存失败：未知错误"
+        if text.startswith("115 转存失败") or text.startswith("影巢解锁成功，但 115 转存失败"):
+            return text
+        return f"115 转存失败：{text}"
+
+    @staticmethod
     def _compact_115_result(result: Dict[str, Any]) -> Dict[str, Any]:
         compact = {
             "ok": bool(result.get("ok")),
@@ -2938,7 +2947,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                     f"目录：{result.get('path') or final_path}\n"
                     f"结果：{result.get('message') or 'success'}"
                     if ok
-                    else f"115 转存失败：{message or '未知错误'}"
+                    else self._format_115_error_text(message)
                 )
                 return ok, text, {
                     "action": "transfer_115",
@@ -3366,7 +3375,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                     final_path,
                 )
                 if not ok:
-                    return False, f"115 转存失败：{message or '未知错误'}", {
+                    return False, self._format_115_error_text(message), {
                         "action": "transfer_115",
                         "ok": False,
                         "message": message or "transfer failed",
