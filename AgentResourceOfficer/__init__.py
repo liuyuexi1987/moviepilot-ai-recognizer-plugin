@@ -46,7 +46,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.11"
+    plugin_version = "0.1.12"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -66,6 +66,7 @@ class AgentResourceOfficer(_PluginBase):
     _hdhive_default_path = "/待整理"
     _hdhive_candidate_page_size = 10
     _p115_default_path = "/待整理"
+    _p115_client_type = "alipaymini"
     _p115_cookie = ""
     _p115_prefer_direct = True
 
@@ -155,6 +156,7 @@ class AgentResourceOfficer(_PluginBase):
         self._hdhive_default_path = self._normalize_path(config.get("hdhive_default_path") or "/待整理")
         self._hdhive_candidate_page_size = max(5, min(20, self._safe_int(config.get("hdhive_candidate_page_size"), 10)))
         self._p115_default_path = self._normalize_path(config.get("p115_default_path") or "/待整理")
+        self._p115_client_type = P115TransferService.normalize_qrcode_client_type(config.get("p115_client_type"))
         self._p115_cookie = self._clean_text(config.get("p115_cookie"))
         self._p115_prefer_direct = bool(config.get("p115_prefer_direct", True))
         self._quark_service = QuarkTransferService(
@@ -318,6 +320,7 @@ class AgentResourceOfficer(_PluginBase):
             "hdhive_default_path": self._hdhive_default_path,
             "hdhive_candidate_page_size": self._hdhive_candidate_page_size,
             "p115_default_path": self._p115_default_path,
+            "p115_client_type": self._p115_client_type,
             "p115_cookie": self._p115_cookie,
             "p115_prefer_direct": self._p115_prefer_direct,
         }
@@ -445,6 +448,32 @@ class AgentResourceOfficer(_PluginBase):
             self._p115_service.prefer_direct = self._p115_prefer_direct
         return self._p115_service
 
+    def _apply_runtime_config(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        config = self._build_config(overrides)
+        self.update_config(config)
+        self.init_plugin(config)
+        return config
+
+    @staticmethod
+    def _p115_client_type_items() -> List[Dict[str, str]]:
+        return [
+            {"title": "支付宝小程序（推荐）", "value": "alipaymini"},
+            {"title": "115 Android", "value": "115android"},
+            {"title": "115 iOS", "value": "115ios"},
+            {"title": "115 iPad", "value": "115ipad"},
+            {"title": "115 TV", "value": "tv"},
+            {"title": "微信小程序", "value": "wechatmini"},
+            {"title": "Web", "value": "web"},
+        ]
+
+    @classmethod
+    def _p115_client_type_title(cls, value: str) -> str:
+        final_value = P115TransferService.normalize_qrcode_client_type(value)
+        for item in cls._p115_client_type_items():
+            if item.get("value") == final_value:
+                return str(item.get("title") or final_value)
+        return final_value
+
     @staticmethod
     def get_command() -> List[Dict[str, Any]]:
         return []
@@ -533,6 +562,18 @@ class AgentResourceOfficer(_PluginBase):
                 "summary": "检查 Agent资源官 的 115 转存依赖状态",
             },
             {
+                "path": "/p115/qrcode",
+                "endpoint": self.api_p115_qrcode,
+                "methods": ["GET"],
+                "summary": "获取 Agent资源官 的 115 扫码登录二维码",
+            },
+            {
+                "path": "/p115/qrcode/check",
+                "endpoint": self.api_p115_qrcode_check,
+                "methods": ["GET"],
+                "summary": "检查 Agent资源官 的 115 扫码登录状态",
+            },
+            {
                 "path": "/p115/transfer",
                 "endpoint": self.api_p115_transfer,
                 "methods": ["POST"],
@@ -606,7 +647,14 @@ class AgentResourceOfficer(_PluginBase):
     def get_page(self) -> List[dict]:
         quark_ready = "已配置" if self._quark_cookie else "未配置"
         hdhive_ready = "已配置" if self._hdhive_api_key else "未配置"
-        p115_ready = "独立 Cookie 优先" if self._p115_cookie else "复用 115 助手客户端"
+        p115_health_ok, p115_health, _p115_health_message = self._ensure_p115_service().health()
+        cookie_state = p115_health.get("cookie_state") or {}
+        if cookie_state.get("valid"):
+            p115_ready = "已配置扫码会话"
+        elif cookie_state.get("configured"):
+            p115_ready = "已配置但不是扫码会话"
+        else:
+            p115_ready = "复用 115 助手客户端"
         hdhive_summary = self._build_hdhive_page_summary()
         return [
             {
@@ -622,7 +670,11 @@ class AgentResourceOfficer(_PluginBase):
                             f"\n影巢默认目录：{self._hdhive_default_path}"
                             f"\n115 默认目录：{self._p115_default_path}"
                             f"\n115 执行方式：{p115_ready}"
+                            f"\n115 扫码客户端：{self._p115_client_type_title(self._p115_client_type)}"
+                            f"\n115 运行状态：{'可用' if p115_health_ok else '待修复'}"
+                            f"\n115 扫码接口：/p115/qrcode  /p115/qrcode/check"
                             "\n\n已支持的影巢用户态 API：/hdhive/account /hdhive/checkin /hdhive/quota /hdhive/usage_today /hdhive/weekly_free_quota"
+                            f"\n115 Cookie 判定：{cookie_state.get('message') or '当前会话可直接用于 115 直转'}"
                             f"\n\n{hdhive_summary}"
                         ),
                     }
@@ -793,6 +845,20 @@ class AgentResourceOfficer(_PluginBase):
                         "content": [
                             {
                                 "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "115 建议走扫码会话，不建议填网页版 Cookie。Agent资源官 已支持 /p115/qrcode 和 /p115/qrcode/check 两步扫码登录；手填 Cookie 仅作为高级兜底。",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
                                 "props": {"cols": 12, "md": 4},
                                 "content": [
                                     {
@@ -863,6 +929,20 @@ class AgentResourceOfficer(_PluginBase):
                             },
                             {
                                 "component": "VCol",
+                                "props": {"cols": 12, "md": 5},
+                                "content": [
+                                    {
+                                        "component": "VSelect",
+                                        "props": {
+                                            "model": "p115_client_type",
+                                            "label": "115 扫码客户端类型",
+                                            "items": self._p115_client_type_items(),
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
                                 "props": {"cols": 12, "md": 3},
                                 "content": [
                                     {
@@ -887,9 +967,9 @@ class AgentResourceOfficer(_PluginBase):
                                         "component": "VTextarea",
                                         "props": {
                                             "model": "p115_cookie",
-                                            "label": "115 Cookie（可选）",
+                                            "label": "115 扫码会话 Cookie（高级，可选）",
                                             "rows": 3,
-                                            "placeholder": "留空时复用 P115StrmHelper 已登录客户端；填写后 Agent资源官 可独立执行 115 分享转存",
+                                            "placeholder": "仅支持 UID/CID/SEID/KID 这类扫码客户端 Cookie；普通网页版 Cookie 不建议粘贴到这里",
                                         },
                                     }
                                 ],
@@ -1692,6 +1772,7 @@ class AgentResourceOfficer(_PluginBase):
 
         service = self._ensure_p115_service()
         health_ok, result, health_message = service.health()
+        cookie_state = result.get("cookie_state") or {}
         return {
             "success": True,
             "data": {
@@ -1702,10 +1783,66 @@ class AgentResourceOfficer(_PluginBase):
                 "p115_direct_source": result.get("direct_source") or "",
                 "p115_helper_ready": bool(result.get("helper_ready")),
                 "default_target_path": self._p115_default_path,
+                "p115_client_type": self._p115_client_type,
+                "p115_cookie_configured": bool(cookie_state.get("configured")),
+                "p115_cookie_valid": bool(cookie_state.get("valid")),
+                "p115_cookie_mode": cookie_state.get("mode") or "none",
+                "p115_cookie_keys": cookie_state.get("cookie_keys") or [],
                 "message": "" if health_ok else health_message,
                 "raw": result,
             },
         }
+
+    async def api_p115_qrcode(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        client_type = P115TransferService.normalize_qrcode_client_type(
+            request.query_params.get("client_type") or self._p115_client_type
+        )
+        qr_ok, data, qr_message = self._ensure_p115_service().create_qrcode_login(client_type=client_type)
+        if not qr_ok:
+            return {"success": False, "message": qr_message}
+        return {"success": True, "message": qr_message, "data": data}
+
+    async def api_p115_qrcode_check(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        uid = self._clean_text(request.query_params.get("uid"))
+        time_value = self._clean_text(request.query_params.get("time"))
+        sign = self._clean_text(request.query_params.get("sign"))
+        if not uid or not time_value or not sign:
+            return {"success": False, "message": "缺少 uid/time/sign，无法检查扫码状态"}
+        client_type = P115TransferService.normalize_qrcode_client_type(
+            request.query_params.get("client_type") or self._p115_client_type
+        )
+        qr_ok, data, qr_message = self._ensure_p115_service().check_qrcode_login(
+            uid=uid,
+            time_value=time_value,
+            sign=sign,
+            client_type=client_type,
+        )
+        if qr_ok and (data.get("status") == "success"):
+            cookie = self._clean_text(data.pop("cookie"))
+            if cookie:
+                self._p115_cookie = cookie
+                self._p115_client_type = client_type
+                self._apply_runtime_config({
+                    "p115_cookie": cookie,
+                    "p115_client_type": client_type,
+                })
+                data["cookie_saved"] = True
+                data["cookie_mode"] = "client_cookie"
+        if not qr_ok:
+            return {"success": False, "message": qr_message, "data": data}
+        return {"success": True, "message": qr_message, "data": data}
 
     async def api_p115_transfer(self, request: Request):
         body = await request.json()

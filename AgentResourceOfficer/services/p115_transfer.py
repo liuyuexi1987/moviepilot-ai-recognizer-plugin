@@ -1,6 +1,7 @@
 import importlib
 import re
 import sys
+from base64 import b64encode
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
@@ -19,6 +20,20 @@ except Exception:
 
 class P115TransferService:
     """Reusable 115 share transfer execution layer for Agent资源官."""
+
+    CLIENT_COOKIE_REQUIRED_KEYS = {"UID", "CID", "SEID"}
+    QR_CLIENT_TYPES = {
+        "web",
+        "android",
+        "115android",
+        "ios",
+        "115ios",
+        "alipaymini",
+        "wechatmini",
+        "115ipad",
+        "tv",
+        "qandroid",
+    }
 
     def __init__(
         self,
@@ -85,6 +100,55 @@ class P115TransferService:
             query = dict(parse_qsl(parsed.query, keep_blank_values=True))
             receive_code = str(query.get("password") or query.get("receive_code") or query.get("pwd") or "").strip()
             return share_code, receive_code
+
+    @classmethod
+    def parse_cookie_pairs(cls, cookie: str) -> Dict[str, str]:
+        pairs: Dict[str, str] = {}
+        for part in cls.normalize_text(cookie).strip(";").split(";"):
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if key and value:
+                pairs[key] = value
+        return pairs
+
+    @classmethod
+    def validate_client_cookie(cls, cookie: str) -> Tuple[bool, str]:
+        if not cls.normalize_text(cookie):
+            return False, "未配置独立 115 Cookie"
+        pairs = cls.parse_cookie_pairs(cookie)
+        missing = sorted(cls.CLIENT_COOKIE_REQUIRED_KEYS - set(pairs))
+        if missing:
+            return False, f"当前 115 Cookie 缺少 {'/'.join(missing)}，看起来不是扫码客户端 Cookie；不建议使用网页版 Cookie"
+        return True, ""
+
+    def cookie_state(self) -> Dict[str, Any]:
+        configured = bool(self.normalize_text(self.cookie))
+        pairs = self.parse_cookie_pairs(self.cookie)
+        cookie_keys = sorted(pairs.keys())
+        if not configured:
+            return {
+                "configured": False,
+                "valid": False,
+                "mode": "none",
+                "cookie_keys": [],
+                "message": "未配置独立 115 会话，将优先复用 P115StrmHelper 已登录客户端",
+            }
+        cookie_ok, cookie_message = self.validate_client_cookie(self.cookie)
+        return {
+            "configured": True,
+            "valid": cookie_ok,
+            "mode": "client_cookie" if cookie_ok else "invalid_cookie",
+            "cookie_keys": cookie_keys,
+            "message": "" if cookie_ok else cookie_message,
+        }
+
+    @classmethod
+    def normalize_qrcode_client_type(cls, client_type: Any) -> str:
+        text = cls.normalize_text(client_type).lower()
+        return text if text in cls.QR_CLIENT_TYPES else "alipaymini"
 
     @staticmethod
     def jsonable(value: Any) -> Any:
@@ -208,6 +272,9 @@ class P115TransferService:
     def _get_cookie_p115_client(self) -> Tuple[Optional[Any], str]:
         if not self.cookie:
             return None, "未配置独立 115 Cookie"
+        cookie_ok, cookie_message = self.validate_client_cookie(self.cookie)
+        if not cookie_ok:
+            return None, cookie_message
         try:
             from p115client import P115Client
 
@@ -219,6 +286,89 @@ class P115TransferService:
             ), "direct_cookie"
         except Exception as exc:
             return None, f"独立 115 Cookie 初始化失败: {exc}"
+
+    @classmethod
+    def create_qrcode_login(cls, client_type: str = "alipaymini") -> Tuple[bool, Dict[str, Any], str]:
+        final_client_type = cls.normalize_qrcode_client_type(client_type)
+        try:
+            from p115client import P115Client, check_response
+
+            resp = P115Client.login_qrcode_token()
+            check_response(resp)
+            resp_info = resp.get("data", {}) if isinstance(resp, dict) else {}
+            uid = str(resp_info.get("uid") or "")
+            qrcode_time = str(resp_info.get("time") or "")
+            sign = str(resp_info.get("sign") or "")
+            qrcode = P115Client.login_qrcode(uid)
+            if not isinstance(qrcode, (bytes, bytearray)):
+                return False, {}, "获取二维码失败：返回内容类型异常"
+            return True, {
+                "uid": uid,
+                "time": qrcode_time,
+                "sign": sign,
+                "client_type": final_client_type,
+                "tips": "请使用 115 App 扫码登录",
+                "qrcode": f"data:image/png;base64,{b64encode(qrcode).decode('utf-8')}",
+            }, "success"
+        except Exception as exc:
+            return False, {}, f"获取 115 登录二维码失败: {exc}"
+
+    @classmethod
+    def check_qrcode_login(
+        cls,
+        *,
+        uid: str,
+        time_value: str,
+        sign: str,
+        client_type: str = "alipaymini",
+    ) -> Tuple[bool, Dict[str, Any], str]:
+        final_client_type = cls.normalize_qrcode_client_type(client_type)
+        try:
+            from p115client import P115Client, check_response
+
+            payload = {"uid": uid, "time": time_value, "sign": sign}
+            resp = P115Client.login_qrcode_scan_status(payload)
+            if not isinstance(resp, dict):
+                return False, {}, "检查二维码状态失败：返回内容类型异常"
+            check_response(resp)
+            status_code = (resp.get("data") or {}).get("status")
+        except Exception as exc:
+            return False, {}, f"检查二维码状态失败: {exc}"
+
+        if status_code == 0:
+            return True, {"status": "waiting", "client_type": final_client_type}, "等待扫码"
+        if status_code == 1:
+            return True, {"status": "scanned", "client_type": final_client_type}, "已扫码，等待确认"
+        if status_code == -1 or status_code is None:
+            return False, {"status": "expired", "client_type": final_client_type}, "二维码已过期"
+        if status_code == -2:
+            return False, {"status": "cancelled", "client_type": final_client_type}, "用户取消登录"
+        if status_code != 2:
+            return False, {"status": "unknown", "client_type": final_client_type}, f"未知二维码状态: {status_code}"
+
+        try:
+            from p115client import P115Client, check_response
+
+            resp = P115Client.login_qrcode_scan_result(uid, app=final_client_type)
+            if not isinstance(resp, dict):
+                return False, {}, "获取登录结果失败：返回内容类型异常"
+            check_response(resp)
+        except Exception as exc:
+            return False, {}, f"获取登录结果失败: {exc}"
+
+        cookie_data = (resp.get("data") or {}).get("cookie") if isinstance(resp, dict) else None
+        if not isinstance(cookie_data, dict):
+            return False, {}, "登录成功但未返回 Cookie"
+        cookie = "; ".join(f"{name}={value}" for name, value in cookie_data.items() if name and value).strip()
+        cookie_ok, cookie_message = cls.validate_client_cookie(cookie)
+        if not cookie_ok:
+            return False, {}, cookie_message
+        return True, {
+            "status": "success",
+            "client_type": final_client_type,
+            "cookie": cookie,
+            "cookie_keys": sorted(cls.parse_cookie_pairs(cookie).keys()),
+        }, "登录成功"
 
     def get_direct_client(self) -> Tuple[Optional[Any], str, str]:
         client, source = self._get_cookie_p115_client()
@@ -263,6 +413,7 @@ class P115TransferService:
         return helper, None
 
     def health(self) -> Tuple[bool, Dict[str, Any], str]:
+        cookie_state = self.cookie_state()
         direct_client, direct_source, direct_error = self.get_direct_client()
         direct_ready = direct_client is not None
         helper, helper_error = self.get_share_helper()
@@ -276,6 +427,7 @@ class P115TransferService:
             "direct_message": "" if direct_ready else direct_error,
             "helper_ready": helper_ready,
             "helper_message": "" if helper_ready else helper_error,
+            "cookie_state": cookie_state,
             "message": message or "success",
         }, message
 
