@@ -53,7 +53,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.18"
+    plugin_version = "0.1.19"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1272,16 +1272,28 @@ class AgentResourceOfficer(_PluginBase):
             "cookie_mode": self._clean_text((result.get("cookie_state") or {}).get("mode")),
         }
 
-    def _format_p115_next_actions(self) -> str:
-        return "\n".join(
-            [
+    def _format_p115_next_actions(self, status: Optional[Dict[str, Any]] = None) -> str:
+        current = dict(status or self._p115_status_snapshot())
+        final_path = current.get("default_target_path") or self._p115_default_path
+        if current.get("ready"):
+            lines = [
+                "下一步建议：",
+                f"1. 直接发：链接 https://115cdn.com/s/xxxx path={final_path}",
+                "2. 也可以直接贴 115 链接，不写前缀也能识别",
+                "3. 搜资源可发：影巢搜索 片名",
+                "4. 外部搜资源可发：盘搜搜索 片名",
+                "5. 想复查登录状态可发：115状态",
+            ]
+        else:
+            lines = [
                 "下一步建议：",
                 "1. 回复：115登录",
-                "2. 登录完成后可回复：115状态",
-                f"3. 可直接发送 115 链接转存到 {self._p115_default_path}",
-                "4. 也可以继续发：影巢搜索 片名",
+                "2. 扫码确认后回复：检查115登录",
+                "3. 登录完成后可回复：115状态",
+                f"4. 然后可直接发 115 链接转存到 {final_path}",
+                "5. 也可以继续发：影巢搜索 片名",
             ]
-        )
+        return "\n".join(lines)
 
     def _format_p115_transfer_failure(
         self,
@@ -1328,7 +1340,25 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("当前会话：复用 115 助手客户端")
         if status.get("message") and not status.get("ready"):
             lines.append(f"详情：{status.get('message')}")
-        lines.append(self._format_p115_next_actions())
+        lines.append(self._format_p115_next_actions(status))
+        return "\n".join(lines)
+
+    def _format_p115_help_text(self) -> str:
+        status = self._p115_status_snapshot()
+        final_path = status.get("default_target_path") or self._p115_default_path
+        lines = [
+            "115 使用帮助",
+            f"当前状态：{'可用' if status.get('ready') else '待登录/待修复'}",
+            f"默认目录：{final_path}",
+            "常用示例：",
+            f"1. 链接 https://115cdn.com/s/xxxx path={final_path}",
+            "2. 影巢搜索 蜘蛛侠",
+            "3. 盘搜搜索 大君夫人",
+            "4. 115登录",
+            "5. 检查115登录",
+            "6. 115状态",
+            self._format_p115_next_actions(status),
+        ]
         return "\n".join(lines)
 
     @staticmethod
@@ -2202,7 +2232,7 @@ class AgentResourceOfficer(_PluginBase):
 
         assistant_action = self._clean_text(parsed.get("action"))
         if assistant_action == "p115_help":
-            summary = self._format_p115_status_summary(title="115 使用帮助")
+            summary = self._format_p115_help_text()
             return {
                 "success": True,
                 "message": summary,
