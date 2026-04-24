@@ -52,7 +52,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "重构中的资源工作流主插件，后续统一承接影巢、夸克、飞书与智能体入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.14"
+    plugin_version = "0.1.15"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1258,6 +1258,40 @@ class AgentResourceOfficer(_PluginBase):
         session = self._clean_text(session) or "default"
         return f"assistant::{session}"
 
+    def _p115_status_snapshot(self) -> Dict[str, Any]:
+        health_ok, result, health_message = self._ensure_p115_service().health()
+        return {
+            "ready": health_ok,
+            "message": health_message or result.get("message") or "",
+            "direct_source": self._clean_text(result.get("direct_source")),
+            "helper_ready": bool(result.get("helper_ready")),
+            "client_type": self._p115_client_type,
+            "default_target_path": self._p115_default_path,
+            "cookie_mode": self._clean_text((result.get("cookie_state") or {}).get("mode")),
+        }
+
+    def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
+        status = self._p115_status_snapshot()
+        lines = [
+            title,
+            f"可用状态：{'可用' if status.get('ready') else '待修复'}",
+            f"默认目录：{status.get('default_target_path') or self._p115_default_path}",
+            f"扫码客户端：{status.get('client_type') or self._p115_client_type}",
+        ]
+        if status.get("direct_source"):
+            lines.append(f"直转来源：{status.get('direct_source')}")
+        elif status.get("helper_ready"):
+            lines.append("直转来源：P115StrmHelper")
+        if status.get("cookie_mode") == "client_cookie":
+            lines.append("当前会话：已保存扫码会话")
+        elif status.get("cookie_mode") == "invalid_cookie":
+            lines.append("当前会话：已配置但看起来不是扫码会话")
+        else:
+            lines.append("当前会话：复用 115 助手客户端")
+        if status.get("message") and not status.get("ready"):
+            lines.append(f"详情：{status.get('message')}")
+        return "\n".join(lines)
+
     @staticmethod
     def _parse_assistant_text(text: str) -> Dict[str, str]:
         raw = str(text or "").strip()
@@ -1859,6 +1893,7 @@ class AgentResourceOfficer(_PluginBase):
         ]
         if data.get("cookie_saved"):
             lines.append("cookie_saved: true")
+            lines.append(self._format_p115_status_summary(title="115 登录完成"))
         if data.get("cookie_keys"):
             lines.append(f"cookie_keys: {', '.join(data.get('cookie_keys') or [])}")
         return "\n".join(lines)
@@ -1938,6 +1973,7 @@ class AgentResourceOfficer(_PluginBase):
                 })
                 data["cookie_saved"] = True
                 data["cookie_mode"] = "client_cookie"
+                data["status_summary"] = self._format_p115_status_summary(title="115 登录完成")
         if not qr_ok:
             return {"success": False, "message": qr_message, "data": data}
         return {"success": True, "message": qr_message, "data": data}
@@ -2153,12 +2189,16 @@ class AgentResourceOfficer(_PluginBase):
                     "data": {"action": "p115_qrcode_check", "ok": False, **data},
                 }
             status = self._clean_text(data.get("status"))
-            message_text = "\n".join([
+            lines = [
                 "115 扫码状态",
                 f"状态：{status or 'unknown'}",
                 f"结果：{qr_message}",
-                "如果还没确认登录，请在 115 App 里点确认后再次回复：检查115登录" if status in {"waiting", "scanned"} else "",
-            ]).strip()
+            ]
+            if data.get("cookie_saved"):
+                lines.append(self._format_p115_status_summary(title="115 登录完成"))
+            elif status in {"waiting", "scanned"}:
+                lines.append("如果还没确认登录，请在 115 App 里点确认后再次回复：检查115登录")
+            message_text = "\n".join(line for line in lines if line).strip()
             return {
                 "success": True,
                 "message": message_text,
