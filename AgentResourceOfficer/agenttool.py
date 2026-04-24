@@ -6,6 +6,7 @@ from app.agent.tools.base import MoviePilotTool
 from app.core.plugin import PluginManager
 
 from .schemas import (
+    AssistantHelpToolInput,
     AssistantPickToolInput,
     AssistantRouteToolInput,
     HDHiveSearchSessionToolInput,
@@ -135,6 +136,21 @@ class AssistantPickTool(MoviePilotTool):
             action=action,
             target_path=path,
         )
+
+
+class AssistantHelpTool(MoviePilotTool):
+    name: str = "agent_resource_officer_help"
+    description: str = "Show the recommended Agent资源官 workflow for MoviePilot Agent, including smart-entry examples, pick examples, and 115 login guidance."
+    args_schema: Type[BaseModel] = AssistantHelpToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在查看 Agent资源官 使用帮助"
+
+    async def run(self, session: str = "default", **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_help(session=session)
 
 
 class P115QRCodeStartTool(MoviePilotTool):

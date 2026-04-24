@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.28`
+- 当前版本：`0.1.29`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -121,6 +121,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_hdhive_pick`
 - `agent_resource_officer_smart_entry`
 - `agent_resource_officer_smart_pick`
+- `agent_resource_officer_help`
 - `agent_resource_officer_route_share`
 - `agent_resource_officer_p115_qrcode_start`
 - `agent_resource_officer_p115_qrcode_check`

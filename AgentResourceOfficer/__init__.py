@@ -30,6 +30,7 @@ from .services.hdhive_openapi import HDHiveOpenApiService
 from .services.p115_transfer import P115TransferService
 from .services.quark_transfer import QuarkTransferService
 from .agenttool import (
+    AssistantHelpTool,
     AssistantPickTool,
     AssistantRouteTool,
     HDHiveSearchSessionTool,
@@ -64,7 +65,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.28"
+    plugin_version = "0.1.29"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -207,6 +208,7 @@ class AgentResourceOfficer(_PluginBase):
 
     def get_agent_tools(self) -> List[type]:
         return [
+            AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
             HDHiveSearchSessionTool,
@@ -1612,6 +1614,31 @@ class AgentResourceOfficer(_PluginBase):
         ]
         return "\n".join(lines)
 
+    def _format_assistant_help_text(self, session: str = "default") -> str:
+        session_name = self._clean_text(session) or "default"
+        lines = [
+            "Agent资源官 使用帮助",
+            f"当前会话：{session_name}",
+            "推荐优先使用原生 Tool：agent_resource_officer_smart_entry 与 agent_resource_officer_smart_pick。",
+            "smart_entry 常用示例：",
+            "1. text=盘搜搜索 大君夫人",
+            "2. text=影巢搜索 蜘蛛侠",
+            "3. text=115登录",
+            "4. text=检查115登录",
+            "5. text=链接 https://115cdn.com/s/xxxx path=/待整理",
+            "6. text=链接 https://pan.quark.cn/s/xxxx 位置=分享",
+            "smart_pick 常用示例：",
+            "1. choice=1",
+            "2. action=详情",
+            "3. action=下一页",
+            "说明：同一个 session 会自动串起候选列表、资源列表、115 待任务与扫码续跑。",
+            self._format_p115_next_actions(self._p115_status_snapshot()),
+        ]
+        pending_summary = self._pending_p115_summary(self._load_session(self._assistant_session_id(session_name)) or {})
+        if pending_summary:
+            lines.extend(["", pending_summary])
+        return "\n".join(line for line in lines if line)
+
     @staticmethod
     def _parse_assistant_text(text: str) -> Dict[str, str]:
         raw = str(text or "").strip()
@@ -1632,6 +1659,18 @@ class AgentResourceOfficer(_PluginBase):
             "client_type": "",
         }
         if compact in {
+            "帮助",
+            "使用帮助",
+            "命令帮助",
+            "help",
+            "agenthelp",
+            "arohelp",
+            "资源官帮助",
+        }:
+            options["action"] = "assistant_help"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "115登录",
             "115扫码",
             "扫码115",
@@ -2257,6 +2296,11 @@ class AgentResourceOfficer(_PluginBase):
         )
         return str(result.get("message") or "继续处理完成")
 
+    async def tool_assistant_help(self, session: str = "default") -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_help_text(session=session)
+
     async def tool_p115_qrcode_start(self, client_type: str = "alipaymini") -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
@@ -2693,7 +2737,30 @@ class AgentResourceOfficer(_PluginBase):
             )
             return pick_result
 
+        if not text:
+            summary = self._format_assistant_help_text(session=session)
+            return {
+                "success": True,
+                "message": summary,
+                "data": {
+                    "action": "assistant_help",
+                    "ok": True,
+                    "status_summary": summary,
+                },
+            }
+
         assistant_action = self._clean_text(parsed.get("action"))
+        if assistant_action == "assistant_help":
+            summary = self._format_assistant_help_text(session=session)
+            return {
+                "success": True,
+                "message": summary,
+                "data": {
+                    "action": "assistant_help",
+                    "ok": True,
+                    "status_summary": summary,
+                },
+            }
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()
             pending_summary = self._pending_p115_summary(state)
