@@ -176,13 +176,15 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 
 ## 115 轻量直转层
 
-`Agent资源官` 从 `0.1.11` 开始支持 115 分享链接轻量直转：
+`Agent资源官` 从 `0.1.12` 开始支持 115 分享链接轻量直转 + 扫码会话登录：
 
-- 配置独立 115 Cookie 时，直接用该 Cookie 创建 115 客户端并调用 `share_receive`
-- 未配置独立 Cookie 时，优先复用已加载的 115 客户端，不再必须走 `sharetransferhelper`
+- 支持生成和轮询 `p115client` 同款 115 扫码二维码，拿到 `UID / CID / SEID / KID` 这类客户端会话后自动写回插件配置
+- 配置扫码得到的 115 会话时，直接用该会话创建 115 客户端并调用 `share_receive`
+- 未配置独立扫码会话时，优先复用已加载的 115 客户端，不再必须走 `sharetransferhelper`
 - 直转失败时回退 `P115StrmHelper` 的分享转存主流程
 
 这个能力只负责“分享链接落到 115 目标目录”。STRM 生成、302、增量/全量同步、媒体库整理仍保持由 `P115StrmHelper` 承担。
+这里特意没有走网页版 CookieCloud，也没有直接拿 MP 系统内置的 `u115` OAuth Token 来代替扫码会话，因为分享转存链路仍然更适合复用 `p115client` 的客户端会话模型。
 
 ## 首个里程碑
 
