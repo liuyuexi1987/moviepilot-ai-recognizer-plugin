@@ -24,9 +24,17 @@ class ShareRouteToolInput(BaseModel):
 
 
 class AssistantRouteToolInput(BaseModel):
-    text: str = Field(..., description="统一智能入口文本，例如 盘搜搜索 片名、影巢搜索 片名、115登录 或直接粘贴 115/夸克分享链接")
+    text: Optional[str] = Field(default=None, description="统一智能入口文本，例如 盘搜搜索 片名、影巢搜索 片名、115登录 或直接粘贴 115/夸克分享链接")
     session: Optional[str] = Field(default="default", description="会话标识，用于关联后续选择、115 待任务与扫码续跑")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则按当前模式使用默认目录")
+    mode: Optional[str] = Field(default=None, description="结构化模式：pansou / hdhive")
+    keyword: Optional[str] = Field(default=None, description="结构化搜索关键词")
+    url: Optional[str] = Field(default=None, description="结构化分享链接，支持 115 / 夸克")
+    access_code: Optional[str] = Field(default=None, description="结构化提取码")
+    media_type: Optional[str] = Field(default=None, description="结构化媒体类型：movie / tv")
+    year: Optional[str] = Field(default=None, description="结构化年份")
+    client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
+    action: Optional[str] = Field(default=None, description="结构化动作：p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel / assistant_help")
 
 
 class AssistantPickToolInput(BaseModel):
@@ -46,6 +54,10 @@ class AssistantSessionStateToolInput(BaseModel):
 
 class AssistantSessionClearToolInput(BaseModel):
     session: Optional[str] = Field(default="default", description="会话标识；不填则清理 default 会话")
+
+
+class AssistantCapabilitiesToolInput(BaseModel):
+    pass
 
 
 class P115QRCodeStartToolInput(BaseModel):

@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.30",
+    "version": "0.1.31",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.31": "统一智能入口新增结构化参数模式与能力探测接口，外部智能体可直接传 mode/keyword/url/action 等字段，不必再拼自然语言命令。",
       "0.1.30": "新增统一智能入口会话状态/清理 API 与原生 Tool，便于外部智能体先查当前阶段、建议动作和待继续 115 任务，再决定下一步调用。",
       "0.1.29": "新增 Agent资源官 帮助 Tool，并让统一智能入口在空输入或帮助语义下直接返回推荐用法，降低 MP 智能助手首次调用门槛。",
       "0.1.28": "新增 Agent资源官 统一智能入口原生 Tool：smart_entry / smart_pick，MP 智能助手可直接复用飞书同款处理/选择主链。",

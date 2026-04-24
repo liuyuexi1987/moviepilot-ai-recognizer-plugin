@@ -6,6 +6,7 @@ from app.agent.tools.base import MoviePilotTool
 from app.core.plugin import PluginManager
 
 from .schemas import (
+    AssistantCapabilitiesToolInput,
     AssistantHelpToolInput,
     AssistantPickToolInput,
     AssistantRouteToolInput,
@@ -95,10 +96,24 @@ class AssistantRouteTool(MoviePilotTool):
     args_schema: Type[BaseModel] = AssistantRouteToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        text = kwargs.get("text", "")
+        text = kwargs.get("text") or kwargs.get("keyword") or kwargs.get("url") or kwargs.get("action") or ""
         return f"正在通过 Agent资源官 统一入口处理：{text}"
 
-    async def run(self, text: str, session: str = "default", path: str = None, **kwargs) -> str:
+    async def run(
+        self,
+        text: str = None,
+        session: str = "default",
+        path: str = None,
+        mode: str = None,
+        keyword: str = None,
+        url: str = None,
+        access_code: str = None,
+        media_type: str = None,
+        year: str = None,
+        client_type: str = None,
+        action: str = None,
+        **kwargs,
+    ) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
@@ -106,6 +121,14 @@ class AssistantRouteTool(MoviePilotTool):
             text=text,
             session=session,
             target_path=path,
+            mode=mode,
+            keyword=keyword,
+            share_url=url,
+            access_code=access_code,
+            media_type=media_type,
+            year=year,
+            client_type=client_type,
+            action=action,
         )
 
 
@@ -153,6 +176,21 @@ class AssistantHelpTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_help(session=session)
+
+
+class AssistantCapabilitiesTool(MoviePilotTool):
+    name: str = "agent_resource_officer_capabilities"
+    description: str = "Show the current Agent资源官 execution capabilities, supported structured smart-entry fields, defaults, and recommended call patterns for external agents."
+    args_schema: Type[BaseModel] = AssistantCapabilitiesToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在查看 Agent资源官 能力说明"
+
+    async def run(self, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_capabilities()
 
 
 class AssistantSessionStateTool(MoviePilotTool):

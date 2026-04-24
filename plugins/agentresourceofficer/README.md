@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.30`
+- 当前版本：`0.1.31`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -112,6 +112,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/share/route`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/route`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/pick`
+- `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/session`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/session`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/session/clear`
@@ -125,6 +126,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_smart_entry`
 - `agent_resource_officer_smart_pick`
 - `agent_resource_officer_help`
+- `agent_resource_officer_capabilities`
 - `agent_resource_officer_route_share`
 - `agent_resource_officer_session_state`
 - `agent_resource_officer_session_clear`
@@ -273,6 +275,30 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/route
 }
 ```
 
+外部智能体也可以直接走结构化参数，不必再拼中文命令：
+
+```json
+POST /api/v1/plugin/AgentResourceOfficer/assistant/route
+{
+  "session": "demo-session",
+  "mode": "pansou",
+  "keyword": "大君夫人",
+  "apikey": "你的 MP API Token"
+}
+```
+
+或者：
+
+```json
+POST /api/v1/plugin/AgentResourceOfficer/assistant/route
+{
+  "session": "demo-session",
+  "url": "https://115cdn.com/s/xxxx?password=abcd",
+  "path": "/待整理",
+  "apikey": "你的 MP API Token"
+}
+```
+
 继续选择时：
 
 ```json
@@ -282,4 +308,10 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/pick
   "index": 1,
   "apikey": "你的 MP API Token"
 }
+```
+
+在真正执行前，也推荐先探测统一入口能力：
+
+```text
+GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP API Token
 ```

@@ -30,6 +30,7 @@ from .services.hdhive_openapi import HDHiveOpenApiService
 from .services.p115_transfer import P115TransferService
 from .services.quark_transfer import QuarkTransferService
 from .agenttool import (
+    AssistantCapabilitiesTool,
     AssistantHelpTool,
     AssistantPickTool,
     AssistantRouteTool,
@@ -67,7 +68,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.30"
+    plugin_version = "0.1.31"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -210,6 +211,7 @@ class AgentResourceOfficer(_PluginBase):
 
     def get_agent_tools(self) -> List[type]:
         return [
+            AssistantCapabilitiesTool,
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
@@ -662,6 +664,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_pick,
                 "methods": ["POST"],
                 "summary": "统一智能入口的按编号继续执行",
+            },
+            {
+                "path": "/assistant/capabilities",
+                "endpoint": self.api_assistant_capabilities,
+                "methods": ["GET"],
+                "summary": "查看统一智能入口支持的结构化参数、默认值与推荐调用方式",
             },
             {
                 "path": "/assistant/session",
@@ -1818,6 +1826,118 @@ class AgentResourceOfficer(_PluginBase):
             lines.extend(["", pending_summary])
         return "\n".join(line for line in lines if line)
 
+    def _assistant_capabilities_public_data(self) -> Dict[str, Any]:
+        return {
+            "version": self.plugin_version,
+            "defaults": {
+                "hdhive_path": self._hdhive_default_path,
+                "p115_path": self._p115_default_path,
+                "quark_path": self._quark_default_path,
+                "p115_client_type": self._p115_client_type,
+                "hdhive_candidate_page_size": self._hdhive_candidate_page_size,
+            },
+            "smart_entry": {
+                "supports_text": True,
+                "supports_structured_fields": True,
+                "modes": ["pansou", "hdhive"],
+                "actions": [
+                    "assistant_help",
+                    "p115_qrcode_start",
+                    "p115_qrcode_check",
+                    "p115_status",
+                    "p115_help",
+                    "p115_pending",
+                    "p115_resume",
+                    "p115_cancel",
+                ],
+                "structured_fields": [
+                    "session",
+                    "path",
+                    "mode",
+                    "keyword",
+                    "url",
+                    "access_code",
+                    "media_type",
+                    "year",
+                    "client_type",
+                    "action",
+                ],
+            },
+            "smart_pick": {
+                "fields": ["session", "choice", "action", "path"],
+                "actions": ["detail", "next_page"],
+            },
+            "session_tools": [
+                "assistant/session",
+                "assistant/session/clear",
+            ],
+            "agent_tools": [
+                "agent_resource_officer_capabilities",
+                "agent_resource_officer_help",
+                "agent_resource_officer_smart_entry",
+                "agent_resource_officer_smart_pick",
+                "agent_resource_officer_session_state",
+                "agent_resource_officer_session_clear",
+            ],
+        }
+
+    def _format_assistant_capabilities_text(self) -> str:
+        data = self._assistant_capabilities_public_data()
+        defaults = data.get("defaults") or {}
+        lines = [
+            "Agent资源官 能力说明",
+            f"版本：{data.get('version')}",
+            "推荐上层调用顺序：",
+            "1. 先看 capabilities",
+            "2. 再调用 smart_entry",
+            "3. 之后用 assistant/session 或 session_state 判断下一步",
+            "4. 最后再调用 smart_pick 或 session_clear",
+            "默认目录：",
+            f"- 影巢：{defaults.get('hdhive_path')}",
+            f"- 115：{defaults.get('p115_path')}",
+            f"- 夸克：{defaults.get('quark_path')}",
+            f"- 115 客户端：{defaults.get('p115_client_type')}",
+            "smart_entry 结构化字段：session / path / mode / keyword / url / access_code / media_type / year / client_type / action",
+            "smart_entry 结构化模式：pansou / hdhive",
+            "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
+            "smart_pick 字段：session / choice / action / path",
+            "smart_pick 动作：detail / next_page",
+        ]
+        return "\n".join(lines)
+
+    def _merge_assistant_structured_input(self, body: Dict[str, Any], parsed: Dict[str, str]) -> Dict[str, str]:
+        merged = dict(parsed or {})
+        body = dict(body or {})
+
+        mode = self._clean_text(body.get("mode"))
+        if mode in {"pansou", "hdhive"}:
+            merged["mode"] = mode
+        keyword = self._clean_text(body.get("keyword") or body.get("title"))
+        if keyword:
+            merged["keyword"] = keyword
+        share_url = self._clean_text(body.get("url") or body.get("share_url"))
+        if share_url:
+            merged["url"] = share_url
+        access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
+        if access_code:
+            merged["access_code"] = access_code
+        path = self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path")))
+        if path:
+            merged["path"] = path
+        media_type = self._clean_text(body.get("media_type") or body.get("type")).lower()
+        if media_type:
+            merged["type"] = media_type
+        year = self._clean_text(body.get("year"))
+        if year:
+            merged["year"] = year
+        client_type = self._clean_text(body.get("client_type") or body.get("client"))
+        if client_type:
+            merged["client_type"] = P115TransferService.normalize_qrcode_client_type(client_type)
+        action = self._clean_text(body.get("action"))
+        if action:
+            merged["action"] = action
+        return merged
+
     @staticmethod
     def _parse_assistant_text(text: str) -> Dict[str, str]:
         raw = str(text or "").strip()
@@ -2438,7 +2558,20 @@ class AgentResourceOfficer(_PluginBase):
 
         return "当前链接不是可识别的 115 / 夸克分享链接"
 
-    async def tool_assistant_route(self, text: str, session: str = "default", target_path: str = "") -> str:
+    async def tool_assistant_route(
+        self,
+        text: str = "",
+        session: str = "default",
+        target_path: str = "",
+        mode: str = "",
+        keyword: str = "",
+        share_url: str = "",
+        access_code: str = "",
+        media_type: str = "",
+        year: str = "",
+        client_type: str = "",
+        action: str = "",
+    ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
         result = await self.api_assistant_route(
@@ -2448,6 +2581,14 @@ class AgentResourceOfficer(_PluginBase):
                     "text": self._clean_text(text),
                     "session": self._clean_text(session) or "default",
                     "path": self._clean_text(target_path),
+                    "mode": self._clean_text(mode),
+                    "keyword": self._clean_text(keyword),
+                    "url": self._clean_text(share_url),
+                    "access_code": self._clean_text(access_code),
+                    "media_type": self._clean_text(media_type),
+                    "year": self._clean_text(year),
+                    "client_type": self._clean_text(client_type),
+                    "action": self._clean_text(action),
                 },
             )
         )
@@ -2479,6 +2620,11 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_help_text(session=session)
+
+    async def tool_assistant_capabilities(self) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_capabilities_text()
 
     async def tool_assistant_session_state(self, session: str = "default") -> str:
         if not self._enabled:
@@ -2916,7 +3062,7 @@ class AgentResourceOfficer(_PluginBase):
             or "default"
         )
         text = self._clean_text(body.get("text") or body.get("query") or body.get("message") or "")
-        parsed = self._parse_assistant_text(text)
+        parsed = self._merge_assistant_structured_input(body, self._parse_assistant_text(text))
         cache_key = self._assistant_session_id(session)
         state = self._load_session(cache_key) or {}
         target_path = parsed.get("path") or ""
@@ -2933,7 +3079,7 @@ class AgentResourceOfficer(_PluginBase):
             )
             return pick_result
 
-        if not text:
+        if not text and not any(parsed.get(key) for key in ["mode", "keyword", "url", "action"]):
             summary = self._format_assistant_help_text(session=session)
             return {
                 "success": True,
@@ -3495,6 +3641,18 @@ class AgentResourceOfficer(_PluginBase):
             }
 
         return {"success": False, "message": f"当前会话阶段不支持继续选择：{kind or 'unknown'}"}
+
+    async def api_assistant_capabilities(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        return {
+            "success": True,
+            "message": self._format_assistant_capabilities_text(),
+            "data": self._assistant_capabilities_public_data(),
+        }
 
     async def api_assistant_session_state(self, request: Request):
         body: Dict[str, Any] = {}
