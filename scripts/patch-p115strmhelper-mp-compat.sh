@@ -29,8 +29,11 @@ text = path.read_text()
 
 text = text.replace("    TransferOverwriteCheckEventData,\n", "")
 
-marker = "from app.schemas.types import ChainEventType\n"
-compat = '''from app.schemas.types import ChainEventType
+markers = [
+    "from app.schemas.types import ChainEventType\n",
+    "from app.schemas.types import EventType, MessageChannel, ChainEventType, MediaType\n",
+]
+compat = '''from app.schemas.types import EventType, MessageChannel, ChainEventType, MediaType
 
 _TRANSFER_OVERWRITE_CHECK_EVENT = getattr(ChainEventType, "TransferOverwriteCheck", None)
 try:
@@ -48,7 +51,8 @@ def _optional_event_register(event_type):
     return eventmanager.register(event_type)
 '''
 
-if marker not in text:
+marker = next((item for item in markers if item in text), None)
+if marker is None:
     raise SystemExit("cannot find ChainEventType import marker")
 text = text.replace(marker, compat, 1)
 
