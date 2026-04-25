@@ -89,7 +89,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.67"
+    plugin_version = "0.1.68"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3778,6 +3778,7 @@ class AgentResourceOfficer(_PluginBase):
                 }
             ),
             "recommended_entrypoints": [
+                "GET /api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness",
                 "GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities",
                 "POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow",
@@ -3786,6 +3787,7 @@ class AgentResourceOfficer(_PluginBase):
                 "POST /api/v1/plugin/AgentResourceOfficer/assistant/route",
             ],
             "recommended_tools": [
+                "agent_resource_officer_startup",
                 "agent_resource_officer_readiness",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_execute_actions",
@@ -3970,8 +3972,11 @@ class AgentResourceOfficer(_PluginBase):
             "version": self.plugin_version,
             "services": pulse.get("services") or {},
             "warnings": pulse.get("warnings") or [],
+            "session": pulse.get("session"),
+            "session_id": pulse.get("session_id"),
             "recovery": pulse.get("recovery") or {},
             "selected_session": pulse.get("selected_session"),
+            "action_templates": pulse.get("action_templates") or [],
             "selfcheck": {
                 "ok": bool(selfcheck.get("ok")),
                 "checks": selfcheck.get("checks") or {},
@@ -3983,7 +3988,7 @@ class AgentResourceOfficer(_PluginBase):
             "workflows": [item.get("name") for item in (toolbox.get("workflows") or []) if item.get("name")],
             "actions": toolbox.get("actions") or [],
             "command_examples": (toolbox.get("command_examples") or [])[:6],
-            "next_actions": ["assistant_recover", "assistant_workflow", "smart_entry"],
+            "next_actions": pulse.get("next_actions") or ["assistant_recover", "assistant_workflow", "smart_entry"],
             "recommended_endpoints": key_endpoints,
         }
 
@@ -4000,6 +4005,7 @@ class AgentResourceOfficer(_PluginBase):
             f"115：{'可用' if services.get('p115_ready') else '不可用'}；影巢：{'已配' if services.get('hdhive_configured') else '未配'}；夸克：{'已配' if services.get('quark_configured') else '未配'}",
             f"自检：{'通过' if not failed else '失败 ' + ', '.join(failed)}",
             f"恢复模式：{recovery.get('mode') or 'unknown'}",
+            f"可执行模板：{len(data.get('action_templates') or [])} 个",
             "下一步：优先按 recovery 建议执行；没有待恢复任务时使用 workflow 或 smart_entry",
         ]
         warnings = data.get("warnings") or []
