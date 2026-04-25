@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.53`
+- 当前版本：`0.1.54`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -586,4 +586,16 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/recover?apikey=你的MP_API_TO
 
 ```text
 GET /api/v1/plugin/AgentResourceOfficer/assistant/pulse?apikey=你的MP_API_TOKEN
+```
+
+从 `0.1.54` 开始，外部智能体初始化提示词可先读取 `assistant/toolbox`：
+
+- 返回轻量工具清单：推荐启动顺序、关键端点、Tool 名、workflow 名、action 名、默认目录和命令示例
+- 不返回会话状态，适合做系统提示或工具说明缓存
+- 对应 MP 智能助手 Tool：`agent_resource_officer_toolbox`
+
+示例：
+
+```text
+GET /api/v1/plugin/AgentResourceOfficer/assistant/toolbox?apikey=你的MP_API_TOKEN
 ```

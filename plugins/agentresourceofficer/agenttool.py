@@ -23,6 +23,7 @@ from .schemas import (
     AssistantSessionsClearToolInput,
     AssistantSessionsToolInput,
     AssistantSessionStateToolInput,
+    AssistantToolboxToolInput,
     AssistantWorkflowToolInput,
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
@@ -237,6 +238,21 @@ class AssistantPulseTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_pulse()
+
+
+class AssistantToolboxTool(MoviePilotTool):
+    name: str = "agent_resource_officer_toolbox"
+    description: str = "Return a compact Agent资源官 toolbox manifest: recommended tools, endpoints, workflows, actions, defaults, and command examples."
+    args_schema: Type[BaseModel] = AssistantToolboxToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在读取 Agent资源官 轻量工具清单"
+
+    async def run(self, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_toolbox()
 
 
 class AssistantHistoryTool(MoviePilotTool):

@@ -47,6 +47,7 @@ from .agenttool import (
     AssistantSessionsClearTool,
     AssistantSessionsTool,
     AssistantSessionStateTool,
+    AssistantToolboxTool,
     AssistantWorkflowTool,
     HDHiveSearchSessionTool,
     HDHiveSessionPickTool,
@@ -86,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.53"
+    plugin_version = "0.1.54"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -245,6 +246,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantPlansClearTool,
             AssistantRecoverTool,
             AssistantPulseTool,
+            AssistantToolboxTool,
             AssistantReadinessTool,
             AssistantHistoryTool,
             AssistantHelpTool,
@@ -733,6 +735,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_pulse,
                 "methods": ["GET"],
                 "summary": "轻量启动探针：返回版本、关键服务状态、警告和最佳恢复建议",
+            },
+            {
+                "path": "/assistant/toolbox",
+                "endpoint": self.api_assistant_toolbox,
+                "methods": ["GET"],
+                "summary": "轻量工具清单：返回推荐工具、端点、工作流、动作名、默认目录和命令示例",
             },
             {
                 "path": "/assistant/history",
@@ -3180,6 +3188,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "session_tools": [
                 "assistant/pulse",
+                "assistant/toolbox",
                 "assistant/readiness",
                 "assistant/history",
                 "assistant/action",
@@ -3210,6 +3219,7 @@ class AgentResourceOfficer(_PluginBase):
             "agent_tools": [
                 "agent_resource_officer_capabilities",
                 "agent_resource_officer_pulse",
+                "agent_resource_officer_toolbox",
                 "agent_resource_officer_readiness",
                 "agent_resource_officer_history",
                 "agent_resource_officer_execute_action",
@@ -3247,6 +3257,7 @@ class AgentResourceOfficer(_PluginBase):
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
             "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
+            "轻量工具清单：assistant/toolbox，返回推荐工具、端点、工作流和命令示例，适合外部智能体初始化系统提示",
             "完整启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用",
             "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
@@ -3461,6 +3472,94 @@ class AgentResourceOfficer(_PluginBase):
         warnings = data.get("warnings") or []
         if warnings:
             lines.append("提示：" + "；".join(str(item) for item in warnings if item))
+        return "\n".join(lines)
+
+    def _assistant_toolbox_public_data(self) -> Dict[str, Any]:
+        workflows = [dict(item or {}) for item in (self._assistant_workflow_catalog().get("workflows") or []) if isinstance(item, dict)]
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "toolbox",
+            "ok": True,
+            "version": self.plugin_version,
+            "defaults": {
+                "p115_path": self._p115_default_path,
+                "quark_path": self._quark_default_path,
+                "hdhive_path": self._hdhive_default_path,
+                "p115_client_type": self._p115_client_type,
+            },
+            "startup_order": [
+                "agent_resource_officer_pulse",
+                "agent_resource_officer_recover",
+                "agent_resource_officer_run_workflow",
+                "agent_resource_officer_smart_entry",
+                "agent_resource_officer_smart_pick",
+            ],
+            "endpoints": {
+                "pulse": "/api/v1/plugin/AgentResourceOfficer/assistant/pulse",
+                "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
+                "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
+                "workflow": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "action": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                "actions": "/api/v1/plugin/AgentResourceOfficer/assistant/actions",
+                "route": "/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                "pick": "/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+            },
+            "tools": {
+                "pulse": "agent_resource_officer_pulse",
+                "toolbox": "agent_resource_officer_toolbox",
+                "recover": "agent_resource_officer_recover",
+                "workflow": "agent_resource_officer_run_workflow",
+                "route": "agent_resource_officer_smart_entry",
+                "pick": "agent_resource_officer_smart_pick",
+                "execute_action": "agent_resource_officer_execute_action",
+                "execute_actions": "agent_resource_officer_execute_actions",
+            },
+            "workflows": [
+                {
+                    "name": item.get("name"),
+                    "fields": item.get("fields") or [],
+                }
+                for item in workflows
+            ],
+            "actions": [
+                "start_pansou_search",
+                "pick_pansou_result",
+                "start_hdhive_search",
+                "pick_hdhive_candidate",
+                "candidate_detail",
+                "candidate_next_page",
+                "pick_hdhive_resource",
+                "route_share",
+                "start_115_login",
+                "check_115_login",
+                "show_115_status",
+                "resume_pending_115",
+                "execute_latest_plan",
+                "execute_session_latest_plan",
+            ],
+            "command_examples": [
+                "盘搜搜索 大君夫人",
+                "影巢搜索 蜘蛛侠",
+                "1大君夫人",
+                "2蜘蛛侠",
+                "链接 https://pan.quark.cn/s/xxxx path=/飞书",
+                "选择 1",
+                "详情",
+                "下一页",
+                "115登录",
+            ],
+        }
+
+    def _format_assistant_toolbox_text(self) -> str:
+        data = self._assistant_toolbox_public_data()
+        workflows = data.get("workflows") or []
+        lines = [
+            "Agent资源官 轻量工具清单",
+            f"版本：{data.get('version')}",
+            "推荐启动顺序：" + " -> ".join(str(item) for item in (data.get("startup_order") or [])[:5]),
+            "常用工作流：" + " / ".join(str(item.get("name")) for item in workflows if item.get("name")),
+            "默认目录：115={p115_path}；夸克={quark_path}；影巢={hdhive_path}".format(**(data.get("defaults") or {})),
+        ]
         return "\n".join(lines)
 
     def _assistant_response_data(
@@ -4216,6 +4315,11 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_pulse_text()
+
+    async def tool_assistant_toolbox(self) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_toolbox_text()
 
     async def tool_assistant_history(self, session: str = "", session_id: str = "", limit: int = 20) -> str:
         if not self._enabled:
@@ -6084,6 +6188,17 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": bool(data.get("can_start")),
             "message": self._format_assistant_pulse_text(),
+            "data": data,
+        }
+
+    async def api_assistant_toolbox(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        data = self._assistant_toolbox_public_data()
+        return {
+            "success": True,
+            "message": self._format_assistant_toolbox_text(),
             "data": data,
         }
 
