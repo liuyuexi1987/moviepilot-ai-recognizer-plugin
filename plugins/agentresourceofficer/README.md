@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.50`
+- 当前版本：`0.1.51`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -546,3 +546,20 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/action?apikey=你的MP_API_TO
 - 返回里会有标准字段：`protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates / recovery`
 - 同时继续保留原有的会话摘要字段，避免已有调用方断掉
 - 外部智能体现在可以把 `session / sessions / readiness / route / pick` 全部按同一套回执协议消费
+
+从 `0.1.51` 开始，推荐把断线续跑统一交给 `assistant/recover`：
+
+- `GET /assistant/recover`：只查看当前最推荐的恢复动作
+- `POST /assistant/recover`：可传 `session` 或 `session_id` 精确检查，也可不传让插件从全局会话和计划里自动挑选
+- `execute=true` 时会直接执行推荐动作，适合外部智能体把“刚才到哪了，继续”压成一个稳定入口
+- 对应 MP 智能助手 Tool：`agent_resource_officer_recover`
+
+示例：
+
+```json
+POST /api/v1/plugin/AgentResourceOfficer/assistant/recover?apikey=你的MP_API_TOKEN
+{
+  "session": "demo-plan",
+  "execute": true
+}
+```

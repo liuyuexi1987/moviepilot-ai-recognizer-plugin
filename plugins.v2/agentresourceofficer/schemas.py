@@ -149,6 +149,16 @@ class AssistantPlansClearToolInput(BaseModel):
     limit: Optional[int] = Field(default=100, description="批量清理时最多清理多少条")
 
 
+class AssistantRecoverToolInput(BaseModel):
+    session: Optional[str] = Field(default=None, description="可选会话名；不传则自动从全局活跃会话和待执行计划里挑选最佳恢复项")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    execute: Optional[bool] = Field(default=False, description="是否直接执行推荐恢复动作；默认只返回恢复建议")
+    prefer_unexecuted: Optional[bool] = Field(default=True, description="执行保存计划时是否优先选择未执行计划")
+    stop_on_error: Optional[bool] = Field(default=True, description="执行恢复动作时遇到失败是否停止")
+    include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果；默认关闭以减少 token")
+    limit: Optional[int] = Field(default=20, description="全局恢复扫描时最多查看多少个会话")
+
+
 class AssistantSessionsToolInput(BaseModel):
     kind: Optional[str] = Field(default=None, description="按会话类型过滤，例如 assistant_pansou / assistant_hdhive / assistant_p115_login")
     has_pending_p115: Optional[bool] = Field(default=None, description="是否只看带待继续 115 任务的会话")

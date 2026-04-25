@@ -40,6 +40,7 @@ from .agenttool import (
     AssistantPlansClearTool,
     AssistantPlansTool,
     AssistantReadinessTool,
+    AssistantRecoverTool,
     AssistantRouteTool,
     AssistantSessionClearTool,
     AssistantSessionsClearTool,
@@ -84,7 +85,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.50"
+    plugin_version = "0.1.51"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -241,6 +242,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantExecutePlanTool,
             AssistantPlansTool,
             AssistantPlansClearTool,
+            AssistantRecoverTool,
             AssistantReadinessTool,
             AssistantHistoryTool,
             AssistantHelpTool,
@@ -765,6 +767,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_plans_clear,
                 "methods": ["POST"],
                 "summary": "清理 dry_run 保存的工作流计划",
+            },
+            {
+                "path": "/assistant/recover",
+                "endpoint": self.api_assistant_recover,
+                "methods": ["GET", "POST"],
+                "summary": "查看或直接执行当前最推荐的恢复动作，给外部智能体提供单入口续跑能力",
             },
             {
                 "path": "/assistant/session",
@@ -2622,6 +2630,113 @@ class AgentResourceOfficer(_PluginBase):
             ),
         }
 
+    def _assistant_recover_public_data(
+        self,
+        *,
+        session: str = "",
+        session_id: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        requested_session = self._clean_text(session)
+        requested_session_id = self._clean_text(session_id)
+        max_limit = min(max(1, self._safe_int(limit, 20)), 100)
+        if requested_session or requested_session_id:
+            session_name, normalized_session_id = self._normalize_assistant_session_ref(
+                session=requested_session or "default",
+                session_id=requested_session_id,
+            )
+            state = self._assistant_session_public_data(session=session_name)
+            return {
+                "scope": "session",
+                "session": session_name,
+                "session_id": normalized_session_id or state.get("session_id") or self._assistant_session_id(session_name),
+                "selected_session": {
+                    "session": session_name,
+                    "session_id": normalized_session_id or state.get("session_id") or self._assistant_session_id(session_name),
+                    "kind": state.get("kind"),
+                    "stage": state.get("stage"),
+                    "keyword": state.get("keyword"),
+                    "has_pending_plan": bool((state.get("saved_plan") or {}).get("has_pending")),
+                    "has_pending_p115": bool((state.get("pending_p115") or {}).get("has_pending")),
+                },
+                "session_state": state,
+                "sessions": None,
+                "recovery": dict(state.get("recovery") or self._assistant_recovery_public_data(session_state=state)),
+            }
+
+        sessions = self._assistant_sessions_public_data(limit=max_limit)
+        items = [dict(item or {}) for item in (sessions.get("items") or []) if isinstance(item, dict)]
+        selected: Optional[Dict[str, Any]] = None
+
+        current_recovery = dict(sessions.get("recovery") or {})
+        template_body = dict(((current_recovery.get("action_template") or {}).get("body") or {}))
+        preferred_session_id = self._clean_text(template_body.get("session_id"))
+        if preferred_session_id:
+            selected = next((item for item in items if self._clean_text(item.get("session_id")) == preferred_session_id), None)
+        if not selected:
+            selected = next((item for item in items if bool((item.get("recovery") or {}).get("can_resume"))), None)
+        if not selected:
+            selected = next((item for item in items if item.get("has_pending_plan") or item.get("has_pending_p115")), None)
+        if not selected and items:
+            selected = items[0]
+
+        if selected:
+            session_name = self._clean_text(selected.get("session")) or "default"
+            selected_session_id = self._clean_text(selected.get("session_id")) or self._assistant_session_id(session_name)
+            state = self._assistant_session_public_data(session=session_name)
+            recovery = dict(state.get("recovery") or selected.get("recovery") or current_recovery)
+            selected = {**selected, "recovery": recovery}
+            return {
+                "scope": "global",
+                "session": session_name,
+                "session_id": selected_session_id,
+                "selected_session": selected,
+                "session_state": state,
+                "sessions": sessions,
+                "recovery": recovery,
+            }
+
+        state = self._assistant_session_public_data(session="default")
+        return {
+            "scope": "global",
+            "session": "default",
+            "session_id": state.get("session_id") or self._assistant_session_id("default"),
+            "selected_session": None,
+            "session_state": state,
+            "sessions": sessions,
+            "recovery": dict(state.get("recovery") or current_recovery),
+        }
+
+    def _format_assistant_recover_text(self, data: Dict[str, Any]) -> str:
+        recovery = dict((data or {}).get("recovery") or {})
+        selected = dict((data or {}).get("selected_session") or {})
+        lines = [
+            "Agent资源官 恢复入口",
+            f"范围：{(data or {}).get('scope') or 'session'}",
+            f"会话：{(data or {}).get('session') or 'default'}",
+            f"模式：{recovery.get('mode') or 'unknown'}",
+            f"原因：{recovery.get('reason') or '-'}",
+            f"可恢复：{'是' if recovery.get('can_resume') else '否'}",
+        ]
+        if recovery.get("recommended_action"):
+            lines.append(f"推荐动作：{recovery.get('recommended_action')}")
+        if recovery.get("recommended_tool"):
+            lines.append(f"推荐 Tool：{recovery.get('recommended_tool')}")
+        if selected.get("kind") or selected.get("keyword"):
+            detail = " / ".join(
+                str(item)
+                for item in [
+                    selected.get("kind"),
+                    selected.get("stage"),
+                    selected.get("keyword"),
+                ]
+                if item
+            )
+            lines.append(f"当前状态：{detail}")
+        if recovery.get("can_resume"):
+            lines.append("如需直接恢复，可调用 assistant/recover 并传 execute=true。")
+        return "\n".join(lines)
+
     def _format_assistant_sessions_text(
         self,
         *,
@@ -3009,6 +3124,18 @@ class AgentResourceOfficer(_PluginBase):
                     "limit",
                 ],
             },
+            "assistant_recover": {
+                "fields": [
+                    "session",
+                    "session_id",
+                    "execute",
+                    "prefer_unexecuted",
+                    "stop_on_error",
+                    "include_raw_results",
+                    "limit",
+                ],
+                "description": "单入口恢复协议：不传 session 时自动挑选最值得恢复的会话或计划；execute=true 时直接执行推荐动作。",
+            },
             "session_tools": [
                 "assistant/readiness",
                 "assistant/history",
@@ -3018,6 +3145,7 @@ class AgentResourceOfficer(_PluginBase):
                 "assistant/plan/execute",
                 "assistant/plans",
                 "assistant/plans/clear",
+                "assistant/recover",
                 "assistant/sessions",
                 "assistant/sessions/clear",
                 "assistant/session",
@@ -3045,6 +3173,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_execute_plan",
                 "agent_resource_officer_plans",
                 "agent_resource_officer_plans_clear",
+                "agent_resource_officer_recover",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
@@ -3085,6 +3214,7 @@ class AgentResourceOfficer(_PluginBase):
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景",
             "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id",
             "计划管理入口：assistant/plans 与 assistant/plans/clear，可查询或清理 dry_run 保存的计划",
+            "单入口恢复：assistant/recover，可自动选择最值得恢复的会话或计划；execute=true 时直接执行推荐动作",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
@@ -4160,6 +4290,34 @@ class AgentResourceOfficer(_PluginBase):
             limit=limit,
         )
         return str(result.get("message") or "计划清理完成")
+
+    async def tool_assistant_recover(
+        self,
+        session: str = "",
+        session_id: str = "",
+        execute: bool = False,
+        prefer_unexecuted: bool = True,
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+        limit: int = 20,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_recover(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "session": self._clean_text(session),
+                    "session_id": self._clean_text(session_id),
+                    "execute": bool(execute),
+                    "prefer_unexecuted": bool(prefer_unexecuted),
+                    "stop_on_error": bool(stop_on_error),
+                    "include_raw_results": bool(include_raw_results),
+                    "limit": self._safe_int(limit, 20),
+                },
+            )
+        )
+        return str(result.get("message") or "恢复检查完成")
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
@@ -5881,6 +6039,118 @@ class AgentResourceOfficer(_PluginBase):
                 "ok": True,
                 **result,
             }),
+        }
+
+    async def api_assistant_recover(self, request: Request):
+        body: Dict[str, Any] = {}
+        if request.method.upper() != "GET":
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+        ok, message = self._check_api_access(request, body or None)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        session = self._clean_text(body.get("session") or request.query_params.get("session"))
+        session_id = self._clean_text(body.get("session_id") or request.query_params.get("session_id"))
+        execute = bool(
+            self._parse_optional_bool(body.get("execute"))
+            if "execute" in body
+            else self._parse_optional_bool(request.query_params.get("execute"))
+        )
+        prefer_unexecuted = bool(
+            self._parse_optional_bool(body.get("prefer_unexecuted"))
+            if "prefer_unexecuted" in body
+            else True
+        )
+        stop_on_error = bool(
+            self._parse_optional_bool(body.get("stop_on_error"))
+            if "stop_on_error" in body
+            else True
+        )
+        include_raw_results = bool(
+            self._parse_optional_bool(body.get("include_raw_results"))
+            if "include_raw_results" in body
+            else False
+        )
+        limit = self._safe_int(body.get("limit") or request.query_params.get("limit"), 20)
+        data = self._assistant_recover_public_data(
+            session=session,
+            session_id=session_id,
+            limit=limit,
+        )
+        data.update({
+            "action": "recover",
+            "ok": True,
+            "execute_requested": execute,
+            "executed": False,
+        })
+
+        if not execute:
+            return {
+                "success": True,
+                "message": self._format_assistant_recover_text(data),
+                "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
+            }
+
+        recovery = dict(data.get("recovery") or {})
+        if not recovery.get("can_resume"):
+            data["ok"] = False
+            data["execute_error"] = recovery.get("reason") or "当前没有可直接恢复的动作"
+            return {
+                "success": False,
+                "message": str(data["execute_error"]),
+                "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
+            }
+
+        template = dict(recovery.get("action_template") or {})
+        action_body = dict(template.get("action_body") or {})
+        if not action_body and template.get("name"):
+            action_body = {"name": template.get("name"), **dict(template.get("body") or {})}
+        if not self._clean_text(action_body.get("name")):
+            data["ok"] = False
+            data["execute_error"] = "恢复模板缺少可执行动作名"
+            return {
+                "success": False,
+                "message": data["execute_error"],
+                "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
+            }
+
+        action_body.setdefault("session", data.get("session") or "default")
+        if data.get("session_id"):
+            action_body.setdefault("session_id", data.get("session_id"))
+        action_body.setdefault("prefer_unexecuted", prefer_unexecuted)
+        action_body.setdefault("stop_on_error", stop_on_error)
+        action_body.setdefault("include_raw_results", include_raw_results)
+        action_body["apikey"] = self._extract_apikey(request, body)
+        result = await self.api_assistant_action(_JsonRequestShim(request, action_body))
+        result_data = dict(result.get("data") or {})
+        data.update({
+            "ok": bool(result.get("success")),
+            "executed": True,
+            "execute_success": bool(result.get("success")),
+            "execute_action": action_body.get("name"),
+            "execute_message": result.get("message") or "",
+            "execute_result": result if include_raw_results else {
+                "success": bool(result.get("success")),
+                "message": result.get("message") or "",
+                "data": {
+                    "action": result_data.get("action"),
+                    "ok": result_data.get("ok"),
+                    "session": result_data.get("session"),
+                    "session_id": result_data.get("session_id"),
+                    "plan_id": result_data.get("plan_id"),
+                    "workflow": result_data.get("workflow"),
+                },
+            },
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": f"恢复动作 {action_body.get('name')} 执行完成\n{result.get('message') or ''}".strip(),
+            "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
         }
 
     async def api_assistant_session_state(self, request: Request):

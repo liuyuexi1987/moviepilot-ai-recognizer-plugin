@@ -16,6 +16,7 @@ from .schemas import (
     AssistantPlansClearToolInput,
     AssistantPlansToolInput,
     AssistantReadinessToolInput,
+    AssistantRecoverToolInput,
     AssistantRouteToolInput,
     AssistantSessionClearToolInput,
     AssistantSessionsClearToolInput,
@@ -460,6 +461,41 @@ class AssistantPlansClearTool(MoviePilotTool):
             session_id=session_id,
             executed=executed,
             all_plans=all_plans,
+            limit=limit,
+        )
+
+
+class AssistantRecoverTool(MoviePilotTool):
+    name: str = "agent_resource_officer_recover"
+    description: str = "Inspect the best Agent资源官 recovery action, or execute it directly, so external agents can resume work through one stable entrypoint."
+    args_schema: Type[BaseModel] = AssistantRecoverToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        target = kwargs.get("session_id") or kwargs.get("session") or "全局"
+        action = "并直接恢复" if kwargs.get("execute") else "恢复建议"
+        return f"正在查看 Agent资源官 {target} 的{action}"
+
+    async def run(
+        self,
+        session: str = None,
+        session_id: str = None,
+        execute: bool = False,
+        prefer_unexecuted: bool = True,
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+        limit: int = 20,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_recover(
+            session=session,
+            session_id=session_id,
+            execute=execute,
+            prefer_unexecuted=prefer_unexecuted,
+            stop_on_error=stop_on_error,
+            include_raw_results=include_raw_results,
             limit=limit,
         )
 
