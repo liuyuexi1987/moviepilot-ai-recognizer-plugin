@@ -88,7 +88,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.65"
+    plugin_version = "0.1.66"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3631,7 +3631,12 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry_actions": (data.get("smart_entry") or {}).get("actions") or [],
             "smart_pick_actions": (data.get("smart_pick") or {}).get("actions") or [],
             "workflows": workflows,
-            "recommended_start": ["assistant/pulse", "assistant/toolbox", "assistant/readiness?compact=true"],
+            "recommended_start": [
+                "assistant/pulse",
+                "assistant/selfcheck",
+                "assistant/toolbox",
+                "assistant/readiness?compact=true",
+            ],
             "compact_endpoints": compact_endpoints,
             "agent_tools": data.get("agent_tools") or [],
             "next_actions": ["assistant_readiness", "smart_entry", "assistant_workflow"],
@@ -3892,6 +3897,8 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": recovery_compact.get("next_actions") or [],
             "action_templates": recovery_compact.get("action_templates") or [],
             "recommended_endpoints": {
+                "selfcheck": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
+                "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
                 "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
                 "workflow": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
                 "actions": "/api/v1/plugin/AgentResourceOfficer/assistant/actions",

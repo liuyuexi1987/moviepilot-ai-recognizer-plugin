@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.65`
+- 当前版本：`0.1.66`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -367,6 +367,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.63` 开始，`dry_run`、`stop_on_error`、`include_raw_results`、`prefer_unexecuted`、`all_plans`、`stale_only`、`all_sessions`、`execute` 等 POST 布尔字段也统一按同样规则解析。
 从 `0.1.64` 开始，新增 `assistant/selfcheck`，用于快速确认 compact 模板、布尔解析和协议字段是否健康。
 从 `0.1.65` 开始，`assistant/selfcheck` 也下沉为 MP 原生 Tool：`agent_resource_officer_selfcheck`。
+从 `0.1.66` 开始，`assistant/pulse` 和 compact `assistant/capabilities` 会把 `assistant/selfcheck` 放进推荐启动链路，外部智能体开场即可先做协议自检。
 
 从 `0.1.36` 开始，还新增了：
 
