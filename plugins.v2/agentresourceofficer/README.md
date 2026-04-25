@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.42`
+- 当前版本：`0.1.43`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -464,6 +464,28 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow?apikey=你的MP_API_
 
 ```json
 POST /api/v1/plugin/AgentResourceOfficer/assistant/plan/execute?apikey=你的MP_API_TOKEN
+{
+  "plan_id": "plan-..."
+}
+```
+
+从 `0.1.43` 开始，保存计划也可以独立查询和清理：
+
+- `GET /assistant/plans`：查看最近保存的计划，可按 `session`、`session_id`、`executed` 过滤
+- `POST /assistant/plans/clear`：按 `plan_id`、会话、执行状态或 `all_plans=true` 清理计划
+- `agent_resource_officer_plans`：MP 智能助手查看计划
+- `agent_resource_officer_plans_clear`：MP 智能助手清理计划
+
+常用查询：
+
+```text
+GET /api/v1/plugin/AgentResourceOfficer/assistant/plans?apikey=你的MP_API_TOKEN&executed=false
+```
+
+清理单个计划：
+
+```json
+POST /api/v1/plugin/AgentResourceOfficer/assistant/plans/clear?apikey=你的MP_API_TOKEN
 {
   "plan_id": "plan-..."
 }

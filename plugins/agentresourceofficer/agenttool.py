@@ -13,6 +13,8 @@ from .schemas import (
     AssistantHistoryToolInput,
     AssistantHelpToolInput,
     AssistantPickToolInput,
+    AssistantPlansClearToolInput,
+    AssistantPlansToolInput,
     AssistantReadinessToolInput,
     AssistantRouteToolInput,
     AssistantSessionClearToolInput,
@@ -389,6 +391,66 @@ class AssistantExecutePlanTool(MoviePilotTool):
             plan_id=plan_id,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
+        )
+
+
+class AssistantPlansTool(MoviePilotTool):
+    name: str = "agent_resource_officer_plans"
+    description: str = "List saved Agent资源官 dry-run workflow plans so agents can recover and execute the right plan_id."
+    args_schema: Type[BaseModel] = AssistantPlansToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在查看 Agent资源官 已保存计划"
+
+    async def run(
+        self,
+        session: str = None,
+        session_id: str = None,
+        executed: bool = None,
+        include_actions: bool = False,
+        limit: int = 20,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_plans(
+            session=session,
+            session_id=session_id,
+            executed=executed,
+            include_actions=include_actions,
+            limit=limit,
+        )
+
+
+class AssistantPlansClearTool(MoviePilotTool):
+    name: str = "agent_resource_officer_plans_clear"
+    description: str = "Clear saved Agent资源官 workflow plans by plan_id, session, executed state, or all_plans."
+    args_schema: Type[BaseModel] = AssistantPlansClearToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在清理 Agent资源官 已保存计划"
+
+    async def run(
+        self,
+        plan_id: str = None,
+        session: str = None,
+        session_id: str = None,
+        executed: bool = None,
+        all_plans: bool = False,
+        limit: int = 100,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_plans_clear(
+            plan_id=plan_id,
+            session=session,
+            session_id=session_id,
+            executed=executed,
+            all_plans=all_plans,
+            limit=limit,
         )
 
 

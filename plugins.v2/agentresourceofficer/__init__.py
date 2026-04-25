@@ -37,6 +37,8 @@ from .agenttool import (
     AssistantHistoryTool,
     AssistantHelpTool,
     AssistantPickTool,
+    AssistantPlansClearTool,
+    AssistantPlansTool,
     AssistantReadinessTool,
     AssistantRouteTool,
     AssistantSessionClearTool,
@@ -82,7 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.42"
+    plugin_version = "0.1.43"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -237,6 +239,8 @@ class AgentResourceOfficer(_PluginBase):
             AssistantExecuteActionTool,
             AssistantExecuteActionsTool,
             AssistantExecutePlanTool,
+            AssistantPlansTool,
+            AssistantPlansClearTool,
             AssistantReadinessTool,
             AssistantHistoryTool,
             AssistantHelpTool,
@@ -279,6 +283,19 @@ class AgentResourceOfficer(_PluginBase):
             return int(value)
         except Exception:
             return default
+
+    @staticmethod
+    def _parse_optional_bool(value: Any) -> Optional[bool]:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        text = str(value).strip().lower()
+        if text in {"1", "true", "yes", "y", "on"}:
+            return True
+        if text in {"0", "false", "no", "n", "off"}:
+            return False
+        return None
 
     @staticmethod
     def _normalize_path(value: Any) -> str:
@@ -736,6 +753,18 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_plan_execute,
                 "methods": ["POST"],
                 "summary": "执行 dry_run 保存的工作流计划，避免外部智能体重复携带大 JSON",
+            },
+            {
+                "path": "/assistant/plans",
+                "endpoint": self.api_assistant_plans,
+                "methods": ["GET"],
+                "summary": "查看 dry_run 保存的工作流计划，便于断线恢复和选择 plan_id",
+            },
+            {
+                "path": "/assistant/plans/clear",
+                "endpoint": self.api_assistant_plans_clear,
+                "methods": ["POST"],
+                "summary": "清理 dry_run 保存的工作流计划",
             },
             {
                 "path": "/assistant/session",
@@ -1494,6 +1523,155 @@ class AgentResourceOfficer(_PluginBase):
     def _load_workflow_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
         plan = (self._workflow_plans or {}).get(self._clean_text(plan_id))
         return dict(plan) if isinstance(plan, dict) else None
+
+    def _workflow_plan_public_item(self, plan: Dict[str, Any], *, include_actions: bool = False) -> Dict[str, Any]:
+        current = dict(plan or {})
+        actions = current.get("actions") or []
+        item = {
+            "plan_id": self._clean_text(current.get("plan_id")),
+            "workflow": self._clean_text(current.get("workflow")),
+            "session": self._clean_text(current.get("session")),
+            "session_id": self._clean_text(current.get("session_id")),
+            "created_at": self._safe_int(current.get("created_at"), 0),
+            "created_at_text": self._clean_text(current.get("created_at_text")),
+            "executed": bool(current.get("executed")),
+            "executed_at": self._safe_int(current.get("executed_at"), 0),
+            "executed_at_text": self._clean_text(current.get("executed_at_text")),
+            "last_success": current.get("last_success"),
+            "last_message": self._clean_text(current.get("last_message")),
+            "action_count": len(actions) if isinstance(actions, list) else 0,
+        }
+        if include_actions:
+            item["actions"] = [dict(action or {}) for action in actions] if isinstance(actions, list) else []
+            item["execute_body"] = dict(current.get("execute_body") or {})
+        return item
+
+    def _assistant_plans_public_data(
+        self,
+        *,
+        session: str = "",
+        session_id: str = "",
+        executed: Optional[bool] = None,
+        include_actions: bool = False,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        max_limit = min(max(1, self._safe_int(limit, 20)), 100)
+        session_filter = ""
+        session_id_filter = ""
+        if self._clean_text(session) or self._clean_text(session_id):
+            session_filter, session_id_filter = self._normalize_assistant_session_ref(
+                session=session,
+                session_id=session_id,
+            )
+        plans = sorted(
+            (dict(item) for item in (self._workflow_plans or {}).values() if isinstance(item, dict)),
+            key=lambda item: self._safe_int(item.get("created_at"), 0),
+            reverse=True,
+        )
+        items: List[Dict[str, Any]] = []
+        for plan in plans:
+            if session_id_filter and self._clean_text(plan.get("session_id")) != session_id_filter:
+                continue
+            if executed is not None and bool(plan.get("executed")) != bool(executed):
+                continue
+            items.append(self._workflow_plan_public_item(plan, include_actions=include_actions))
+            if len(items) >= max_limit:
+                break
+        return {
+            "total": len(self._workflow_plans or {}),
+            "limit": max_limit,
+            "session": session_filter,
+            "session_id": session_id_filter,
+            "executed": executed,
+            "include_actions": bool(include_actions),
+            "items": items,
+        }
+
+    def _format_assistant_plans_text(
+        self,
+        *,
+        session: str = "",
+        session_id: str = "",
+        executed: Optional[bool] = None,
+        include_actions: bool = False,
+        limit: int = 20,
+    ) -> str:
+        data = self._assistant_plans_public_data(
+            session=session,
+            session_id=session_id,
+            executed=executed,
+            include_actions=include_actions,
+            limit=limit,
+        )
+        items = data.get("items") or []
+        if not items:
+            return "当前没有 Agent资源官 保存计划。"
+        lines = [f"已保存计划：{len(items)} 条"]
+        for index, item in enumerate(items, 1):
+            status = "已执行" if item.get("executed") else "待执行"
+            line = (
+                f"{index}. {item.get('plan_id') or '-'} | {status} | "
+                f"{item.get('workflow') or '-'} | {item.get('session') or '-'} | "
+                f"{item.get('action_count') or 0}步 | {item.get('created_at_text') or '-'}"
+            )
+            if item.get("last_message"):
+                line = f"{line} | {item.get('last_message')}"
+            lines.append(line)
+        lines.append("下一步：可用 agent_resource_officer_execute_plan 执行 plan_id，或用 agent_resource_officer_plans_clear 清理。")
+        return "\n".join(lines)
+
+    def _clear_workflow_plans(
+        self,
+        *,
+        plan_id: str = "",
+        session: str = "",
+        session_id: str = "",
+        executed: Optional[bool] = None,
+        all_plans: bool = False,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        clean_plan_id = self._clean_text(plan_id)
+        max_limit = min(max(1, self._safe_int(limit, 100)), 500)
+        session_filter = ""
+        session_id_filter = ""
+        if self._clean_text(session) or self._clean_text(session_id):
+            session_filter, session_id_filter = self._normalize_assistant_session_ref(
+                session=session,
+                session_id=session_id,
+            )
+        if not any([clean_plan_id, session_id_filter, executed is not None, all_plans]):
+            return {
+                "ok": False,
+                "message": "请指定 plan_id、session/session_id、executed 过滤条件，或显式 all_plans=true",
+                "removed": 0,
+                "removed_ids": [],
+            }
+        removed_ids: List[str] = []
+        for current_id, plan in list((self._workflow_plans or {}).items()):
+            if len(removed_ids) >= max_limit:
+                break
+            current = dict(plan or {})
+            if clean_plan_id and self._clean_text(current_id) != clean_plan_id:
+                continue
+            if session_id_filter and self._clean_text(current.get("session_id")) != session_id_filter:
+                continue
+            if executed is not None and bool(current.get("executed")) != bool(executed):
+                continue
+            removed_ids.append(self._clean_text(current_id))
+        for current_id in removed_ids:
+            self._workflow_plans.pop(current_id, None)
+        if removed_ids:
+            self._persist_workflow_plans()
+        return {
+            "ok": True,
+            "message": f"已清理 {len(removed_ids)} 条计划",
+            "removed": len(removed_ids),
+            "removed_ids": removed_ids,
+            "session": session_filter,
+            "session_id": session_id_filter,
+            "executed": executed,
+            "all_plans": bool(all_plans),
+        }
 
     def _record_assistant_execution(
         self,
@@ -2542,6 +2720,25 @@ class AgentResourceOfficer(_PluginBase):
                     "include_raw_results",
                 ],
             },
+            "assistant_plans": {
+                "fields": [
+                    "session",
+                    "session_id",
+                    "executed",
+                    "include_actions",
+                    "limit",
+                ],
+            },
+            "assistant_plans_clear": {
+                "fields": [
+                    "plan_id",
+                    "session",
+                    "session_id",
+                    "executed",
+                    "all_plans",
+                    "limit",
+                ],
+            },
             "session_tools": [
                 "assistant/readiness",
                 "assistant/history",
@@ -2549,6 +2746,8 @@ class AgentResourceOfficer(_PluginBase):
                 "assistant/actions",
                 "assistant/workflow",
                 "assistant/plan/execute",
+                "assistant/plans",
+                "assistant/plans/clear",
                 "assistant/sessions",
                 "assistant/sessions/clear",
                 "assistant/session",
@@ -2574,6 +2773,8 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_execute_action",
                 "agent_resource_officer_execute_actions",
                 "agent_resource_officer_execute_plan",
+                "agent_resource_officer_plans",
+                "agent_resource_officer_plans_clear",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
@@ -2613,6 +2814,7 @@ class AgentResourceOfficer(_PluginBase):
             "批量动作入口：assistant/actions，可一次执行多步 action_body，默认只返回精简执行摘要，减少外部智能体往返和 token 消耗",
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景",
             "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id",
+            "计划管理入口：assistant/plans 与 assistant/plans/clear，可查询或清理 dry_run 保存的计划",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
@@ -3587,6 +3789,45 @@ class AgentResourceOfficer(_PluginBase):
             )
         )
         return str(result.get("message") or "计划执行完成")
+
+    async def tool_assistant_plans(
+        self,
+        session: str = "",
+        session_id: str = "",
+        executed: Optional[bool] = None,
+        include_actions: bool = False,
+        limit: int = 20,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_plans_text(
+            session=session,
+            session_id=session_id,
+            executed=executed,
+            include_actions=include_actions,
+            limit=limit,
+        )
+
+    async def tool_assistant_plans_clear(
+        self,
+        plan_id: str = "",
+        session: str = "",
+        session_id: str = "",
+        executed: Optional[bool] = None,
+        all_plans: bool = False,
+        limit: int = 100,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = self._clear_workflow_plans(
+            plan_id=plan_id,
+            session=session,
+            session_id=session_id,
+            executed=executed,
+            all_plans=all_plans,
+            limit=limit,
+        )
+        return str(result.get("message") or "计划清理完成")
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
@@ -5217,6 +5458,71 @@ class AgentResourceOfficer(_PluginBase):
                 "action": "history",
                 "ok": True,
                 **data,
+            }),
+        }
+
+    async def api_assistant_plans(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        session = self._clean_text(request.query_params.get("session"))
+        session_id = self._clean_text(request.query_params.get("session_id"))
+        executed = self._parse_optional_bool(request.query_params.get("executed"))
+        include_actions = bool(self._parse_optional_bool(request.query_params.get("include_actions")) or False)
+        limit = self._safe_int(request.query_params.get("limit"), 20)
+        data = self._assistant_plans_public_data(
+            session=session,
+            session_id=session_id,
+            executed=executed,
+            include_actions=include_actions,
+            limit=limit,
+        )
+        return {
+            "success": True,
+            "message": self._format_assistant_plans_text(
+                session=session,
+                session_id=session_id,
+                executed=executed,
+                include_actions=include_actions,
+                limit=limit,
+            ),
+            "data": self._assistant_response_data(session=session or "default", data={
+                "action": "plans",
+                "ok": True,
+                **data,
+            }),
+        }
+
+    async def api_assistant_plans_clear(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        result = self._clear_workflow_plans(
+            plan_id=body.get("plan_id"),
+            session=body.get("session"),
+            session_id=body.get("session_id"),
+            executed=self._parse_optional_bool(body.get("executed")),
+            all_plans=bool(body.get("all_plans")),
+            limit=self._safe_int(body.get("limit"), 100),
+        )
+        if not result.get("ok"):
+            return {
+                "success": False,
+                "message": str(result.get("message") or "计划清理参数无效"),
+                "data": result,
+            }
+        return {
+            "success": True,
+            "message": str(result.get("message") or "计划清理完成"),
+            "data": self._assistant_response_data(session=body.get("session") or "default", data={
+                "action": "plans_clear",
+                "ok": True,
+                **result,
             }),
         }
 

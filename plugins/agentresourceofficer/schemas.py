@@ -127,6 +127,23 @@ class AssistantExecutePlanToolInput(BaseModel):
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果")
 
 
+class AssistantPlansToolInput(BaseModel):
+    session: Optional[str] = Field(default=None, description="可选会话名；不填则返回全部最近计划")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    executed: Optional[bool] = Field(default=None, description="可选过滤：true 只看已执行，false 只看未执行")
+    include_actions: Optional[bool] = Field(default=False, description="是否附带计划动作明细；默认关闭以减少 token")
+    limit: Optional[int] = Field(default=20, description="最多返回多少条计划")
+
+
+class AssistantPlansClearToolInput(BaseModel):
+    plan_id: Optional[str] = Field(default=None, description="可选计划 ID；传入时只清理这一条")
+    session: Optional[str] = Field(default=None, description="可选会话名；按会话清理")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    executed: Optional[bool] = Field(default=None, description="可选过滤：true 只清理已执行，false 只清理未执行")
+    all_plans: Optional[bool] = Field(default=False, description="清理全部计划；未指定 plan_id/session/session_id/executed 时需要显式打开")
+    limit: Optional[int] = Field(default=100, description="批量清理时最多清理多少条")
+
+
 class AssistantSessionsToolInput(BaseModel):
     kind: Optional[str] = Field(default=None, description="按会话类型过滤，例如 assistant_pansou / assistant_hdhive / assistant_p115_login")
     has_pending_p115: Optional[bool] = Field(default=None, description="是否只看带待继续 115 任务的会话")
