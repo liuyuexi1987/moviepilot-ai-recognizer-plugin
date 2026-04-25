@@ -7,6 +7,7 @@ from app.core.plugin import PluginManager
 
 from .schemas import (
     AssistantCapabilitiesToolInput,
+    AssistantExecuteActionToolInput,
     AssistantHelpToolInput,
     AssistantPickToolInput,
     AssistantRouteToolInput,
@@ -197,6 +198,57 @@ class AssistantCapabilitiesTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_capabilities()
+
+
+class AssistantExecuteActionTool(MoviePilotTool):
+    name: str = "agent_resource_officer_execute_action"
+    description: str = "Execute a named Agent资源官 action template directly, so external agents can reuse action_templates without manually mapping each next step."
+    args_schema: Type[BaseModel] = AssistantExecuteActionToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return f"正在执行 Agent资源官 动作模板：{kwargs.get('name', '')}"
+
+    async def run(
+        self,
+        name: str,
+        session: str = "default",
+        session_id: str = None,
+        choice: int = None,
+        path: str = None,
+        keyword: str = None,
+        media_type: str = None,
+        year: str = None,
+        url: str = None,
+        access_code: str = None,
+        client_type: str = None,
+        kind: str = None,
+        has_pending_p115: bool = None,
+        stale_only: bool = False,
+        all_sessions: bool = False,
+        limit: int = 100,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_execute_action(
+            name=name,
+            session=session,
+            session_id=session_id,
+            choice=choice,
+            target_path=path,
+            keyword=keyword,
+            media_type=media_type,
+            year=year,
+            share_url=url,
+            access_code=access_code,
+            client_type=client_type,
+            kind=kind,
+            has_pending_p115=has_pending_p115,
+            stale_only=stale_only,
+            all_sessions=all_sessions,
+            limit=limit,
+        )
 
 
 class AssistantSessionStateTool(MoviePilotTool):

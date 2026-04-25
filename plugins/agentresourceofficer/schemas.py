@@ -65,6 +65,25 @@ class AssistantCapabilitiesToolInput(BaseModel):
     pass
 
 
+class AssistantExecuteActionToolInput(BaseModel):
+    name: str = Field(..., description="要执行的动作模板名，例如 pick_pansou_result / candidate_next_page / resume_pending_115")
+    session: Optional[str] = Field(default="default", description="可选会话名")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    choice: Optional[int] = Field(default=None, description="需要选择编号时传入")
+    path: Optional[str] = Field(default=None, description="可选目标目录")
+    keyword: Optional[str] = Field(default=None, description="搜索类动作使用的关键词")
+    media_type: Optional[str] = Field(default=None, description="搜索类动作使用的媒体类型")
+    year: Optional[str] = Field(default=None, description="搜索类动作使用的年份")
+    url: Optional[str] = Field(default=None, description="直链类动作使用的分享链接")
+    access_code: Optional[str] = Field(default=None, description="可选提取码")
+    client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
+    kind: Optional[str] = Field(default=None, description="批量清理会话时的类型过滤")
+    has_pending_p115: Optional[bool] = Field(default=None, description="批量清理会话时是否仅清理带待继续 115 的会话")
+    stale_only: Optional[bool] = Field(default=False, description="批量清理会话时是否只清理过期会话")
+    all_sessions: Optional[bool] = Field(default=False, description="批量清理会话时是否清理全部会话")
+    limit: Optional[int] = Field(default=100, description="批量清理会话时的最多处理条数")
+
+
 class AssistantSessionsToolInput(BaseModel):
     kind: Optional[str] = Field(default=None, description="按会话类型过滤，例如 assistant_pansou / assistant_hdhive / assistant_p115_login")
     has_pending_p115: Optional[bool] = Field(default=None, description="是否只看带待继续 115 任务的会话")

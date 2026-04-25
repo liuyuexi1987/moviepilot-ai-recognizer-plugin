@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.35`
+- 当前版本：`0.1.36`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -113,6 +113,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/route`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/pick`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
+- `POST /api/v1/plugin/AgentResourceOfficer/assistant/action`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/session`
@@ -129,6 +130,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_smart_pick`
 - `agent_resource_officer_help`
 - `agent_resource_officer_capabilities`
+- `agent_resource_officer_execute_action`
 - `agent_resource_officer_route_share`
 - `agent_resource_officer_sessions`
 - `agent_resource_officer_sessions_clear`
@@ -350,3 +352,10 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 - `action_templates`
 
 `action_templates` 会直接给出下一步可调用的 Tool / API / method / body 模板。外部智能体拿到回执后，不必再自己总结“下一步怎么调”，可以直接复用这些结构化模板继续执行。
+
+从 `0.1.36` 开始，还新增了：
+
+- `POST /assistant/action`
+- `agent_resource_officer_execute_action`
+
+这样外部智能体不只可以“读模板”，还可以直接把 `action_templates` 里的 `name + action_body` 回传给 Agent资源官 执行，进一步减少上层自定义映射逻辑。

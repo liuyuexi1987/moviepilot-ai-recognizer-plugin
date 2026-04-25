@@ -31,6 +31,7 @@ from .services.p115_transfer import P115TransferService
 from .services.quark_transfer import QuarkTransferService
 from .agenttool import (
     AssistantCapabilitiesTool,
+    AssistantExecuteActionTool,
     AssistantHelpTool,
     AssistantPickTool,
     AssistantRouteTool,
@@ -51,7 +52,8 @@ from .agenttool import (
 
 
 class _JsonRequestShim:
-    def __init__(self, request: Request, body: Dict[str, Any]) -> None:
+    def __init__(self, request: Request, body: Dict[str, Any], method: str = "POST") -> None:
+        self.method = str(method or "POST").upper()
         self.headers = request.headers
         self.query_params = request.query_params
         self._body = body
@@ -70,7 +72,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.35"
+    plugin_version = "0.1.36"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -214,6 +216,7 @@ class AgentResourceOfficer(_PluginBase):
     def get_agent_tools(self) -> List[type]:
         return [
             AssistantCapabilitiesTool,
+            AssistantExecuteActionTool,
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
@@ -674,6 +677,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_capabilities,
                 "methods": ["GET"],
                 "summary": "查看统一智能入口支持的结构化参数、默认值与推荐调用方式",
+            },
+            {
+                "path": "/assistant/action",
+                "endpoint": self.api_assistant_action,
+                "methods": ["POST"],
+                "summary": "直接执行统一智能入口返回的动作模板名，适合外部智能体无映射继续执行",
             },
             {
                 "path": "/assistant/session",
@@ -1726,6 +1735,26 @@ class AgentResourceOfficer(_PluginBase):
         method: str = "POST",
         tool: str = "",
     ) -> Dict[str, Any]:
+        action_body: Dict[str, Any] = {"name": name}
+        for key in [
+            "session",
+            "session_id",
+            "choice",
+            "path",
+            "keyword",
+            "media_type",
+            "year",
+            "url",
+            "access_code",
+            "client_type",
+            "kind",
+            "has_pending_p115",
+            "stale_only",
+            "all_sessions",
+            "limit",
+        ]:
+            if key in body:
+                action_body[key] = body.get(key)
         return {
             "name": name,
             "description": description,
@@ -1733,6 +1762,9 @@ class AgentResourceOfficer(_PluginBase):
             "method": method,
             "tool": tool,
             "body": body,
+            "action_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+            "action_tool": "agent_resource_officer_execute_action",
+            "action_body": action_body,
         }
 
     def _assistant_action_templates(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -2256,7 +2288,28 @@ class AgentResourceOfficer(_PluginBase):
                 "fields": ["session", "session_id", "choice", "action", "path"],
                 "actions": ["detail", "next_page"],
             },
+            "assistant_action": {
+                "fields": [
+                    "name",
+                    "session",
+                    "session_id",
+                    "choice",
+                    "path",
+                    "keyword",
+                    "media_type",
+                    "year",
+                    "url",
+                    "access_code",
+                    "client_type",
+                    "kind",
+                    "has_pending_p115",
+                    "stale_only",
+                    "all_sessions",
+                    "limit",
+                ],
+            },
             "session_tools": [
+                "assistant/action",
                 "assistant/sessions",
                 "assistant/sessions/clear",
                 "assistant/session",
@@ -2277,6 +2330,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "agent_tools": [
                 "agent_resource_officer_capabilities",
+                "agent_resource_officer_execute_action",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
                 "agent_resource_officer_smart_pick",
@@ -2309,6 +2363,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
             "smart_pick 字段：session / session_id / choice / action / path",
             "smart_pick 动作：detail / next_page",
+            "动作执行入口：assistant/action，可直接执行 action_templates 里的 name + body",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
@@ -3055,6 +3110,52 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_capabilities_text()
+
+    async def tool_assistant_execute_action(
+        self,
+        name: str,
+        session: str = "default",
+        session_id: str = "",
+        choice: Optional[int] = None,
+        target_path: str = "",
+        keyword: str = "",
+        media_type: str = "",
+        year: str = "",
+        share_url: str = "",
+        access_code: str = "",
+        client_type: str = "",
+        kind: str = "",
+        has_pending_p115: Optional[bool] = None,
+        stale_only: bool = False,
+        all_sessions: bool = False,
+        limit: int = 100,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_action(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "name": self._clean_text(name),
+                    "session": self._clean_text(session) or "default",
+                    "session_id": self._clean_text(session_id),
+                    "choice": choice,
+                    "path": self._clean_text(target_path),
+                    "keyword": self._clean_text(keyword),
+                    "media_type": self._clean_text(media_type),
+                    "year": self._clean_text(year),
+                    "url": self._clean_text(share_url),
+                    "access_code": self._clean_text(access_code),
+                    "client_type": self._clean_text(client_type),
+                    "kind": self._clean_text(kind),
+                    "has_pending_p115": has_pending_p115,
+                    "stale_only": bool(stale_only),
+                    "all_sessions": bool(all_sessions),
+                    "limit": self._safe_int(limit, 100),
+                },
+            )
+        )
+        return str(result.get("message") or "动作执行完成")
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
@@ -3918,6 +4019,98 @@ class AgentResourceOfficer(_PluginBase):
                 "candidates": candidates,
             }),
         }
+
+    async def api_assistant_action(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        name = self._clean_text(body.get("name") or body.get("action_name"))
+        if not name:
+            return {"success": False, "message": "缺少动作名 name"}
+
+        route_payload = {
+            "session": body.get("session"),
+            "session_id": body.get("session_id"),
+            "path": body.get("path") or body.get("target_path"),
+            "apikey": self._extract_apikey(request, body),
+        }
+        pick_payload = {
+            "session": body.get("session"),
+            "session_id": body.get("session_id"),
+            "path": body.get("path") or body.get("target_path"),
+            "apikey": self._extract_apikey(request, body),
+        }
+
+        if name == "start_pansou_search":
+            route_payload.update({
+                "mode": "pansou",
+                "keyword": body.get("keyword"),
+            })
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "start_hdhive_search":
+            route_payload.update({
+                "mode": "hdhive",
+                "keyword": body.get("keyword"),
+                "media_type": body.get("media_type") or "movie",
+                "year": body.get("year"),
+            })
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "start_115_login":
+            route_payload.update({
+                "action": "p115_qrcode_start",
+                "client_type": body.get("client_type"),
+            })
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "inspect_session_state":
+            return await self.api_assistant_session_state(_JsonRequestShim(request, {
+                "session": body.get("session"),
+                "session_id": body.get("session_id"),
+                "apikey": self._extract_apikey(request, body),
+            }))
+        if name in {"pick_pansou_result", "pick_hdhive_candidate", "pick_hdhive_resource"}:
+            pick_payload.update({"choice": body.get("choice") or body.get("index")})
+            return await self.api_assistant_pick(_JsonRequestShim(request, pick_payload))
+        if name == "candidate_detail":
+            pick_payload.update({"action": "detail"})
+            return await self.api_assistant_pick(_JsonRequestShim(request, pick_payload))
+        if name == "candidate_next_page":
+            pick_payload.update({"action": "next_page"})
+            return await self.api_assistant_pick(_JsonRequestShim(request, pick_payload))
+        if name == "check_115_login":
+            route_payload.update({"action": "p115_qrcode_check"})
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "show_115_status":
+            route_payload.update({"action": "p115_status"})
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "resume_pending_115":
+            route_payload.update({"action": "p115_resume"})
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "cancel_pending_115":
+            route_payload.update({"action": "p115_cancel"})
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "clear_current_session":
+            return await self.api_assistant_session_clear(_JsonRequestShim(request, {
+                "session": body.get("session"),
+                "session_id": body.get("session_id"),
+                "apikey": self._extract_apikey(request, body),
+            }))
+        if name == "inspect_session":
+            return await self.api_assistant_session_state(_JsonRequestShim(request, {
+                "session": body.get("session"),
+                "session_id": body.get("session_id"),
+                "apikey": self._extract_apikey(request, body),
+            }))
+        if name == "clear_session_by_id":
+            return await self.api_assistant_sessions_clear(_JsonRequestShim(request, {
+                "session_id": body.get("session_id"),
+                "apikey": self._extract_apikey(request, body),
+            }))
+
+        return {"success": False, "message": f"不支持的动作模板：{name}"}
 
     async def api_assistant_pick(self, request: Request):
         body = await request.json()
