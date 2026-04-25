@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.36",
+    "version": "0.1.37",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.37": "新增 assistant/actions 与 execute_actions Tool，外部智能体可一次提交多个 action_body 顺序执行，默认仅返回精简执行摘要，进一步减少往返和 token 消耗。",
       "0.1.36": "新增 assistant/action 与 execute_action Tool，外部智能体可直接执行 action_templates 返回的动作模板名，不必自己做动作到接口的映射。",
       "0.1.35": "统一回执与 session_state 新增 protocol_version 和 action_templates，外部智能体可直接按返回模板继续调用，不再自己拼下一步参数。",
       "0.1.34": "新增 session_id 精准恢复与 assistant 会话批量清理能力，外部智能体可按 session_id 继续，也可按过滤条件回收旧会话。",

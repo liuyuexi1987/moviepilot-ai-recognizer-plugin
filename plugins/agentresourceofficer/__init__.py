@@ -32,6 +32,7 @@ from .services.quark_transfer import QuarkTransferService
 from .agenttool import (
     AssistantCapabilitiesTool,
     AssistantExecuteActionTool,
+    AssistantExecuteActionsTool,
     AssistantHelpTool,
     AssistantPickTool,
     AssistantRouteTool,
@@ -72,7 +73,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.36"
+    plugin_version = "0.1.37"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -217,6 +218,7 @@ class AgentResourceOfficer(_PluginBase):
         return [
             AssistantCapabilitiesTool,
             AssistantExecuteActionTool,
+            AssistantExecuteActionsTool,
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
@@ -683,6 +685,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_action,
                 "methods": ["POST"],
                 "summary": "直接执行统一智能入口返回的动作模板名，适合外部智能体无映射继续执行",
+            },
+            {
+                "path": "/assistant/actions",
+                "endpoint": self.api_assistant_actions,
+                "methods": ["POST"],
+                "summary": "批量执行多个动作模板，适合外部智能体一次请求串起多步工作流，减少往返",
             },
             {
                 "path": "/assistant/session",
@@ -2308,8 +2316,18 @@ class AgentResourceOfficer(_PluginBase):
                     "limit",
                 ],
             },
+            "assistant_actions": {
+                "fields": [
+                    "actions",
+                    "session",
+                    "session_id",
+                    "stop_on_error",
+                    "include_raw_results",
+                ],
+            },
             "session_tools": [
                 "assistant/action",
+                "assistant/actions",
                 "assistant/sessions",
                 "assistant/sessions/clear",
                 "assistant/session",
@@ -2331,6 +2349,7 @@ class AgentResourceOfficer(_PluginBase):
             "agent_tools": [
                 "agent_resource_officer_capabilities",
                 "agent_resource_officer_execute_action",
+                "agent_resource_officer_execute_actions",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
                 "agent_resource_officer_smart_pick",
@@ -2364,6 +2383,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_pick 字段：session / session_id / choice / action / path",
             "smart_pick 动作：detail / next_page",
             "动作执行入口：assistant/action，可直接执行 action_templates 里的 name + body",
+            "批量动作入口：assistant/actions，可一次执行多步 action_body，默认只返回精简执行摘要，减少外部智能体往返和 token 消耗",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
@@ -3156,6 +3176,30 @@ class AgentResourceOfficer(_PluginBase):
             )
         )
         return str(result.get("message") or "动作执行完成")
+
+    async def tool_assistant_execute_actions(
+        self,
+        actions: List[Dict[str, Any]],
+        session: str = "default",
+        session_id: str = "",
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_actions(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "actions": actions or [],
+                    "session": self._clean_text(session) or "default",
+                    "session_id": self._clean_text(session_id),
+                    "stop_on_error": bool(stop_on_error),
+                    "include_raw_results": bool(include_raw_results),
+                },
+            )
+        )
+        return str(result.get("message") or "批量动作执行完成")
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
@@ -4111,6 +4155,124 @@ class AgentResourceOfficer(_PluginBase):
             }))
 
         return {"success": False, "message": f"不支持的动作模板：{name}"}
+
+    @staticmethod
+    def _assistant_result_message_head(value: Any) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        return text.splitlines()[0][:200]
+
+    def _assistant_action_result_summary(
+        self,
+        *,
+        index: int,
+        name: str,
+        result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        data = dict((result or {}).get("data") or {})
+        session_state = dict(data.get("session_state") or {})
+        if not session_state and (
+            "has_session" in data
+            or "kind" in data
+            or "stage" in data
+            or "suggested_actions" in data
+        ):
+            session_state = dict(data)
+        return {
+            "index": index,
+            "name": self._clean_text(name),
+            "success": bool((result or {}).get("success")),
+            "action": self._clean_text(data.get("action")) or self._clean_text(name),
+            "ok": bool(data.get("ok")) if "ok" in data else bool((result or {}).get("success")),
+            "message_head": self._assistant_result_message_head((result or {}).get("message")),
+            "session": self._clean_text(data.get("session") or session_state.get("session")),
+            "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
+            "kind": self._clean_text(session_state.get("kind")),
+            "stage": self._clean_text(session_state.get("stage")),
+            "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
+            "has_pending_p115": bool(((session_state.get("pending_p115") or {}).get("has_pending"))),
+        }
+
+    async def api_assistant_actions(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        actions = body.get("actions") or []
+        if not isinstance(actions, list) or not actions:
+            return {"success": False, "message": "缺少 actions 数组"}
+
+        requested_count = min(len(actions), 20)
+        stop_on_error = bool(body.get("stop_on_error", True))
+        include_raw_results = bool(body.get("include_raw_results", False))
+        batch_session = self._clean_text(body.get("session")) or "default"
+        batch_session_id = self._clean_text(body.get("session_id"))
+
+        summaries: List[Dict[str, Any]] = []
+        raw_results: List[Dict[str, Any]] = []
+        halted = False
+        halted_at = 0
+
+        for idx, item in enumerate(actions[:requested_count], 1):
+            payload = dict(item or {}) if isinstance(item, dict) else {"name": self._clean_text(item)}
+            if not payload.get("session") and batch_session:
+                payload["session"] = batch_session
+            if not payload.get("session_id") and batch_session_id:
+                payload["session_id"] = batch_session_id
+            action_name = self._clean_text(payload.get("name") or payload.get("action_name"))
+            result = await self.api_assistant_action(_JsonRequestShim(request, payload))
+            summaries.append(self._assistant_action_result_summary(index=idx, name=action_name, result=result))
+            if include_raw_results:
+                raw_results.append(result)
+            if not result.get("success") and stop_on_error:
+                halted = True
+                halted_at = idx
+                break
+
+        final_session = batch_session
+        final_session_id = batch_session_id
+        if summaries:
+            final_session = self._clean_text(summaries[-1].get("session")) or final_session
+            final_session_id = self._clean_text(summaries[-1].get("session_id")) or final_session_id
+        session_name, _ = self._normalize_assistant_session_ref(session=final_session, session_id=final_session_id)
+
+        success = bool(summaries) and all(item.get("success") for item in summaries)
+        if halted:
+            success = False
+
+        message_lines = [
+            f"批量动作执行完成：{len(summaries)}/{requested_count} 步",
+            f"成功：{len([item for item in summaries if item.get('success')])} 步",
+        ]
+        if halted:
+            message_lines.append(f"已在第 {halted_at} 步停止")
+        else:
+            message_lines.append("已按顺序执行完毕")
+        if summaries:
+            last_head = self._clean_text(summaries[-1].get("message_head"))
+            if last_head:
+                message_lines.append(f"最后结果：{last_head}")
+
+        data = {
+            "action": "execute_actions",
+            "ok": success,
+            "executed_count": len(summaries),
+            "requested_count": requested_count,
+            "stopped_on_error": halted,
+            "halted_at": halted_at,
+            "results": summaries,
+        }
+        if include_raw_results:
+            data["raw_results"] = raw_results
+        return {
+            "success": success,
+            "message": "\n".join(message_lines),
+            "data": self._assistant_response_data(session=session_name, data=data),
+        }
 
     async def api_assistant_pick(self, request: Request):
         body = await request.json()

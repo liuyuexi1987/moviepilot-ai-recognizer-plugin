@@ -8,6 +8,7 @@ from app.core.plugin import PluginManager
 from .schemas import (
     AssistantCapabilitiesToolInput,
     AssistantExecuteActionToolInput,
+    AssistantExecuteActionsToolInput,
     AssistantHelpToolInput,
     AssistantPickToolInput,
     AssistantRouteToolInput,
@@ -248,6 +249,36 @@ class AssistantExecuteActionTool(MoviePilotTool):
             stale_only=stale_only,
             all_sessions=all_sessions,
             limit=limit,
+        )
+
+
+class AssistantExecuteActionsTool(MoviePilotTool):
+    name: str = "agent_resource_officer_execute_actions"
+    description: str = "Execute a sequence of Agent资源官 action templates in one request, so external agents can reduce round trips and reuse action_templates directly."
+    args_schema: Type[BaseModel] = AssistantExecuteActionsToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        actions = kwargs.get("actions") or []
+        return f"正在批量执行 Agent资源官 动作模板：{len(actions)} 步"
+
+    async def run(
+        self,
+        actions: list,
+        session: str = "default",
+        session_id: str = None,
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_execute_actions(
+            actions=actions,
+            session=session,
+            session_id=session_id,
+            stop_on_error=stop_on_error,
+            include_raw_results=include_raw_results,
         )
 
 

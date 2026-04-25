@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -82,6 +82,14 @@ class AssistantExecuteActionToolInput(BaseModel):
     stale_only: Optional[bool] = Field(default=False, description="批量清理会话时是否只清理过期会话")
     all_sessions: Optional[bool] = Field(default=False, description="批量清理会话时是否清理全部会话")
     limit: Optional[int] = Field(default=100, description="批量清理会话时的最多处理条数")
+
+
+class AssistantExecuteActionsToolInput(BaseModel):
+    actions: List[Dict[str, Any]] = Field(..., description="动作模板执行数组，每项可直接复用 action_templates 里的 action_body")
+    session: Optional[str] = Field(default="default", description="批量动作默认会话名；子动作未显式传 session/session_id 时自动继承")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否立即停止后续执行")
+    include_raw_results: Optional[bool] = Field(default=False, description="是否附带每一步原始返回；默认关闭以减少 token 与负载")
 
 
 class AssistantSessionsToolInput(BaseModel):
