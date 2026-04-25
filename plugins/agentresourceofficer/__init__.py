@@ -76,7 +76,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.40"
+    plugin_version = "0.1.41"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3446,6 +3446,7 @@ class AgentResourceOfficer(_PluginBase):
         media_type: str = "",
         year: str = "",
         client_type: str = "",
+        dry_run: bool = False,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
     ) -> str:
@@ -3468,6 +3469,7 @@ class AgentResourceOfficer(_PluginBase):
                     "media_type": self._clean_text(media_type),
                     "year": self._clean_text(year),
                     "client_type": self._clean_text(client_type),
+                    "dry_run": bool(dry_run),
                     "stop_on_error": bool(stop_on_error),
                     "include_raw_results": bool(include_raw_results),
                 },
@@ -4726,6 +4728,27 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": build_error}
 
         session = self._clean_text(body.get("session")) or "default"
+        if bool(body.get("dry_run")):
+            data = self._assistant_response_data(session=session, data={
+                "action": "workflow_plan",
+                "ok": True,
+                "workflow": workflow_name,
+                "dry_run": True,
+                "workflow_actions": actions,
+                "estimated_steps": len(actions),
+                "ready_to_execute": True,
+                "execute_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "execute_body": {
+                    **{key: value for key, value in body.items() if key not in {"apikey", "dry_run"}},
+                    "dry_run": False,
+                },
+            })
+            return {
+                "success": True,
+                "message": f"工作流 {workflow_name} 计划已生成，共 {len(actions)} 步，未实际执行。",
+                "data": data,
+            }
+
         result = await self.api_assistant_actions(
             _JsonRequestShim(
                 request,

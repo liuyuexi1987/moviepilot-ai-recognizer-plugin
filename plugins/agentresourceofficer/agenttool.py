@@ -338,6 +338,7 @@ class AssistantWorkflowTool(MoviePilotTool):
         media_type: str = None,
         year: str = None,
         client_type: str = None,
+        dry_run: bool = False,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
         **kwargs,
@@ -359,6 +360,7 @@ class AssistantWorkflowTool(MoviePilotTool):
             media_type=media_type,
             year=year,
             client_type=client_type,
+            dry_run=dry_run,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
         )

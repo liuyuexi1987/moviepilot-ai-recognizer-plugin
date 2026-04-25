@@ -116,6 +116,7 @@ class AssistantWorkflowToolInput(BaseModel):
     media_type: Optional[str] = Field(default=None, description="媒体类型，movie 或 tv")
     year: Optional[str] = Field(default=None, description="年份")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
+    dry_run: Optional[bool] = Field(default=False, description="只生成工作流计划，不实际执行")
     stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否停止")
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果")
 
