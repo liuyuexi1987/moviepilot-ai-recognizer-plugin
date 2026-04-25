@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.74",
+    "version": "0.1.75",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.75": "assistant/capabilities 增加 assistant_maintain 字段说明，并把 assistant/maintain 纳入 compact endpoint 和推荐启动链路。",
       "0.1.74": "assistant/selfcheck 新增 maintain endpoint 和 maintain Tool 检查，确保维护入口已正确纳入外部智能体工具清单。",
       "0.1.73": "新增 assistant/maintain 与 agent_resource_officer_maintain，支持 dry-run 查看低风险维护建议，也支持 execute=true 执行过期会话和已执行计划清理。",
       "0.1.72": "assistant/startup.maintenance 增加 stale_sessions、saved_plans_executed 和 recommended_actions，外部智能体可直接判断是否值得做低风险维护清理。",

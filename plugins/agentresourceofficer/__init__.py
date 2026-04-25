@@ -90,7 +90,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.74"
+    plugin_version = "0.1.75"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3566,6 +3566,13 @@ class AgentResourceOfficer(_PluginBase):
                 ],
                 "description": "单入口恢复协议：不传 session 时自动挑选最值得恢复的会话或计划；execute=true 时直接执行推荐动作；compact=true 可返回低 token 回执。",
             },
+            "assistant_maintain": {
+                "fields": [
+                    "execute",
+                    "limit",
+                ],
+                "description": "低风险维护入口：execute=false 只返回建议；execute=true 清理过期会话和已执行计划，不清理待执行计划。",
+            },
             "session_tools": [
                 "assistant/pulse",
                 "assistant/startup",
@@ -3636,6 +3643,7 @@ class AgentResourceOfficer(_PluginBase):
         compact_endpoints = [
             "assistant/capabilities",
             "assistant/startup",
+            "assistant/maintain",
             "assistant/readiness",
             "assistant/recover",
             "assistant/session",
@@ -3660,13 +3668,14 @@ class AgentResourceOfficer(_PluginBase):
             "recommended_start": [
                 "assistant/pulse",
                 "assistant/startup",
+                "assistant/maintain",
                 "assistant/selfcheck",
                 "assistant/toolbox",
                 "assistant/readiness?compact=true",
             ],
             "compact_endpoints": compact_endpoints,
             "agent_tools": data.get("agent_tools") or [],
-            "next_actions": ["assistant_startup", "assistant_readiness", "smart_entry", "assistant_workflow"],
+            "next_actions": ["assistant_startup", "assistant_maintain", "assistant_readiness", "smart_entry", "assistant_workflow"],
         }
 
     def _format_assistant_capabilities_text(self) -> str:
