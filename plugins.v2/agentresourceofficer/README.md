@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.34`
+- 当前版本：`0.1.35`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -343,3 +343,10 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 - 新增 `agent_resource_officer_sessions_clear`
 
 这样外部智能体既可以按 `session_id` 精准恢复指定会话，也可以在需要时按类型、待继续 115 状态、过期状态或全量方式批量清理 assistant 会话。
+
+从 `0.1.35` 开始，`session_state` 和统一回执又新增了：
+
+- `protocol_version`
+- `action_templates`
+
+`action_templates` 会直接给出下一步可调用的 Tool / API / method / body 模板。外部智能体拿到回执后，不必再自己总结“下一步怎么调”，可以直接复用这些结构化模板继续执行。

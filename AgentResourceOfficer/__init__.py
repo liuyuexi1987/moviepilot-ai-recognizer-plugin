@@ -70,7 +70,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.34"
+    plugin_version = "0.1.35"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1677,6 +1677,7 @@ class AgentResourceOfficer(_PluginBase):
             })
         else:
             payload["suggested_actions"] = ["smart_entry", "session_clear"]
+        payload["action_templates"] = self._assistant_action_templates(payload)
         return payload
 
     def _assistant_session_brief_public_data(self, session_id: str, state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1715,6 +1716,173 @@ class AgentResourceOfficer(_PluginBase):
             result["client_type"] = self._clean_text(payload.get("client_type")) or self._p115_client_type
         return result
 
+    @staticmethod
+    def _assistant_action_template(
+        *,
+        name: str,
+        description: str,
+        endpoint: str,
+        body: Dict[str, Any],
+        method: str = "POST",
+        tool: str = "",
+    ) -> Dict[str, Any]:
+        return {
+            "name": name,
+            "description": description,
+            "endpoint": endpoint,
+            "method": method,
+            "tool": tool,
+            "body": body,
+        }
+
+    def _assistant_action_templates(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        session_name = self._clean_text(data.get("session")) or "default"
+        session_id = self._clean_text(data.get("session_id")) or self._assistant_session_id(session_name)
+        base_route = {
+            "session": session_name,
+            "session_id": session_id,
+        }
+        base_pick = {
+            "session": session_name,
+            "session_id": session_id,
+        }
+        base_state = {
+            "session": session_name,
+            "session_id": session_id,
+        }
+        templates: List[Dict[str, Any]] = []
+
+        if not data.get("has_session"):
+            return [
+                self._assistant_action_template(
+                    name="start_pansou_search",
+                    description="发起新的盘搜搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "pansou", "keyword": "<关键词>"},
+                ),
+                self._assistant_action_template(
+                    name="start_hdhive_search",
+                    description="发起新的影巢候选搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "hdhive", "keyword": "<关键词>", "media_type": "movie"},
+                ),
+                self._assistant_action_template(
+                    name="start_115_login",
+                    description="发起新的 115 扫码登录",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "action": "p115_qrcode_start"},
+                ),
+            ]
+
+        kind = self._clean_text(data.get("kind"))
+        stage = self._clean_text(data.get("stage"))
+        pending = dict(data.get("pending_p115") or {})
+        target_path = self._clean_text(data.get("target_path"))
+
+        templates.append(
+            self._assistant_action_template(
+                name="inspect_session_state",
+                description="重新获取当前会话详细状态",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/session",
+                tool="agent_resource_officer_session_state",
+                body=base_state,
+            )
+        )
+
+        if kind == "assistant_pansou":
+            templates.append(
+                self._assistant_action_template(
+                    name="pick_pansou_result",
+                    description="按编号选择盘搜结果继续转存",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "path": target_path or self._p115_default_path},
+                )
+            )
+        elif kind == "assistant_hdhive" and stage == "candidate":
+            templates.extend([
+                self._assistant_action_template(
+                    name="pick_hdhive_candidate",
+                    description="按编号选择影巢候选影片进入资源列表",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "path": target_path or self._hdhive_default_path},
+                ),
+                self._assistant_action_template(
+                    name="candidate_detail",
+                    description="补充当前候选页详情，例如主演",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "action": "detail"},
+                ),
+                self._assistant_action_template(
+                    name="candidate_next_page",
+                    description="翻到候选下一页",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "action": "next_page"},
+                ),
+            ])
+        elif kind == "assistant_hdhive" and stage == "resource":
+            templates.append(
+                self._assistant_action_template(
+                    name="pick_hdhive_resource",
+                    description="按编号选择影巢资源，解锁并路由到对应网盘",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "path": target_path or self._hdhive_default_path},
+                )
+            )
+        elif kind == "assistant_p115_login":
+            templates.extend([
+                self._assistant_action_template(
+                    name="check_115_login",
+                    description="检查 115 扫码是否已确认，并在成功后自动继续待任务",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "action": "p115_qrcode_check"},
+                ),
+                self._assistant_action_template(
+                    name="show_115_status",
+                    description="查看当前 115 状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "action": "p115_status"},
+                ),
+            ])
+
+        if pending.get("has_pending"):
+            templates.extend([
+                self._assistant_action_template(
+                    name="resume_pending_115",
+                    description="继续当前会话里待处理的 115 任务",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "action": "p115_resume"},
+                ),
+                self._assistant_action_template(
+                    name="cancel_pending_115",
+                    description="取消当前会话里待处理的 115 任务",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "action": "p115_cancel"},
+                ),
+            ])
+
+        templates.append(
+            self._assistant_action_template(
+                name="clear_current_session",
+                description="清理当前会话缓存",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/session/clear",
+                tool="agent_resource_officer_session_clear",
+                body=base_state,
+            )
+        )
+        return templates
+
     def _assistant_sessions_public_data(
         self,
         *,
@@ -1746,6 +1914,22 @@ class AgentResourceOfficer(_PluginBase):
                 "kind": kind_filter,
                 "has_pending_p115": has_pending_p115,
             },
+            "action_templates": [
+                self._assistant_action_template(
+                    name="inspect_session",
+                    description="查看某个会话的详细状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/session",
+                    tool="agent_resource_officer_session_state",
+                    body={"session_id": "<assistant::session_id>"},
+                ),
+                self._assistant_action_template(
+                    name="clear_session_by_id",
+                    description="按 session_id 清理单个会话",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear",
+                    tool="agent_resource_officer_sessions_clear",
+                    body={"session_id": "<assistant::session_id>"},
+                ),
+            ],
         }
 
     def _format_assistant_sessions_text(
@@ -2080,14 +2264,16 @@ class AgentResourceOfficer(_PluginBase):
             ],
             "response_envelope": {
                 "fields": [
+                    "protocol_version",
                     "action",
                     "ok",
                     "session",
                     "session_id",
                     "session_state",
                     "next_actions",
+                    "action_templates",
                 ],
-                "description": "assistant/route 与 assistant/pick 返回的 data 中会统一附带当前会话状态和建议下一步动作，上层智能体可直接按结构化字段继续编排。",
+                "description": "assistant/route 与 assistant/pick 返回的 data 中会统一附带当前会话状态、建议下一步动作与可直接调用的动作模板，上层智能体可直接按结构化字段继续编排。",
             },
             "agent_tools": [
                 "agent_resource_officer_capabilities",
@@ -2123,7 +2309,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
             "smart_pick 字段：session / session_id / choice / action / path",
             "smart_pick 动作：detail / next_page",
-            "统一回执字段：action / ok / session / session_id / session_state / next_actions",
+            "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
 
@@ -2136,10 +2322,12 @@ class AgentResourceOfficer(_PluginBase):
         payload = dict(data or {})
         session_name = self._clean_text(session) or "default"
         session_state = self._assistant_session_public_data(session=session_name)
+        payload["protocol_version"] = "assistant.v1"
         payload["session"] = session_name
         payload["session_id"] = session_state.get("session_id") or self._assistant_session_id(session_name)
         payload["session_state"] = session_state
         payload["next_actions"] = session_state.get("suggested_actions") or []
+        payload["action_templates"] = session_state.get("action_templates") or []
         return payload
 
     def _merge_assistant_structured_input(self, body: Dict[str, Any], parsed: Dict[str, str]) -> Dict[str, str]:
