@@ -11,6 +11,7 @@ from .schemas import (
     AssistantExecuteActionsToolInput,
     AssistantHelpToolInput,
     AssistantPickToolInput,
+    AssistantReadinessToolInput,
     AssistantRouteToolInput,
     AssistantSessionClearToolInput,
     AssistantSessionsClearToolInput,
@@ -200,6 +201,21 @@ class AssistantCapabilitiesTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_capabilities()
+
+
+class AssistantReadinessTool(MoviePilotTool):
+    name: str = "agent_resource_officer_readiness"
+    description: str = "Check whether Agent资源官 is ready for external agents, including version, services, suggested entrypoints, and startup warnings."
+    args_schema: Type[BaseModel] = AssistantReadinessToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在检查 Agent资源官 启动就绪状态"
+
+    async def run(self, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_readiness()
 
 
 class AssistantExecuteActionTool(MoviePilotTool):

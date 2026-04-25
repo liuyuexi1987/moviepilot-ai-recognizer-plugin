@@ -65,6 +65,10 @@ class AssistantCapabilitiesToolInput(BaseModel):
     pass
 
 
+class AssistantReadinessToolInput(BaseModel):
+    pass
+
+
 class AssistantExecuteActionToolInput(BaseModel):
     name: str = Field(..., description="要执行的动作模板名，例如 pick_pansou_result / candidate_next_page / resume_pending_115")
     session: Optional[str] = Field(default="default", description="可选会话名")

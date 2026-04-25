@@ -35,6 +35,7 @@ from .agenttool import (
     AssistantExecuteActionsTool,
     AssistantHelpTool,
     AssistantPickTool,
+    AssistantReadinessTool,
     AssistantRouteTool,
     AssistantSessionClearTool,
     AssistantSessionsClearTool,
@@ -74,7 +75,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.38"
+    plugin_version = "0.1.39"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -220,6 +221,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantCapabilitiesTool,
             AssistantExecuteActionTool,
             AssistantExecuteActionsTool,
+            AssistantReadinessTool,
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
@@ -681,6 +683,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_capabilities,
                 "methods": ["GET"],
                 "summary": "查看统一智能入口支持的结构化参数、默认值与推荐调用方式",
+            },
+            {
+                "path": "/assistant/readiness",
+                "endpoint": self.api_assistant_readiness,
+                "methods": ["GET"],
+                "summary": "检查 Agent资源官 是否已准备好给外部智能体调用",
             },
             {
                 "path": "/assistant/action",
@@ -2335,6 +2343,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "assistant_workflow": self._assistant_workflow_catalog(),
             "session_tools": [
+                "assistant/readiness",
                 "assistant/action",
                 "assistant/actions",
                 "assistant/workflow",
@@ -2358,6 +2367,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "agent_tools": [
                 "agent_resource_officer_capabilities",
+                "agent_resource_officer_readiness",
                 "agent_resource_officer_execute_action",
                 "agent_resource_officer_execute_actions",
                 "agent_resource_officer_run_workflow",
@@ -2388,6 +2398,7 @@ class AgentResourceOfficer(_PluginBase):
             f"- 115：{defaults.get('p115_path')}",
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
+            "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
             "smart_entry 结构化模式：pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
@@ -2398,6 +2409,88 @@ class AgentResourceOfficer(_PluginBase):
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
+        return "\n".join(lines)
+
+    def _assistant_readiness_public_data(self) -> Dict[str, Any]:
+        p115_status = self._p115_status_snapshot()
+        sessions = self._assistant_sessions_public_data(limit=10)
+        warnings: List[str] = []
+        if not self._enabled:
+            warnings.append("插件未启用")
+        if not self._hdhive_api_key:
+            warnings.append("影巢 API Key 未配置，影巢相关工作流不可用")
+        if not p115_status.get("ready"):
+            warnings.append("115 当前不可用，需要先扫码或修复执行层")
+        if not self._quark_cookie:
+            warnings.append("夸克 Cookie 未配置，夸克转存可能需要先刷新")
+
+        ready_for_external_agent = bool(self._enabled)
+        return {
+            "version": self.plugin_version,
+            "enabled": self._enabled,
+            "ready_for_external_agent": ready_for_external_agent,
+            "can_start": ready_for_external_agent,
+            "services": {
+                "p115": p115_status,
+                "hdhive": {
+                    "configured": bool(self._hdhive_api_key),
+                    "base_url": self._hdhive_base_url,
+                    "default_path": self._hdhive_default_path,
+                },
+                "quark": {
+                    "configured": bool(self._quark_cookie),
+                    "default_path": self._quark_default_path,
+                    "auto_import_cookiecloud": self._quark_auto_import_cookiecloud,
+                },
+            },
+            "active_sessions": {
+                "total": sessions.get("total") or 0,
+                "preview": sessions.get("items") or [],
+            },
+            "recommended_entrypoints": [
+                "GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness",
+                "GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities",
+                "POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "POST /api/v1/plugin/AgentResourceOfficer/assistant/actions",
+                "POST /api/v1/plugin/AgentResourceOfficer/assistant/route",
+            ],
+            "recommended_tools": [
+                "agent_resource_officer_readiness",
+                "agent_resource_officer_run_workflow",
+                "agent_resource_officer_execute_actions",
+                "agent_resource_officer_smart_entry",
+            ],
+            "warnings": warnings,
+            "suggested_first_call": {
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "body": {
+                    "name": "pansou_search",
+                    "session": "external-agent-demo",
+                    "keyword": "片名",
+                },
+            },
+        }
+
+    def _format_assistant_readiness_text(self) -> str:
+        data = self._assistant_readiness_public_data()
+        services = data.get("services") or {}
+        p115 = services.get("p115") or {}
+        hdhive = services.get("hdhive") or {}
+        quark = services.get("quark") or {}
+        lines = [
+            "Agent资源官 启动就绪",
+            f"版本：{data.get('version')}",
+            f"插件：{'已启用' if data.get('enabled') else '未启用'}",
+            f"外部智能体：{'可以启动' if data.get('can_start') else '暂不可启动'}",
+            f"115：{'可用' if p115.get('ready') else '不可用'}",
+            f"影巢：{'已配置' if hdhive.get('configured') else '未配置'}",
+            f"夸克：{'已配置' if quark.get('configured') else '未配置'}",
+            f"活跃会话：{(data.get('active_sessions') or {}).get('total') or 0}",
+            "推荐入口：assistant/workflow 或 assistant/actions",
+        ]
+        warnings = data.get("warnings") or []
+        if warnings:
+            lines.append("提示：" + "；".join(str(item) for item in warnings if item))
         return "\n".join(lines)
 
     def _assistant_response_data(
@@ -3142,6 +3235,11 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_capabilities_text()
+
+    async def tool_assistant_readiness(self) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_readiness_text()
 
     async def tool_assistant_execute_action(
         self,
@@ -4736,6 +4834,21 @@ class AgentResourceOfficer(_PluginBase):
             "success": True,
             "message": self._format_assistant_capabilities_text(),
             "data": self._assistant_response_data(session="default", data=self._assistant_capabilities_public_data()),
+        }
+
+    async def api_assistant_readiness(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        data = self._assistant_readiness_public_data()
+        return {
+            "success": bool(data.get("can_start")),
+            "message": self._format_assistant_readiness_text(),
+            "data": self._assistant_response_data(session="default", data={
+                "action": "readiness",
+                "ok": bool(data.get("can_start")),
+                **data,
+            }),
         }
 
     async def api_assistant_session_state(self, request: Request):

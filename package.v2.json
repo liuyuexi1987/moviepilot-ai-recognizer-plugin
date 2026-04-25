@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.38",
+    "version": "0.1.39",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.39": "新增 assistant/readiness 与 readiness Tool，外部智能体可先检查版本、服务状态、活跃会话、推荐入口和启动提示，再决定是否开始执行。",
       "0.1.38": "新增 assistant/workflow 与 run_workflow Tool，外部智能体可用预设工作流短参数完成盘搜、影巢、直链和 115 状态等常见任务。",
       "0.1.37": "新增 assistant/actions 与 execute_actions Tool，外部智能体可一次提交多个 action_body 顺序执行，默认仅返回精简执行摘要，进一步减少往返和 token 消耗。",
       "0.1.36": "新增 assistant/action 与 execute_action Tool，外部智能体可直接执行 action_templates 返回的动作模板名，不必自己做动作到接口的映射。",

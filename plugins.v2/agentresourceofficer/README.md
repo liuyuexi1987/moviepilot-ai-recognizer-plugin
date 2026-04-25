@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.38`
+- 当前版本：`0.1.39`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -113,6 +113,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/route`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/pick`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
+- `GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/action`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/actions`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
@@ -133,6 +134,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_smart_pick`
 - `agent_resource_officer_help`
 - `agent_resource_officer_capabilities`
+- `agent_resource_officer_readiness`
 - `agent_resource_officer_execute_action`
 - `agent_resource_officer_execute_actions`
 - `agent_resource_officer_run_workflow`
@@ -421,3 +423,10 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow
   "apikey": "你的 MP API Token"
 }
 ```
+
+从 `0.1.39` 开始，还新增了：
+
+- `GET /assistant/readiness`
+- `agent_resource_officer_readiness`
+
+这个接口是给外部智能体启动前使用的轻量探针，会返回插件版本、是否启用、115/影巢/夸克状态、活跃会话数量、推荐入口和启动提示。外部智能体可以先调它，看到 `can_start=true` 后再进入 `assistant/workflow` 或 `assistant/actions`。
