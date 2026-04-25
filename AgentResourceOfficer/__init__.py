@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.61"
+    plugin_version = "0.1.62"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -302,6 +302,11 @@ class AgentResourceOfficer(_PluginBase):
         if text in {"0", "false", "no", "n", "off"}:
             return False
         return None
+
+    @classmethod
+    def _parse_bool_value(cls, value: Any, default: bool = False) -> bool:
+        parsed = cls._parse_optional_bool(value)
+        return bool(default) if parsed is None else bool(parsed)
 
     @staticmethod
     def _normalize_path(value: Any) -> str:
@@ -5524,7 +5529,7 @@ class AgentResourceOfficer(_PluginBase):
         parsed = self._merge_assistant_structured_input(body, self._parse_assistant_text(text))
         state = self._load_session(cache_key) or {}
         target_path = parsed.get("path") or ""
-        compact = bool(body.get("compact", False))
+        compact = self._parse_bool_value(body.get("compact"), False)
 
         def finish(result: Dict[str, Any]) -> Dict[str, Any]:
             return self._assistant_interaction_compact_response(result) if compact else result
@@ -5920,7 +5925,7 @@ class AgentResourceOfficer(_PluginBase):
         name = self._clean_text(body.get("name") or body.get("action_name"))
         if not name:
             return {"success": False, "message": "缺少动作名 name"}
-        compact = bool(body.get("compact", False))
+        compact = self._parse_bool_value(body.get("compact"), False)
 
         async def finish(awaitable):
             result = await awaitable
@@ -6076,7 +6081,7 @@ class AgentResourceOfficer(_PluginBase):
         requested_count = min(len(actions), 20)
         stop_on_error = bool(body.get("stop_on_error", True))
         include_raw_results = bool(body.get("include_raw_results", False))
-        compact = bool(body.get("compact", False))
+        compact = self._parse_bool_value(body.get("compact"), False)
         batch_session = self._clean_text(body.get("session")) or "default"
         batch_session_id = self._clean_text(body.get("session_id"))
 
@@ -6310,7 +6315,7 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": "插件未启用"}
 
         workflow_name = self._clean_text(body.get("name") or body.get("workflow"))
-        compact = bool(body.get("compact", False))
+        compact = self._parse_bool_value(body.get("compact"), False)
         if not workflow_name:
             return {"success": False, "message": "缺少工作流名 name"}
         actions, build_error = self._assistant_workflow_actions(workflow_name, body)
@@ -6389,7 +6394,7 @@ class AgentResourceOfficer(_PluginBase):
         session = self._clean_text(body.get("session"))
         session_id = self._clean_text(body.get("session_id"))
         prefer_unexecuted = bool(body.get("prefer_unexecuted", True))
-        compact = bool(body.get("compact", False))
+        compact = self._parse_bool_value(body.get("compact"), False)
         plan = self._find_workflow_plan(
             plan_id=plan_id,
             session=session,
@@ -6488,7 +6493,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         action = self._normalize_pick_action(body.get("action") or body.get("pick_action"))
         target_path = self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path")))
-        compact = bool(body.get("compact", False))
+        compact = self._parse_bool_value(body.get("compact"), False)
 
         def finish(result: Dict[str, Any]) -> Dict[str, Any]:
             return self._assistant_interaction_compact_response(result) if compact else result

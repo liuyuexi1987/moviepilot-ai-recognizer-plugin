@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.61`
+- 当前版本：`0.1.62`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -362,6 +362,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 
 `action_templates` 会直接给出下一步可调用的 Tool / API / method / body 模板。外部智能体拿到回执后，不必再自己总结“下一步怎么调”，可以直接复用这些结构化模板继续执行。
 从 `0.1.61` 开始，支持低 token 的 assistant 模板会自动在 `body` 和 `action_body` 中带上 `compact=true`，外部智能体原样回放即可得到精简回执。
+从 `0.1.62` 开始，POST JSON 里的 `compact` 也会按布尔语义解析，`"false"`、`"0"`、`"off"` 不会再被误判为开启。
 
 从 `0.1.36` 开始，还新增了：
 
