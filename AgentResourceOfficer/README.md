@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.44`
+- 当前版本：`0.1.45`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -505,3 +505,9 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/plan/execute?apikey=你的MP_
   "session": "demo-plan"
 }
 ```
+
+从 `0.1.45` 开始，计划恢复动作会直接进入结构化回执：
+
+- `assistant/session` 的 `session_state.saved_plan` 会显示当前会话最近计划
+- 若存在待执行计划，`action_templates` 会包含 `execute_latest_plan`
+- `assistant/readiness` 的 `saved_plans.action_templates` 会列出最近待执行计划的直接执行模板

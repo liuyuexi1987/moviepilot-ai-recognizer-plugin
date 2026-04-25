@@ -84,7 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.44"
+    plugin_version = "0.1.45"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1579,6 +1579,21 @@ class AgentResourceOfficer(_PluginBase):
             item["execute_body"] = dict(current.get("execute_body") or {})
         return item
 
+    def _session_workflow_plan_public_data(self, *, session: str = "", session_id: str = "") -> Dict[str, Any]:
+        pending = self._find_workflow_plan(session=session, session_id=session_id, executed=False)
+        latest = pending or self._find_workflow_plan(session=session, session_id=session_id, executed=None)
+        if not latest:
+            return {
+                "has_plan": False,
+                "has_pending": False,
+                "latest": None,
+            }
+        return {
+            "has_plan": True,
+            "has_pending": bool(pending),
+            "latest": self._workflow_plan_public_item(latest, include_actions=False),
+        }
+
     def _assistant_plans_public_data(
         self,
         *,
@@ -2007,14 +2022,18 @@ class AgentResourceOfficer(_PluginBase):
     def _assistant_session_public_data(self, session: str = "default") -> Dict[str, Any]:
         session_name = self._clean_text(session) or "default"
         session_id = self._assistant_session_id(session_name)
+        saved_plan = self._session_workflow_plan_public_data(session=session_name, session_id=session_id)
         state = self._load_session(session_id) or {}
         if not state:
-            return {
+            payload = {
                 "has_session": False,
                 "session": session_name,
                 "session_id": session_id,
-                "suggested_actions": ["smart_entry"],
+                "saved_plan": saved_plan,
+                "suggested_actions": ["execute_plan.session", "smart_entry"] if saved_plan.get("has_pending") else ["smart_entry"],
             }
+            payload["action_templates"] = self._assistant_action_templates(payload)
+            return payload
 
         kind = self._clean_text(state.get("kind"))
         stage = self._clean_text(state.get("stage"))
@@ -2032,6 +2051,7 @@ class AgentResourceOfficer(_PluginBase):
             "media_type": self._clean_text(state.get("media_type")),
             "year": self._clean_text(state.get("year")),
             "pending_p115": self._pending_p115_public_data(state),
+            "saved_plan": saved_plan,
             "suggested_actions": [],
         }
 
@@ -2114,6 +2134,8 @@ class AgentResourceOfficer(_PluginBase):
             })
         else:
             payload["suggested_actions"] = ["smart_entry", "session_clear"]
+        if saved_plan.get("has_pending"):
+            payload["suggested_actions"] = ["execute_plan.session", *list(payload.get("suggested_actions") or [])]
         payload["action_templates"] = self._assistant_action_templates(payload)
         return payload
 
@@ -2180,6 +2202,8 @@ class AgentResourceOfficer(_PluginBase):
             "stale_only",
             "all_sessions",
             "limit",
+            "plan_id",
+            "prefer_unexecuted",
         ]:
             if key in body:
                 action_body[key] = body.get(key)
@@ -2213,7 +2237,19 @@ class AgentResourceOfficer(_PluginBase):
         templates: List[Dict[str, Any]] = []
 
         if not data.get("has_session"):
-            return [
+            templates = []
+            saved_plan = dict(data.get("saved_plan") or {})
+            if saved_plan.get("has_pending"):
+                templates.append(
+                    self._assistant_action_template(
+                        name="execute_latest_plan",
+                        description="执行当前会话最近一条待执行计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                        tool="agent_resource_officer_execute_plan",
+                        body={**base_state, "prefer_unexecuted": True},
+                    )
+                )
+            templates.extend([
                 self._assistant_action_template(
                     name="start_pansou_search",
                     description="发起新的盘搜搜索",
@@ -2235,12 +2271,25 @@ class AgentResourceOfficer(_PluginBase):
                     tool="agent_resource_officer_smart_entry",
                     body={**base_route, "action": "p115_qrcode_start"},
                 ),
-            ]
+            ])
+            return templates
 
         kind = self._clean_text(data.get("kind"))
         stage = self._clean_text(data.get("stage"))
         pending = dict(data.get("pending_p115") or {})
+        saved_plan = dict(data.get("saved_plan") or {})
         target_path = self._clean_text(data.get("target_path"))
+
+        if saved_plan.get("has_pending"):
+            templates.append(
+                self._assistant_action_template(
+                    name="execute_latest_plan",
+                    description="执行当前会话最近一条待执行计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                    tool="agent_resource_officer_execute_plan",
+                    body={**base_state, "prefer_unexecuted": True},
+                )
+            )
 
         templates.append(
             self._assistant_action_template(
@@ -2870,6 +2919,22 @@ class AgentResourceOfficer(_PluginBase):
 
         ready_for_external_agent = bool(self._enabled)
         pending_plans = self._assistant_plans_public_data(executed=False, limit=5)
+        pending_plan_templates = [
+            self._assistant_action_template(
+                name="execute_plan",
+                description="执行待处理计划",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                tool="agent_resource_officer_execute_plan",
+                body={
+                    "plan_id": item.get("plan_id"),
+                    "session": item.get("session"),
+                    "session_id": item.get("session_id"),
+                    "prefer_unexecuted": True,
+                },
+            )
+            for item in (pending_plans.get("items") or [])
+            if isinstance(item, dict) and self._clean_text(item.get("plan_id"))
+        ]
         return {
             "version": self.plugin_version,
             "enabled": self._enabled,
@@ -2896,6 +2961,7 @@ class AgentResourceOfficer(_PluginBase):
                 "total": len(self._workflow_plans or {}),
                 "pending": len(pending_plans.get("items") or []),
                 "pending_preview": pending_plans.get("items") or [],
+                "action_templates": pending_plan_templates,
             },
             "recommended_entrypoints": [
                 "GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness",

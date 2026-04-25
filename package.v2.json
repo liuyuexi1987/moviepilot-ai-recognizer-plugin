@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.44",
+    "version": "0.1.45",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.45": "session_state 与 readiness 新增计划恢复动作模板，外部智能体可直接复用 execute_latest_plan 执行待处理计划。",
       "0.1.44": "assistant/plan/execute 现可按 session/session_id 自动恢复并执行最近计划，进一步减少外部智能体对 plan_id 的依赖。",
       "0.1.43": "新增 assistant/plans 与 assistant/plans/clear 计划管理入口，外部智能体可查询、恢复和清理 dry_run 保存计划。",
       "0.1.42": "dry_run 工作流计划新增 plan_id 持久化与 assistant/plan/execute 执行入口，外部智能体可先生成计划再按 plan_id 执行。",
