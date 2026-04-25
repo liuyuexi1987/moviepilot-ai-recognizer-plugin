@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.57"
+    plugin_version = "0.1.58"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3350,6 +3350,14 @@ class AgentResourceOfficer(_PluginBase):
                 "fields": ["session", "session_id", "compact"],
                 "description": "compact=true 时返回低 token 会话快照，不嵌套完整 session_state。",
             },
+            "assistant_capabilities": {
+                "fields": ["compact"],
+                "description": "compact=true 时返回低 token 能力清单，不嵌套完整 session_state。",
+            },
+            "assistant_readiness": {
+                "fields": ["compact"],
+                "description": "compact=true 时返回低 token 就绪状态，不嵌套完整 session_state。",
+            },
             "assistant_sessions": {
                 "fields": ["kind", "has_pending_p115", "compact", "limit"],
                 "description": "compact=true 时返回低 token 会话列表，不嵌套 default session_state。",
@@ -3491,6 +3499,43 @@ class AgentResourceOfficer(_PluginBase):
             ],
         }
 
+    def _assistant_capabilities_compact_data(self, capabilities_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(capabilities_data or {})
+        workflow_catalog = dict(data.get("assistant_workflow") or {})
+        workflows = [
+            self._clean_text(item.get("name"))
+            for item in workflow_catalog.get("workflows") or []
+            if isinstance(item, dict) and self._clean_text(item.get("name"))
+        ]
+        compact_endpoints = [
+            "assistant/capabilities",
+            "assistant/readiness",
+            "assistant/recover",
+            "assistant/session",
+            "assistant/sessions",
+            "assistant/history",
+            "assistant/actions",
+            "assistant/workflow",
+            "assistant/plan/execute",
+            "assistant/plans",
+        ]
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "capabilities",
+            "ok": True,
+            "compact": True,
+            "version": data.get("version"),
+            "defaults": data.get("defaults") or {},
+            "smart_entry_modes": (data.get("smart_entry") or {}).get("modes") or [],
+            "smart_entry_actions": (data.get("smart_entry") or {}).get("actions") or [],
+            "smart_pick_actions": (data.get("smart_pick") or {}).get("actions") or [],
+            "workflows": workflows,
+            "recommended_start": ["assistant/pulse", "assistant/toolbox", "assistant/readiness?compact=true"],
+            "compact_endpoints": compact_endpoints,
+            "agent_tools": data.get("agent_tools") or [],
+            "next_actions": ["assistant_readiness", "smart_entry", "assistant_workflow"],
+        }
+
     def _format_assistant_capabilities_text(self) -> str:
         data = self._assistant_capabilities_public_data()
         defaults = data.get("defaults") or {}
@@ -3510,7 +3555,7 @@ class AgentResourceOfficer(_PluginBase):
             f"- 115 客户端：{defaults.get('p115_client_type')}",
             "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
             "轻量工具清单：assistant/toolbox，返回推荐工具、端点、工作流和命令示例，适合外部智能体初始化系统提示",
-            "完整启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用",
+            "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用；compact=true 可减少嵌套回执",
             "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要；compact=true 可减少嵌套回执",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
             "smart_entry 结构化模式：pansou / hdhive",
@@ -3635,6 +3680,50 @@ class AgentResourceOfficer(_PluginBase):
                     "keyword": "片名",
                 },
             },
+        }
+
+    def _assistant_readiness_compact_data(self, readiness_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(readiness_data or {})
+        services = dict(data.get("services") or {})
+        p115 = dict(services.get("p115") or {})
+        hdhive = dict(services.get("hdhive") or {})
+        quark = dict(services.get("quark") or {})
+        recovery = dict(data.get("recovery") or {})
+        saved_plans = dict(data.get("saved_plans") or {})
+        template = recovery.get("action_template") if isinstance(recovery.get("action_template"), dict) else None
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "readiness",
+            "ok": bool(data.get("can_start")),
+            "compact": True,
+            "version": data.get("version"),
+            "enabled": bool(data.get("enabled")),
+            "can_start": bool(data.get("can_start")),
+            "services": {
+                "p115_ready": bool(p115.get("ready")),
+                "hdhive_configured": bool(hdhive.get("configured")),
+                "quark_configured": bool(quark.get("configured")),
+            },
+            "active_sessions_total": (data.get("active_sessions") or {}).get("total") or 0,
+            "saved_plans_total": saved_plans.get("total") or 0,
+            "saved_plans_pending": saved_plans.get("pending") or 0,
+            "recovery": {
+                "mode": self._clean_text(recovery.get("mode")),
+                "can_resume": bool(recovery.get("can_resume")),
+                "recommended_action": self._clean_text(recovery.get("recommended_action")),
+                "recommended_tool": self._clean_text(recovery.get("recommended_tool")),
+                "reason": self._clean_text(recovery.get("reason")),
+            },
+            "warnings": data.get("warnings") or [],
+            "next_actions": [
+                item for item in [
+                    recovery.get("recommended_action") if recovery.get("can_resume") else "",
+                    "assistant_workflow",
+                    "smart_entry",
+                ]
+                if item
+            ],
+            "action_templates": [template] if template else [],
         }
 
     def _format_assistant_readiness_text(self) -> str:
@@ -4553,14 +4642,31 @@ class AgentResourceOfficer(_PluginBase):
         session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
         return self._format_assistant_help_text(session=session_name)
 
-    async def tool_assistant_capabilities(self) -> str:
+    async def tool_assistant_capabilities(self, compact: bool = True) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
+        if compact:
+            data = self._assistant_capabilities_compact_data(self._assistant_capabilities_public_data())
+            return (
+                f"Agent资源官：{data.get('version')}；"
+                f"工作流 {len(data.get('workflows') or [])} 个；"
+                f"Tool {len(data.get('agent_tools') or [])} 个"
+            )
         return self._format_assistant_capabilities_text()
 
-    async def tool_assistant_readiness(self) -> str:
+    async def tool_assistant_readiness(self, compact: bool = True) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
+        if compact:
+            data = self._assistant_readiness_compact_data(self._assistant_readiness_public_data())
+            services = data.get("services") or {}
+            return (
+                f"就绪：{'是' if data.get('can_start') else '否'}；"
+                f"115：{'可用' if services.get('p115_ready') else '不可用'}；"
+                f"影巢：{'已配' if services.get('hdhive_configured') else '未配'}；"
+                f"夸克：{'已配' if services.get('quark_configured') else '未配'}；"
+                f"待计划：{data.get('saved_plans_pending') or 0}"
+            )
         return self._format_assistant_readiness_text()
 
     async def tool_assistant_pulse(self) -> str:
@@ -6465,25 +6571,35 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
+        compact = bool(self._parse_optional_bool(request.query_params.get("compact")) or False)
+        data = self._assistant_capabilities_public_data()
         return {
             "success": True,
             "message": self._format_assistant_capabilities_text(),
-            "data": self._assistant_response_data(session="default", data=self._assistant_capabilities_public_data()),
+            "data": self._assistant_capabilities_compact_data(data) if compact else self._assistant_response_data(
+                session="default",
+                data=data,
+            ),
         }
 
     async def api_assistant_readiness(self, request: Request):
         ok, message = self._check_api_access(request)
         if not ok:
             return {"success": False, "message": message}
+        compact = bool(self._parse_optional_bool(request.query_params.get("compact")) or False)
         data = self._assistant_readiness_public_data()
+        response_data = {
+            "action": "readiness",
+            "ok": bool(data.get("can_start")),
+            **data,
+        }
         return {
             "success": bool(data.get("can_start")),
             "message": self._format_assistant_readiness_text(),
-            "data": self._assistant_response_data(session="default", data={
-                "action": "readiness",
-                "ok": bool(data.get("can_start")),
-                **data,
-            }),
+            "data": self._assistant_readiness_compact_data(response_data) if compact else self._assistant_response_data(
+                session="default",
+                data=response_data,
+            ),
         }
 
     async def api_assistant_pulse(self, request: Request):

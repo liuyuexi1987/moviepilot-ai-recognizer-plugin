@@ -203,11 +203,11 @@ class AssistantCapabilitiesTool(MoviePilotTool):
     def get_tool_message(self, **kwargs) -> Optional[str]:
         return "正在查看 Agent资源官 能力说明"
 
-    async def run(self, **kwargs) -> str:
+    async def run(self, compact: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_capabilities()
+        return await plugin.tool_assistant_capabilities(compact=compact)
 
 
 class AssistantReadinessTool(MoviePilotTool):
@@ -218,11 +218,11 @@ class AssistantReadinessTool(MoviePilotTool):
     def get_tool_message(self, **kwargs) -> Optional[str]:
         return "正在检查 Agent资源官 启动就绪状态"
 
-    async def run(self, **kwargs) -> str:
+    async def run(self, compact: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_readiness()
+        return await plugin.tool_assistant_readiness(compact=compact)
 
 
 class AssistantPulseTool(MoviePilotTool):
