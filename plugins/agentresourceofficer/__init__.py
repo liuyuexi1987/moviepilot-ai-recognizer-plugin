@@ -84,7 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.43"
+    plugin_version = "0.1.44"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1524,6 +1524,39 @@ class AgentResourceOfficer(_PluginBase):
         plan = (self._workflow_plans or {}).get(self._clean_text(plan_id))
         return dict(plan) if isinstance(plan, dict) else None
 
+    def _find_workflow_plan(
+        self,
+        *,
+        plan_id: str = "",
+        session: str = "",
+        session_id: str = "",
+        executed: Optional[bool] = None,
+    ) -> Optional[Dict[str, Any]]:
+        clean_plan_id = self._clean_text(plan_id)
+        if clean_plan_id:
+            return self._load_workflow_plan(clean_plan_id)
+        session_filter = ""
+        session_id_filter = ""
+        if self._clean_text(session) or self._clean_text(session_id):
+            session_filter, session_id_filter = self._normalize_assistant_session_ref(
+                session=session,
+                session_id=session_id,
+            )
+        if not session_id_filter:
+            return None
+        plans = sorted(
+            (dict(item) for item in (self._workflow_plans or {}).values() if isinstance(item, dict)),
+            key=lambda item: self._safe_int(item.get("created_at"), 0),
+            reverse=True,
+        )
+        for plan in plans:
+            if self._clean_text(plan.get("session_id")) != session_id_filter:
+                continue
+            if executed is not None and bool(plan.get("executed")) != bool(executed):
+                continue
+            return dict(plan)
+        return None
+
     def _workflow_plan_public_item(self, plan: Dict[str, Any], *, include_actions: bool = False) -> Dict[str, Any]:
         current = dict(plan or {})
         actions = current.get("actions") or []
@@ -2716,6 +2749,9 @@ class AgentResourceOfficer(_PluginBase):
             "assistant_plan_execute": {
                 "fields": [
                     "plan_id",
+                    "session",
+                    "session_id",
+                    "prefer_unexecuted",
                     "stop_on_error",
                     "include_raw_results",
                 ],
@@ -2833,6 +2869,7 @@ class AgentResourceOfficer(_PluginBase):
             warnings.append("夸克 Cookie 未配置，夸克转存可能需要先刷新")
 
         ready_for_external_agent = bool(self._enabled)
+        pending_plans = self._assistant_plans_public_data(executed=False, limit=5)
         return {
             "version": self.plugin_version,
             "enabled": self._enabled,
@@ -2855,17 +2892,24 @@ class AgentResourceOfficer(_PluginBase):
                 "total": sessions.get("total") or 0,
                 "preview": sessions.get("items") or [],
             },
+            "saved_plans": {
+                "total": len(self._workflow_plans or {}),
+                "pending": len(pending_plans.get("items") or []),
+                "pending_preview": pending_plans.get("items") or [],
+            },
             "recommended_entrypoints": [
                 "GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness",
                 "GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities",
                 "POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow",
                 "POST /api/v1/plugin/AgentResourceOfficer/assistant/actions",
+                "POST /api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
                 "POST /api/v1/plugin/AgentResourceOfficer/assistant/route",
             ],
             "recommended_tools": [
                 "agent_resource_officer_readiness",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_execute_actions",
+                "agent_resource_officer_execute_plan",
                 "agent_resource_officer_smart_entry",
             ],
             "warnings": warnings,
@@ -2894,6 +2938,7 @@ class AgentResourceOfficer(_PluginBase):
             f"影巢：{'已配置' if hdhive.get('configured') else '未配置'}",
             f"夸克：{'已配置' if quark.get('configured') else '未配置'}",
             f"活跃会话：{(data.get('active_sessions') or {}).get('total') or 0}",
+            f"待执行计划：{(data.get('saved_plans') or {}).get('pending') or 0}",
             "推荐入口：assistant/workflow 或 assistant/actions",
         ]
         warnings = data.get("warnings") or []
@@ -3772,7 +3817,10 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_execute_plan(
         self,
-        plan_id: str,
+        plan_id: str = "",
+        session: str = "",
+        session_id: str = "",
+        prefer_unexecuted: bool = True,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
     ) -> str:
@@ -3783,6 +3831,9 @@ class AgentResourceOfficer(_PluginBase):
                 _RequestContextShim(),
                 {
                     "plan_id": self._clean_text(plan_id),
+                    "session": self._clean_text(session),
+                    "session_id": self._clean_text(session_id),
+                    "prefer_unexecuted": bool(prefer_unexecuted),
                     "stop_on_error": bool(stop_on_error),
                     "include_raw_results": bool(include_raw_results),
                 },
@@ -5151,12 +5202,26 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": "插件未启用"}
 
         plan_id = self._clean_text(body.get("plan_id"))
-        if not plan_id:
-            return {"success": False, "message": "缺少 plan_id"}
-
-        plan = self._load_workflow_plan(plan_id)
+        session = self._clean_text(body.get("session"))
+        session_id = self._clean_text(body.get("session_id"))
+        prefer_unexecuted = bool(body.get("prefer_unexecuted", True))
+        plan = self._find_workflow_plan(
+            plan_id=plan_id,
+            session=session,
+            session_id=session_id,
+            executed=False if prefer_unexecuted and not plan_id else None,
+        )
+        if not plan and not plan_id and (session or session_id) and prefer_unexecuted:
+            plan = self._find_workflow_plan(
+                session=session,
+                session_id=session_id,
+                executed=None,
+            )
         if not plan:
-            return {"success": False, "message": f"计划不存在或已过期：{plan_id}"}
+            if plan_id:
+                return {"success": False, "message": f"计划不存在或已过期：{plan_id}"}
+            return {"success": False, "message": "没有匹配到可执行计划，请先生成 dry_run 计划或改传 plan_id。"}
+        plan_id = self._clean_text(plan.get("plan_id"))
 
         actions = plan.get("actions") or []
         if not isinstance(actions, list) or not actions:
@@ -5197,6 +5262,7 @@ class AgentResourceOfficer(_PluginBase):
             "plan_id": plan_id,
             "workflow": workflow_name,
             "workflow_actions": actions,
+            "plan_auto_selected": not bool(self._clean_text(body.get("plan_id"))),
             "plan_created_at": plan.get("created_at"),
             "plan_created_at_text": plan.get("created_at_text"),
             "plan_executed_at": executed_at,

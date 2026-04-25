@@ -122,7 +122,10 @@ class AssistantWorkflowToolInput(BaseModel):
 
 
 class AssistantExecutePlanToolInput(BaseModel):
-    plan_id: str = Field(..., description="dry_run 返回的 plan_id")
+    plan_id: Optional[str] = Field(default=None, description="可选 dry_run 返回的 plan_id；不传时可按 session/session_id 自动选择最近计划")
+    session: Optional[str] = Field(default=None, description="可选会话名；未传 plan_id 时可按会话自动选择最近计划")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    prefer_unexecuted: Optional[bool] = Field(default=True, description="自动选计划时是否优先只选未执行计划")
     stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否停止")
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果")
 

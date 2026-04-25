@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.43`
+- 当前版本：`0.1.44`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -488,5 +488,20 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/plans?apikey=你的MP_API_TOKE
 POST /api/v1/plugin/AgentResourceOfficer/assistant/plans/clear?apikey=你的MP_API_TOKEN
 {
   "plan_id": "plan-..."
+}
+```
+
+从 `0.1.44` 开始，`assistant/plan/execute` 还支持按会话自动恢复最近计划：
+
+- 传 `plan_id`：精确执行指定计划
+- 不传 `plan_id`，只传 `session` 或 `session_id`：默认优先执行该会话下最近一条“未执行”计划
+- 如果该会话下没有未执行计划，会自动回退到最近一条计划，便于断线恢复
+
+例如：
+
+```json
+POST /api/v1/plugin/AgentResourceOfficer/assistant/plan/execute?apikey=你的MP_API_TOKEN
+{
+  "session": "demo-plan"
 }
 ```

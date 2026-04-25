@@ -371,15 +371,18 @@ class AssistantWorkflowTool(MoviePilotTool):
 
 class AssistantExecutePlanTool(MoviePilotTool):
     name: str = "agent_resource_officer_execute_plan"
-    description: str = "Execute a saved Agent资源官 dry-run workflow plan by plan_id without resending the whole action list."
+    description: str = "Execute a saved Agent资源官 dry-run workflow plan by plan_id, or recover the latest plan by session/session_id."
     args_schema: Type[BaseModel] = AssistantExecutePlanToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return f"正在执行 Agent资源官 已保存计划：{kwargs.get('plan_id', '')}"
+        return f"正在执行 Agent资源官 已保存计划：{kwargs.get('plan_id', '') or kwargs.get('session_id', '') or kwargs.get('session', '')}"
 
     async def run(
         self,
-        plan_id: str,
+        plan_id: str = None,
+        session: str = None,
+        session_id: str = None,
+        prefer_unexecuted: bool = True,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
         **kwargs,
@@ -389,6 +392,9 @@ class AssistantExecutePlanTool(MoviePilotTool):
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_execute_plan(
             plan_id=plan_id,
+            session=session,
+            session_id=session_id,
+            prefer_unexecuted=prefer_unexecuted,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
         )
