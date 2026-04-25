@@ -81,6 +81,7 @@ class AssistantToolboxToolInput(BaseModel):
 class AssistantHistoryToolInput(BaseModel):
     session: Optional[str] = Field(default=None, description="可选会话名；不填则返回全部最近执行记录")
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
     limit: Optional[int] = Field(default=20, description="最多返回多少条执行记录")
 
 
@@ -146,6 +147,7 @@ class AssistantPlansToolInput(BaseModel):
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
     executed: Optional[bool] = Field(default=None, description="可选过滤：true 只看已执行，false 只看未执行")
     include_actions: Optional[bool] = Field(default=False, description="是否附带计划动作明细；默认关闭以减少 token")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
     limit: Optional[int] = Field(default=20, description="最多返回多少条计划")
 
 

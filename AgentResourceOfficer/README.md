@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.55`
+- 当前版本：`0.1.56`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -469,7 +469,7 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/plan/execute?apikey=你的MP_
 }
 ```
 
-从 `0.1.43` 开始，保存计划也可以独立查询和清理：
+从 `0.1.43` 开始，保存计划也可以独立查询和清理；从 `0.1.56` 开始，计划列表支持 `compact=true` 低 token 回执：
 
 - `GET /assistant/plans`：查看最近保存的计划，可按 `session`、`session_id`、`executed` 过滤
 - `POST /assistant/plans/clear`：按 `plan_id`、会话、执行状态或 `all_plans=true` 清理计划
@@ -479,7 +479,7 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/plan/execute?apikey=你的MP_
 常用查询：
 
 ```text
-GET /api/v1/plugin/AgentResourceOfficer/assistant/plans?apikey=你的MP_API_TOKEN&executed=false
+GET /api/v1/plugin/AgentResourceOfficer/assistant/plans?apikey=你的MP_API_TOKEN&executed=false&compact=true
 ```
 
 清理单个计划：
@@ -600,15 +600,19 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/pulse?apikey=你的MP_API_TOKE
 GET /api/v1/plugin/AgentResourceOfficer/assistant/toolbox?apikey=你的MP_API_TOKEN
 ```
 
-从 `0.1.55` 开始，`assistant/session` 和 `assistant/sessions` 也支持低 token 回执：
+从 `0.1.55` 开始，`assistant/session` 和 `assistant/sessions` 支持低 token 回执；从 `0.1.56` 开始，`assistant/history` 和 `assistant/plans` 也支持同样的精简模式：
 
 - `compact=true` 时不会再嵌套完整 `session_state`
 - `assistant/session` 返回当前会话阶段、恢复建议、待执行计划和待继续 115 任务摘要
 - `assistant/sessions` 返回活跃会话列表摘要，适合外部智能体做会话选择
+- `assistant/history` 返回最近执行动作、成功状态和简短结果
+- `assistant/plans` 返回计划 ID、执行状态和可直接复用的执行模板
 
 示例：
 
 ```text
 GET /api/v1/plugin/AgentResourceOfficer/assistant/session?apikey=你的MP_API_TOKEN&session=default&compact=true
 GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions?apikey=你的MP_API_TOKEN&compact=true
+GET /api/v1/plugin/AgentResourceOfficer/assistant/history?apikey=你的MP_API_TOKEN&compact=true
+GET /api/v1/plugin/AgentResourceOfficer/assistant/plans?apikey=你的MP_API_TOKEN&compact=true
 ```

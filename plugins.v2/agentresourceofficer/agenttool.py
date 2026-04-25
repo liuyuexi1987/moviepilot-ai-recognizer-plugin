@@ -263,11 +263,23 @@ class AssistantHistoryTool(MoviePilotTool):
     def get_tool_message(self, **kwargs) -> Optional[str]:
         return "正在查看 Agent资源官 最近执行历史"
 
-    async def run(self, session: str = None, session_id: str = None, limit: int = 20, **kwargs) -> str:
+    async def run(
+        self,
+        session: str = None,
+        session_id: str = None,
+        compact: bool = True,
+        limit: int = 20,
+        **kwargs,
+    ) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_history(session=session, session_id=session_id, limit=limit)
+        return await plugin.tool_assistant_history(
+            session=session,
+            session_id=session_id,
+            compact=compact,
+            limit=limit,
+        )
 
 
 class AssistantExecuteActionTool(MoviePilotTool):
@@ -451,6 +463,7 @@ class AssistantPlansTool(MoviePilotTool):
         session_id: str = None,
         executed: bool = None,
         include_actions: bool = False,
+        compact: bool = True,
         limit: int = 20,
         **kwargs,
     ) -> str:
@@ -462,6 +475,7 @@ class AssistantPlansTool(MoviePilotTool):
             session_id=session_id,
             executed=executed,
             include_actions=include_actions,
+            compact=compact,
             limit=limit,
         )
 

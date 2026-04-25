@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.55"
+    plugin_version = "0.1.56"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2869,6 +2869,89 @@ class AgentResourceOfficer(_PluginBase):
             "action_templates": [recovery.get("action_template")] if isinstance(recovery.get("action_template"), dict) else [],
         }
 
+    def _assistant_history_compact_data(self, history_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(history_data or {})
+        items: List[Dict[str, Any]] = []
+        for item in data.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            summary = dict(item.get("summary") or {})
+            steps = summary.get("steps")
+            items.append({
+                "time_text": self._clean_text(item.get("time_text")),
+                "success": bool(item.get("success")),
+                "action": self._clean_text(item.get("action")),
+                "workflow": self._clean_text(summary.get("workflow")),
+                "session": self._clean_text(item.get("session")),
+                "session_id": self._clean_text(item.get("session_id")),
+                "message_head": self._clean_text(item.get("message_head")),
+                "steps": steps if isinstance(steps, int) else None,
+            })
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "history",
+            "ok": True,
+            "compact": True,
+            "total": data.get("total") or 0,
+            "limit": data.get("limit") or len(items),
+            "session": self._clean_text(data.get("session")),
+            "session_id": self._clean_text(data.get("session_id")),
+            "items": items,
+        }
+
+    def _assistant_plans_compact_data(self, plans_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(plans_data or {})
+        items: List[Dict[str, Any]] = []
+        first_pending: Optional[Dict[str, Any]] = None
+        for item in data.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            plan_id = self._clean_text(item.get("plan_id"))
+            executed = bool(item.get("executed"))
+            compact_item = {
+                "plan_id": plan_id,
+                "workflow": self._clean_text(item.get("workflow")),
+                "session": self._clean_text(item.get("session")),
+                "session_id": self._clean_text(item.get("session_id")),
+                "executed": executed,
+                "action_count": self._safe_int(item.get("action_count"), 0),
+                "created_at_text": self._clean_text(item.get("created_at_text")),
+                "last_success": item.get("last_success"),
+                "last_message": self._clean_text(item.get("last_message")),
+            }
+            items.append(compact_item)
+            if not executed and first_pending is None and plan_id:
+                first_pending = compact_item
+        templates: List[Dict[str, Any]] = []
+        if first_pending:
+            templates.append(self._assistant_action_template(
+                name="execute_plan",
+                description="执行待处理计划",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                tool="agent_resource_officer_execute_plan",
+                body={
+                    "plan_id": first_pending.get("plan_id"),
+                    "session": first_pending.get("session"),
+                    "session_id": first_pending.get("session_id"),
+                    "prefer_unexecuted": True,
+                },
+            ))
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "plans",
+            "ok": True,
+            "compact": True,
+            "total": data.get("total") or 0,
+            "limit": data.get("limit") or len(items),
+            "session": self._clean_text(data.get("session")),
+            "session_id": self._clean_text(data.get("session_id")),
+            "executed": data.get("executed"),
+            "include_actions": False,
+            "items": items,
+            "next_actions": ["execute_plan"] if first_pending else [],
+            "action_templates": templates,
+        }
+
     def _format_assistant_sessions_text(
         self,
         *,
@@ -3203,6 +3286,10 @@ class AgentResourceOfficer(_PluginBase):
                 "fields": ["kind", "has_pending_p115", "compact", "limit"],
                 "description": "compact=true 时返回低 token 会话列表，不嵌套 default session_state。",
             },
+            "assistant_history": {
+                "fields": ["session", "session_id", "compact", "limit"],
+                "description": "compact=true 时返回低 token 执行历史，不嵌套 default session_state。",
+            },
             "assistant_action": {
                 "fields": [
                     "name",
@@ -3251,8 +3338,10 @@ class AgentResourceOfficer(_PluginBase):
                     "session_id",
                     "executed",
                     "include_actions",
+                    "compact",
                     "limit",
                 ],
+                "description": "compact=true 时返回低 token 计划列表，不嵌套 default session_state。",
             },
             "assistant_plans_clear": {
                 "fields": [
@@ -3350,7 +3439,7 @@ class AgentResourceOfficer(_PluginBase):
             "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
             "轻量工具清单：assistant/toolbox，返回推荐工具、端点、工作流和命令示例，适合外部智能体初始化系统提示",
             "完整启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用",
-            "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要",
+            "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要；compact=true 可减少嵌套回执",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
             "smart_entry 结构化模式：pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
@@ -3360,7 +3449,7 @@ class AgentResourceOfficer(_PluginBase):
             "批量动作入口：assistant/actions，可一次执行多步 action_body，默认只返回精简执行摘要，减少外部智能体往返和 token 消耗",
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景",
             "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id",
-            "计划管理入口：assistant/plans 与 assistant/plans/clear，可查询或清理 dry_run 保存的计划",
+            "计划管理入口：assistant/plans 与 assistant/plans/clear，可查询或清理 dry_run 保存的计划；compact=true 可减少嵌套回执",
             "单入口恢复：assistant/recover，可自动选择最值得恢复的会话或计划；execute=true 时直接执行推荐动作；compact=true 可减少回执字段",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
@@ -4412,9 +4501,21 @@ class AgentResourceOfficer(_PluginBase):
             return "Agent资源官 插件未启用"
         return self._format_assistant_toolbox_text()
 
-    async def tool_assistant_history(self, session: str = "", session_id: str = "", limit: int = 20) -> str:
+    async def tool_assistant_history(
+        self,
+        session: str = "",
+        session_id: str = "",
+        compact: bool = True,
+        limit: int = 20,
+    ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
+        if compact:
+            data = self._assistant_history_compact_data(
+                self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
+            )
+            failed = sum(1 for item in (data.get("items") or []) if not item.get("success"))
+            return f"最近执行历史：{len(data.get('items') or [])} 条；失败 {failed} 条"
         return self._format_assistant_history_text(session=session, session_id=session_id, limit=limit)
 
     async def tool_assistant_execute_action(
@@ -4569,10 +4670,23 @@ class AgentResourceOfficer(_PluginBase):
         session_id: str = "",
         executed: Optional[bool] = None,
         include_actions: bool = False,
+        compact: bool = True,
         limit: int = 20,
     ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
+        if compact:
+            data = self._assistant_plans_compact_data(
+                self._assistant_plans_public_data(
+                    session=session,
+                    session_id=session_id,
+                    executed=executed,
+                    include_actions=False,
+                    limit=limit,
+                )
+            )
+            pending = sum(1 for item in (data.get("items") or []) if not item.get("executed"))
+            return f"已保存计划：{len(data.get('items') or [])} 条；待执行 {pending} 条"
         return self._format_assistant_plans_text(
             session=session,
             session_id=session_id,
@@ -6316,16 +6430,21 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         session = self._clean_text(request.query_params.get("session"))
         session_id = self._clean_text(request.query_params.get("session_id"))
+        compact = bool(self._parse_optional_bool(request.query_params.get("compact")) or False)
         limit = self._safe_int(request.query_params.get("limit"), 20)
         data = self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
-        return {
-            "success": True,
-            "message": self._format_assistant_history_text(session=session, session_id=session_id, limit=limit),
-            "data": self._assistant_response_data(session=session or "default", data={
+        response_data = self._assistant_history_compact_data(data) if compact else self._assistant_response_data(
+            session=session or "default",
+            data={
                 "action": "history",
                 "ok": True,
                 **data,
-            }),
+            },
+        )
+        return {
+            "success": True,
+            "message": self._format_assistant_history_text(session=session, session_id=session_id, limit=limit),
+            "data": response_data,
         }
 
     async def api_assistant_plans(self, request: Request):
@@ -6338,6 +6457,7 @@ class AgentResourceOfficer(_PluginBase):
         session_id = self._clean_text(request.query_params.get("session_id"))
         executed = self._parse_optional_bool(request.query_params.get("executed"))
         include_actions = bool(self._parse_optional_bool(request.query_params.get("include_actions")) or False)
+        compact = bool(self._parse_optional_bool(request.query_params.get("compact")) or False)
         limit = self._safe_int(request.query_params.get("limit"), 20)
         data = self._assistant_plans_public_data(
             session=session,
@@ -6345,6 +6465,14 @@ class AgentResourceOfficer(_PluginBase):
             executed=executed,
             include_actions=include_actions,
             limit=limit,
+        )
+        response_data = self._assistant_plans_compact_data(data) if compact else self._assistant_response_data(
+            session=session or "default",
+            data={
+                "action": "plans",
+                "ok": True,
+                **data,
+            },
         )
         return {
             "success": True,
@@ -6355,11 +6483,7 @@ class AgentResourceOfficer(_PluginBase):
                 include_actions=include_actions,
                 limit=limit,
             ),
-            "data": self._assistant_response_data(session=session or "default", data={
-                "action": "plans",
-                "ok": True,
-                **data,
-            }),
+            "data": response_data,
         }
 
     async def api_assistant_plans_clear(self, request: Request):
