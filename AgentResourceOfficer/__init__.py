@@ -84,7 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.45"
+    plugin_version = "0.1.46"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2783,6 +2783,8 @@ class AgentResourceOfficer(_PluginBase):
                     "stale_only",
                     "all_sessions",
                     "limit",
+                    "plan_id",
+                    "prefer_unexecuted",
                 ],
             },
             "assistant_actions": {
@@ -3783,6 +3785,8 @@ class AgentResourceOfficer(_PluginBase):
         stale_only: bool = False,
         all_sessions: bool = False,
         limit: int = 100,
+        plan_id: str = "",
+        prefer_unexecuted: bool = True,
     ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
@@ -3806,6 +3810,8 @@ class AgentResourceOfficer(_PluginBase):
                     "stale_only": bool(stale_only),
                     "all_sessions": bool(all_sessions),
                     "limit": self._safe_int(limit, 100),
+                    "plan_id": self._clean_text(plan_id),
+                    "prefer_unexecuted": bool(prefer_unexecuted),
                 },
             )
         )
@@ -4864,6 +4870,16 @@ class AgentResourceOfficer(_PluginBase):
             return await self.api_assistant_session_state(_JsonRequestShim(request, {
                 "session": body.get("session"),
                 "session_id": body.get("session_id"),
+                "apikey": self._extract_apikey(request, body),
+            }))
+        if name in {"execute_latest_plan", "execute_plan"}:
+            return await self.api_assistant_plan_execute(_JsonRequestShim(request, {
+                "plan_id": body.get("plan_id"),
+                "session": body.get("session"),
+                "session_id": body.get("session_id"),
+                "prefer_unexecuted": body.get("prefer_unexecuted", True),
+                "stop_on_error": body.get("stop_on_error", True),
+                "include_raw_results": body.get("include_raw_results", False),
                 "apikey": self._extract_apikey(request, body),
             }))
         if name in {"pick_pansou_result", "pick_hdhive_candidate", "pick_hdhive_resource"}:

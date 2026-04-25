@@ -263,6 +263,8 @@ class AssistantExecuteActionTool(MoviePilotTool):
         stale_only: bool = False,
         all_sessions: bool = False,
         limit: int = 100,
+        plan_id: str = None,
+        prefer_unexecuted: bool = True,
         **kwargs,
     ) -> str:
         plugin = _get_plugin()
@@ -285,6 +287,8 @@ class AssistantExecuteActionTool(MoviePilotTool):
             stale_only=stale_only,
             all_sessions=all_sessions,
             limit=limit,
+            plan_id=plan_id,
+            prefer_unexecuted=prefer_unexecuted,
         )
 
 

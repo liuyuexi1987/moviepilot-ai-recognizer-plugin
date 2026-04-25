@@ -92,6 +92,8 @@ class AssistantExecuteActionToolInput(BaseModel):
     stale_only: Optional[bool] = Field(default=False, description="批量清理会话时是否只清理过期会话")
     all_sessions: Optional[bool] = Field(default=False, description="批量清理会话时是否清理全部会话")
     limit: Optional[int] = Field(default=100, description="批量清理会话时的最多处理条数")
+    plan_id: Optional[str] = Field(default=None, description="计划动作使用的 plan_id")
+    prefer_unexecuted: Optional[bool] = Field(default=True, description="计划动作未指定 plan_id 时是否优先选择未执行计划")
 
 
 class AssistantExecuteActionsToolInput(BaseModel):
