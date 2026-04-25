@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.52",
+    "version": "0.1.53",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.53": "新增 assistant/pulse 与 agent_resource_officer_pulse 轻量启动探针，返回版本、关键服务状态、警告和最佳恢复建议。",
       "0.1.52": "assistant/recover 新增 compact=true 低 token 回执，agent_resource_officer_recover 默认使用精简恢复信息，适合外部智能体高频轮询。",
       "0.1.51": "新增 assistant/recover 与 agent_resource_officer_recover 单入口恢复能力，可自动选择最值得恢复的会话或计划，并支持 execute=true 直接续跑。",
       "0.1.50": "assistant/session 与 assistant/sessions 统一到标准回执包裹字段，同时保留兼容摘要字段，降低外部智能体分支判断。",

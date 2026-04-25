@@ -39,6 +39,7 @@ from .agenttool import (
     AssistantPickTool,
     AssistantPlansClearTool,
     AssistantPlansTool,
+    AssistantPulseTool,
     AssistantReadinessTool,
     AssistantRecoverTool,
     AssistantRouteTool,
@@ -85,7 +86,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.52"
+    plugin_version = "0.1.53"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -243,6 +244,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantPlansTool,
             AssistantPlansClearTool,
             AssistantRecoverTool,
+            AssistantPulseTool,
             AssistantReadinessTool,
             AssistantHistoryTool,
             AssistantHelpTool,
@@ -725,6 +727,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_readiness,
                 "methods": ["GET"],
                 "summary": "检查 Agent资源官 是否已准备好给外部智能体调用",
+            },
+            {
+                "path": "/assistant/pulse",
+                "endpoint": self.api_assistant_pulse,
+                "methods": ["GET"],
+                "summary": "轻量启动探针：返回版本、关键服务状态、警告和最佳恢复建议",
             },
             {
                 "path": "/assistant/history",
@@ -3171,6 +3179,7 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "单入口恢复协议：不传 session 时自动挑选最值得恢复的会话或计划；execute=true 时直接执行推荐动作；compact=true 可返回低 token 回执。",
             },
             "session_tools": [
+                "assistant/pulse",
                 "assistant/readiness",
                 "assistant/history",
                 "assistant/action",
@@ -3200,6 +3209,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "agent_tools": [
                 "agent_resource_officer_capabilities",
+                "agent_resource_officer_pulse",
                 "agent_resource_officer_readiness",
                 "agent_resource_officer_history",
                 "agent_resource_officer_execute_action",
@@ -3236,7 +3246,8 @@ class AgentResourceOfficer(_PluginBase):
             f"- 115：{defaults.get('p115_path')}",
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
-            "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用",
+            "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
+            "完整启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用",
             "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
             "smart_entry 结构化模式：pansou / hdhive",
@@ -3381,6 +3392,72 @@ class AgentResourceOfficer(_PluginBase):
             f"待执行计划：{(data.get('saved_plans') or {}).get('pending') or 0}",
             "推荐入口：assistant/workflow 或 assistant/actions",
         ]
+        warnings = data.get("warnings") or []
+        if warnings:
+            lines.append("提示：" + "；".join(str(item) for item in warnings if item))
+        return "\n".join(lines)
+
+    def _assistant_pulse_public_data(self) -> Dict[str, Any]:
+        p115_status = self._p115_status_snapshot()
+        recovery_data = self._assistant_recover_public_data(limit=10)
+        recovery_data.update({
+            "action": "recover",
+            "ok": True,
+            "execute_requested": False,
+            "executed": False,
+        })
+        recovery_compact = self._assistant_recover_response_data(recovery_data, compact=True)
+        warnings: List[str] = []
+        if not self._enabled:
+            warnings.append("插件未启用")
+        if not self._hdhive_api_key:
+            warnings.append("影巢 API Key 未配置")
+        if not p115_status.get("ready"):
+            warnings.append("115 当前不可用")
+        if not self._quark_cookie:
+            warnings.append("夸克 Cookie 未配置")
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "pulse",
+            "ok": bool(self._enabled),
+            "version": self.plugin_version,
+            "enabled": self._enabled,
+            "can_start": bool(self._enabled),
+            "services": {
+                "p115_ready": bool(p115_status.get("ready")),
+                "p115_direct_ready": bool(p115_status.get("direct_ready")),
+                "hdhive_configured": bool(self._hdhive_api_key),
+                "quark_configured": bool(self._quark_cookie),
+            },
+            "warnings": warnings,
+            "session": recovery_compact.get("session"),
+            "session_id": recovery_compact.get("session_id"),
+            "recovery": recovery_compact.get("recovery") or {},
+            "selected_session": recovery_compact.get("selected_session"),
+            "next_actions": recovery_compact.get("next_actions") or [],
+            "action_templates": recovery_compact.get("action_templates") or [],
+            "recommended_endpoints": {
+                "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
+                "workflow": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "actions": "/api/v1/plugin/AgentResourceOfficer/assistant/actions",
+            },
+        }
+
+    def _format_assistant_pulse_text(self) -> str:
+        data = self._assistant_pulse_public_data()
+        services = data.get("services") or {}
+        recovery = data.get("recovery") or {}
+        lines = [
+            "Agent资源官 轻量启动状态",
+            f"版本：{data.get('version')}",
+            f"插件：{'已启用' if data.get('enabled') else '未启用'}",
+            f"115：{'可用' if services.get('p115_ready') else '不可用'}",
+            f"影巢：{'已配置' if services.get('hdhive_configured') else '未配置'}",
+            f"夸克：{'已配置' if services.get('quark_configured') else '未配置'}",
+            f"恢复模式：{recovery.get('mode') or 'unknown'}",
+        ]
+        if recovery.get("recommended_action"):
+            lines.append(f"推荐动作：{recovery.get('recommended_action')}")
         warnings = data.get("warnings") or []
         if warnings:
             lines.append("提示：" + "；".join(str(item) for item in warnings if item))
@@ -4134,6 +4211,11 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_readiness_text()
+
+    async def tool_assistant_pulse(self) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_pulse_text()
 
     async def tool_assistant_history(self, session: str = "", session_id: str = "", limit: int = 20) -> str:
         if not self._enabled:
@@ -5992,6 +6074,17 @@ class AgentResourceOfficer(_PluginBase):
                 "ok": bool(data.get("can_start")),
                 **data,
             }),
+        }
+
+    async def api_assistant_pulse(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        data = self._assistant_pulse_public_data()
+        return {
+            "success": bool(data.get("can_start")),
+            "message": self._format_assistant_pulse_text(),
+            "data": data,
         }
 
     async def api_assistant_history(self, request: Request):

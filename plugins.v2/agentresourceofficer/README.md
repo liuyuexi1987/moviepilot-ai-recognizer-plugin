@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.52`
+- 当前版本：`0.1.53`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -574,4 +574,16 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/recover?apikey=你的MP_API_T
 
 ```text
 GET /api/v1/plugin/AgentResourceOfficer/assistant/recover?apikey=你的MP_API_TOKEN&compact=true
+```
+
+从 `0.1.53` 开始，外部智能体启动前建议先调 `assistant/pulse`：
+
+- 返回固定小结构：版本、启用状态、115/影巢/夸克关键状态、警告、最佳恢复建议
+- 不返回完整会话列表，适合 WorkBuddy、飞书桥接、MP 智能助手每次开场快速探测
+- 对应 MP 智能助手 Tool：`agent_resource_officer_pulse`
+
+示例：
+
+```text
+GET /api/v1/plugin/AgentResourceOfficer/assistant/pulse?apikey=你的MP_API_TOKEN
 ```

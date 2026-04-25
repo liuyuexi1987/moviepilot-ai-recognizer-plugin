@@ -69,6 +69,10 @@ class AssistantReadinessToolInput(BaseModel):
     pass
 
 
+class AssistantPulseToolInput(BaseModel):
+    pass
+
+
 class AssistantHistoryToolInput(BaseModel):
     session: Optional[str] = Field(default=None, description="可选会话名；不填则返回全部最近执行记录")
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
