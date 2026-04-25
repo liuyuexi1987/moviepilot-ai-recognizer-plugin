@@ -90,7 +90,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.77"
+    plugin_version = "0.1.78"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -7162,6 +7162,31 @@ class AgentResourceOfficer(_PluginBase):
         if requested_execute and request.method.upper() == "GET":
             data["execute_ignored"] = True
             data["warning"] = "GET 请求只返回 dry-run 维护建议；如需执行维护请使用 POST execute=true。"
+        if execute:
+            executed_actions = data.get("executed_actions") or []
+            self._record_assistant_execution(
+                action="maintain",
+                session=self._clean_text(body.get("session")) or "default",
+                session_id=self._clean_text(body.get("session_id")),
+                success=bool(data.get("ok")),
+                message=self._format_assistant_maintain_text(data),
+                summary={
+                    "executed": bool(data.get("executed")),
+                    "executed_actions": [
+                        {
+                            "name": self._clean_text(item.get("name")),
+                            "removed": self._safe_int(item.get("removed"), 0),
+                        }
+                        for item in executed_actions
+                        if isinstance(item, dict)
+                    ],
+                    "after": {
+                        "stale_sessions": (data.get("after") or {}).get("stale_sessions"),
+                        "saved_plans_executed": (data.get("after") or {}).get("saved_plans_executed"),
+                        "saved_plans_pending": (data.get("after") or {}).get("saved_plans_pending"),
+                    },
+                },
+            )
         return {
             "success": bool(data.get("ok")),
             "message": self._format_assistant_maintain_text(data),
