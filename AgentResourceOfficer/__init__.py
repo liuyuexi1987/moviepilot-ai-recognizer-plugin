@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.58"
+    plugin_version = "0.1.59"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2989,6 +2989,36 @@ class AgentResourceOfficer(_PluginBase):
             "action_templates": data.get("action_templates") or [],
         }
 
+    def _assistant_single_action_compact_response(self, name: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        response = dict(result or {})
+        data = dict(response.get("data") or {})
+        session_state = dict(data.get("session_state") or {})
+        payload = {
+            "protocol_version": "assistant.v1",
+            "action": self._clean_text(data.get("action")) or self._clean_text(name) or "execute_action",
+            "ok": bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
+            "compact": True,
+            "name": self._clean_text(name),
+            "session": self._clean_text(data.get("session") or session_state.get("session")) or "default",
+            "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
+            "message_head": self._assistant_result_message_head(response.get("message")),
+            "kind": self._clean_text(session_state.get("kind")),
+            "stage": self._clean_text(session_state.get("stage")),
+            "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
+            "action_templates": data.get("action_templates") or [],
+        }
+        for key in ["plan_id", "workflow", "plan_auto_selected", "has_session", "has_pending"]:
+            if key in data:
+                payload[key] = data.get(key)
+        pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
+        if pending_p115:
+            payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
+        return {
+            "success": bool(response.get("success")),
+            "message": response.get("message") or "",
+            "data": payload,
+        }
+
     def _assistant_workflow_plan_compact_data(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:
         data = dict(plan_data or {})
         session_state = dict(data.get("session_state") or {})
@@ -3386,7 +3416,9 @@ class AgentResourceOfficer(_PluginBase):
                     "limit",
                     "plan_id",
                     "prefer_unexecuted",
+                    "compact",
                 ],
+                "description": "compact=true 时返回低 token 单动作摘要，不嵌套完整 session_state。",
             },
             "assistant_actions": {
                 "fields": [
@@ -3562,7 +3594,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
             "smart_pick 字段：session / session_id / choice / action / path",
             "smart_pick 动作：detail / next_page",
-            "动作执行入口：assistant/action，可直接执行 action_templates 里的 name + body",
+            "动作执行入口：assistant/action，可直接执行 action_templates 里的 name + body；compact=true 可减少嵌套回执",
             "批量动作入口：assistant/actions，可一次执行多步 action_body；compact=true 可减少嵌套回执",
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景；compact=true 可减少嵌套回执",
             "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id；compact=true 可减少嵌套回执",
@@ -4716,6 +4748,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 100,
         plan_id: str = "",
         prefer_unexecuted: bool = True,
+        compact: bool = True,
     ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
@@ -4741,6 +4774,7 @@ class AgentResourceOfficer(_PluginBase):
                     "limit": self._safe_int(limit, 100),
                     "plan_id": self._clean_text(plan_id),
                     "prefer_unexecuted": bool(prefer_unexecuted),
+                    "compact": bool(compact),
                 },
             )
         )
@@ -5821,6 +5855,11 @@ class AgentResourceOfficer(_PluginBase):
         name = self._clean_text(body.get("name") or body.get("action_name"))
         if not name:
             return {"success": False, "message": "缺少动作名 name"}
+        compact = bool(body.get("compact", False))
+
+        async def finish(awaitable):
+            result = await awaitable
+            return self._assistant_single_action_compact_response(name, result) if compact else result
 
         route_payload = {
             "session": body.get("session"),
@@ -5840,7 +5879,7 @@ class AgentResourceOfficer(_PluginBase):
                 "mode": "pansou",
                 "keyword": body.get("keyword"),
             })
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "start_hdhive_search":
             route_payload.update({
                 "mode": "hdhive",
@@ -5848,27 +5887,27 @@ class AgentResourceOfficer(_PluginBase):
                 "media_type": body.get("media_type") or "movie",
                 "year": body.get("year"),
             })
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "start_115_login":
             route_payload.update({
                 "action": "p115_qrcode_start",
                 "client_type": body.get("client_type"),
             })
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "route_share":
             route_payload.update({
                 "url": body.get("url") or body.get("share_url"),
                 "access_code": body.get("access_code"),
             })
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "inspect_session_state":
-            return await self.api_assistant_session_state(_JsonRequestShim(request, {
+            return await finish(self.api_assistant_session_state(_JsonRequestShim(request, {
                 "session": body.get("session"),
                 "session_id": body.get("session_id"),
                 "apikey": self._extract_apikey(request, body),
-            }))
+            })))
         if name in {"execute_latest_plan", "execute_plan", "execute_session_latest_plan"}:
-            return await self.api_assistant_plan_execute(_JsonRequestShim(request, {
+            return await finish(self.api_assistant_plan_execute(_JsonRequestShim(request, {
                 "plan_id": body.get("plan_id"),
                 "session": body.get("session"),
                 "session_id": body.get("session_id"),
@@ -5876,45 +5915,45 @@ class AgentResourceOfficer(_PluginBase):
                 "stop_on_error": body.get("stop_on_error", True),
                 "include_raw_results": body.get("include_raw_results", False),
                 "apikey": self._extract_apikey(request, body),
-            }))
+            })))
         if name in {"pick_pansou_result", "pick_hdhive_candidate", "pick_hdhive_resource"}:
             pick_payload.update({"choice": body.get("choice") or body.get("index")})
-            return await self.api_assistant_pick(_JsonRequestShim(request, pick_payload))
+            return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
         if name == "candidate_detail":
             pick_payload.update({"action": "detail"})
-            return await self.api_assistant_pick(_JsonRequestShim(request, pick_payload))
+            return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
         if name == "candidate_next_page":
             pick_payload.update({"action": "next_page"})
-            return await self.api_assistant_pick(_JsonRequestShim(request, pick_payload))
+            return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
         if name == "check_115_login":
             route_payload.update({"action": "p115_qrcode_check"})
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "show_115_status":
             route_payload.update({"action": "p115_status"})
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "resume_pending_115":
             route_payload.update({"action": "p115_resume"})
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "cancel_pending_115":
             route_payload.update({"action": "p115_cancel"})
-            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
         if name == "clear_current_session":
-            return await self.api_assistant_session_clear(_JsonRequestShim(request, {
+            return await finish(self.api_assistant_session_clear(_JsonRequestShim(request, {
                 "session": body.get("session"),
                 "session_id": body.get("session_id"),
                 "apikey": self._extract_apikey(request, body),
-            }))
+            })))
         if name == "inspect_session":
-            return await self.api_assistant_session_state(_JsonRequestShim(request, {
+            return await finish(self.api_assistant_session_state(_JsonRequestShim(request, {
                 "session": body.get("session"),
                 "session_id": body.get("session_id"),
                 "apikey": self._extract_apikey(request, body),
-            }))
+            })))
         if name == "clear_session_by_id":
-            return await self.api_assistant_sessions_clear(_JsonRequestShim(request, {
+            return await finish(self.api_assistant_sessions_clear(_JsonRequestShim(request, {
                 "session_id": body.get("session_id"),
                 "apikey": self._extract_apikey(request, body),
-            }))
+            })))
 
         return {"success": False, "message": f"不支持的动作模板：{name}"}
 

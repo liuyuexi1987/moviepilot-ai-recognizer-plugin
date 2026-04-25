@@ -310,6 +310,7 @@ class AssistantExecuteActionTool(MoviePilotTool):
         limit: int = 100,
         plan_id: str = None,
         prefer_unexecuted: bool = True,
+        compact: bool = True,
         **kwargs,
     ) -> str:
         plugin = _get_plugin()
@@ -334,6 +335,7 @@ class AssistantExecuteActionTool(MoviePilotTool):
             limit=limit,
             plan_id=plan_id,
             prefer_unexecuted=prefer_unexecuted,
+            compact=compact,
         )
 
 
