@@ -126,6 +126,7 @@ class AssistantRouteTool(MoviePilotTool):
         year: str = None,
         client_type: str = None,
         action: str = None,
+        compact: bool = True,
         **kwargs,
     ) -> str:
         plugin = _get_plugin()
@@ -144,6 +145,7 @@ class AssistantRouteTool(MoviePilotTool):
             year=year,
             client_type=client_type,
             action=action,
+            compact=compact,
         )
 
 
@@ -166,6 +168,7 @@ class AssistantPickTool(MoviePilotTool):
         choice: int = 0,
         action: str = None,
         path: str = None,
+        compact: bool = True,
         **kwargs,
     ) -> str:
         plugin = _get_plugin()
@@ -177,6 +180,7 @@ class AssistantPickTool(MoviePilotTool):
             index=choice,
             action=action,
             target_path=path,
+            compact=compact,
         )
 
 

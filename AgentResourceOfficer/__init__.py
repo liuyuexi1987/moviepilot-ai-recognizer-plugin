@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.59"
+    plugin_version = "0.1.60"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3019,6 +3019,40 @@ class AgentResourceOfficer(_PluginBase):
             "data": payload,
         }
 
+    def _assistant_interaction_compact_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        response = dict(result or {})
+        data = dict(response.get("data") or {})
+        session_state = dict(data.get("session_state") or {})
+        payload = {
+            "protocol_version": "assistant.v1",
+            "action": self._clean_text(data.get("action")) or "assistant_interaction",
+            "ok": bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
+            "compact": True,
+            "session": self._clean_text(data.get("session") or session_state.get("session")) or "default",
+            "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
+            "message_head": self._assistant_result_message_head(response.get("message")),
+            "kind": self._clean_text(session_state.get("kind")),
+            "stage": self._clean_text(session_state.get("stage")),
+            "keyword": self._clean_text(session_state.get("keyword")),
+            "target_path": self._clean_text(session_state.get("target_path")),
+            "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
+            "action_templates": data.get("action_templates") or [],
+        }
+        for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource"]:
+            if key in data:
+                payload[key] = data.get(key)
+        for key in ["items", "candidates", "resources"]:
+            if isinstance(data.get(key), list):
+                payload[f"{key}_count"] = len(data.get(key) or [])
+        pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
+        if pending_p115:
+            payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
+        return {
+            "success": bool(response.get("success")),
+            "message": response.get("message") or "",
+            "data": payload,
+        }
+
     def _assistant_workflow_plan_compact_data(self, plan_data: Dict[str, Any]) -> Dict[str, Any]:
         data = dict(plan_data or {})
         session_state = dict(data.get("session_state") or {})
@@ -3370,10 +3404,11 @@ class AgentResourceOfficer(_PluginBase):
                     "year",
                     "client_type",
                     "action",
+                    "compact",
                 ],
             },
             "smart_pick": {
-                "fields": ["session", "session_id", "choice", "action", "path"],
+                "fields": ["session", "session_id", "choice", "action", "path", "compact"],
                 "actions": ["detail", "next_page"],
             },
             "assistant_session": {
@@ -3592,7 +3627,8 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
             "smart_entry 结构化模式：pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
-            "smart_pick 字段：session / session_id / choice / action / path",
+            "smart_entry 与 smart_pick 支持 compact=true，可减少搜索与选择链路嵌套回执",
+            "smart_pick 字段：session / session_id / choice / action / path / compact",
             "smart_pick 动作：detail / next_page",
             "动作执行入口：assistant/action，可直接执行 action_templates 里的 name + body；compact=true 可减少嵌套回执",
             "批量动作入口：assistant/actions，可一次执行多步 action_body；compact=true 可减少嵌套回执",
@@ -4620,6 +4656,7 @@ class AgentResourceOfficer(_PluginBase):
         year: str = "",
         client_type: str = "",
         action: str = "",
+        compact: bool = True,
     ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
@@ -4639,6 +4676,7 @@ class AgentResourceOfficer(_PluginBase):
                     "year": self._clean_text(year),
                     "client_type": self._clean_text(client_type),
                     "action": self._clean_text(action),
+                    "compact": bool(compact),
                 },
             )
         )
@@ -4651,6 +4689,7 @@ class AgentResourceOfficer(_PluginBase):
         index: int = 0,
         action: str = "",
         target_path: str = "",
+        compact: bool = True,
     ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
@@ -4663,6 +4702,7 @@ class AgentResourceOfficer(_PluginBase):
                     "choice": index,
                     "action": self._clean_text(action),
                     "path": self._clean_text(target_path),
+                    "compact": bool(compact),
                 },
             )
         )
@@ -5465,6 +5505,11 @@ class AgentResourceOfficer(_PluginBase):
         parsed = self._merge_assistant_structured_input(body, self._parse_assistant_text(text))
         state = self._load_session(cache_key) or {}
         target_path = parsed.get("path") or ""
+        compact = bool(body.get("compact", False))
+
+        def finish(result: Dict[str, Any]) -> Dict[str, Any]:
+            return self._assistant_interaction_compact_response(result) if compact else result
+
         route_action = self._normalize_pick_action(text)
         if route_action:
             pick_result = await self.api_assistant_pick(
@@ -5473,6 +5518,7 @@ class AgentResourceOfficer(_PluginBase):
                     "index": 0,
                     "action": route_action,
                     "path": target_path,
+                    "compact": compact,
                     "apikey": self._extract_apikey(request, body),
                 })
             )
@@ -5480,7 +5526,7 @@ class AgentResourceOfficer(_PluginBase):
 
         if not text and not any(parsed.get(key) for key in ["mode", "keyword", "url", "action"]):
             summary = self._format_assistant_help_text(session=session)
-            return {
+            return finish({
                 "success": True,
                 "message": summary,
                 "data": self._assistant_response_data(session=session, data={
@@ -5488,12 +5534,12 @@ class AgentResourceOfficer(_PluginBase):
                     "ok": True,
                     "status_summary": summary,
                 }),
-            }
+            })
 
         assistant_action = self._clean_text(parsed.get("action"))
         if assistant_action == "assistant_help":
             summary = self._format_assistant_help_text(session=session)
-            return {
+            return finish({
                 "success": True,
                 "message": summary,
                 "data": self._assistant_response_data(session=session, data={
@@ -5501,7 +5547,7 @@ class AgentResourceOfficer(_PluginBase):
                     "ok": True,
                     "status_summary": summary,
                 }),
-            }
+            })
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()
             pending_summary = self._pending_p115_summary(state)
@@ -5522,7 +5568,7 @@ class AgentResourceOfficer(_PluginBase):
             pending_summary = self._pending_p115_summary(state)
             if pending_summary:
                 summary = f"{summary}\n{pending_summary}"
-            return {
+            return finish({
                 "success": True,
                 "message": summary,
                 "data": self._assistant_response_data(session=session, data={
@@ -5531,7 +5577,7 @@ class AgentResourceOfficer(_PluginBase):
                     "status_summary": summary,
                     "status": self._p115_status_snapshot(),
                 }),
-            }
+            })
         if assistant_action == "p115_pending":
             pending_summary = self._pending_p115_summary(state)
             if not pending_summary:
@@ -5750,7 +5796,7 @@ class AgentResourceOfficer(_PluginBase):
                         source="assistant_link",
                         last_error=str(result.get("message") or ""),
                     )
-            return {
+            return finish({
                 "success": bool(result.get("success")),
                 "message": (
                     f"{'夸克' if provider == 'quark' else '115' if provider == '115' else '分享'}转存已完成\n目录："
@@ -5768,7 +5814,7 @@ class AgentResourceOfficer(_PluginBase):
                     "provider": provider,
                     "result": result.get("data") or {},
                 }),
-            }
+            })
 
         mode = parsed.get("mode") or "hdhive"
         keyword = self._clean_text(parsed.get("keyword"))
@@ -5799,7 +5845,7 @@ class AgentResourceOfficer(_PluginBase):
                 },
             )
             text_message = self._format_pansou_text(keyword, items, int(data.get("total") or len(items)))
-            return {
+            return finish({
                 "success": True,
                 "message": text_message,
                 "data": self._assistant_response_data(session=session, data={
@@ -5807,7 +5853,7 @@ class AgentResourceOfficer(_PluginBase):
                     "ok": True,
                     "items": items,
                 }),
-            }
+            })
 
         service = self._ensure_hdhive_service()
         search_ok, result, search_message = await service.resolve_candidates_by_keyword(
@@ -5834,7 +5880,7 @@ class AgentResourceOfficer(_PluginBase):
             },
         )
         text_message = self._format_candidate_lines(candidates, page=1, page_size=self._hdhive_candidate_page_size)
-        return {
+        return finish({
             "success": True,
             "message": text_message,
             "data": self._assistant_response_data(session=session, data={
@@ -5842,7 +5888,7 @@ class AgentResourceOfficer(_PluginBase):
                 "ok": True,
                 "candidates": candidates,
             }),
-        }
+        })
 
     async def api_assistant_action(self, request: Request):
         body = await request.json()
@@ -6423,6 +6469,11 @@ class AgentResourceOfficer(_PluginBase):
         )
         action = self._normalize_pick_action(body.get("action") or body.get("pick_action"))
         target_path = self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path")))
+        compact = bool(body.get("compact", False))
+
+        def finish(result: Dict[str, Any]) -> Dict[str, Any]:
+            return self._assistant_interaction_compact_response(result) if compact else result
+
         state = self._load_session(cache_key)
         if not state:
             return {"success": False, "message": "没有可继续的缓存，请先发起搜索或发送分享链接。"}
@@ -6460,19 +6511,19 @@ class AgentResourceOfficer(_PluginBase):
                         title=selected.get("note") or "",
                         last_error=str(route_result.get("message") or ""),
                     )
-                    return {
+                    return finish({
                         "success": False,
                         "message": (
                             f"{str(route_result.get('message') or '转存失败')}\n"
                             f"{self._format_p115_resume_hint(selected.get('note') or '')}"
                         ),
                         "data": self._assistant_response_data(session=session, data=route_result.get("data") or {}),
-                    }
-                return {
+                    })
+                return finish({
                     "success": False,
                     "message": str(route_result.get('message') or '转存失败'),
                     "data": self._assistant_response_data(session=session, data=route_result.get("data") or {}),
-                }
+                })
             if self._is_115_url(share_url):
                 self._clear_pending_p115_share(cache_key)
             provider = ((route_result.get("data") or {}).get("provider") or "").lower()
@@ -6484,11 +6535,11 @@ class AgentResourceOfficer(_PluginBase):
                 f"类型：{provider or selected.get('channel') or '-'}",
                 f"目录：{directory or '-'}",
             ])
-            return {
+            return finish({
                 "success": True,
                 "message": text_message,
                 "data": self._assistant_response_data(session=session, data={"action": "share_route", "ok": True}),
-            }
+            })
 
         if kind == "assistant_hdhive":
             stage = str(state.get("stage") or "").strip()
@@ -6504,7 +6555,7 @@ class AgentResourceOfficer(_PluginBase):
                     enriched = [dict(item or {}) for item in candidates]
                     enriched[start:end] = self._enrich_hdhive_candidates_with_actors(enriched[start:end])
                     self._save_session(cache_key, {**state, "candidates": enriched, "target_path": final_path})
-                    return {
+                    return finish({
                         "success": True,
                         "message": self._format_candidate_lines(enriched, page=current_page, page_size=page_size),
                         "data": self._assistant_response_data(session=session, data={
@@ -6513,14 +6564,14 @@ class AgentResourceOfficer(_PluginBase):
                             "page": current_page,
                             "candidates": enriched,
                         }),
-                    }
+                    })
                 if action == "next_page":
                     total_pages = max(1, (len(candidates) + page_size - 1) // page_size)
                     if current_page >= total_pages:
                         return {"success": False, "message": "已经是最后一页了，可以直接回复编号继续选择。"}
                     next_page = current_page + 1
                     self._save_session(cache_key, {**state, "page": next_page, "target_path": final_path})
-                    return {
+                    return finish({
                         "success": True,
                         "message": self._format_candidate_lines(candidates, page=next_page, page_size=page_size),
                         "data": self._assistant_response_data(session=session, data={
@@ -6529,7 +6580,7 @@ class AgentResourceOfficer(_PluginBase):
                             "page": next_page,
                             "total_pages": total_pages,
                         }),
-                    }
+                    })
                 if index > len(candidates):
                     return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(candidates)} 之间的数字。"}
                 candidate = dict(candidates[index - 1])
@@ -6550,7 +6601,7 @@ class AgentResourceOfficer(_PluginBase):
                         "target_path": final_path,
                     },
                 )
-                return {
+                return finish({
                     "success": True,
                     "message": self._format_resource_lines(preview, candidate),
                     "data": self._assistant_response_data(session=session, data={
@@ -6559,7 +6610,7 @@ class AgentResourceOfficer(_PluginBase):
                         "selected_candidate": candidate,
                         "resources": preview,
                     }),
-                }
+                })
             resources = state.get("resources") or []
             if index > len(resources):
                 return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(resources)} 之间的数字。"}
@@ -6581,17 +6632,17 @@ class AgentResourceOfficer(_PluginBase):
                         title=resource.get("title") or resource.get("matched_title") or "",
                         last_error=route_message,
                     )
-                    return {
+                    return finish({
                         "success": False,
                         "message": f"{route_message}\n{self._format_p115_resume_hint(resource.get('title') or resource.get('matched_title') or '')}",
                         "data": self._assistant_response_data(session=session, data=route_result),
-                    }
-                return {
+                    })
+                return finish({
                     "success": False,
                     "message": route_message,
                     "data": self._assistant_response_data(session=session, data=route_result),
-                }
-            return {
+                })
+            return finish({
                 "success": True,
                 "message": self._format_route_result(route_result),
                 "data": self._assistant_response_data(session=session, data={
@@ -6600,7 +6651,7 @@ class AgentResourceOfficer(_PluginBase):
                     "selected_resource": resource,
                     "result": route_result,
                 }),
-            }
+            })
 
         return {"success": False, "message": f"当前会话阶段不支持继续选择：{kind or 'unknown'}"}
 

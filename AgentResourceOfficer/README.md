@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.59`
+- 当前版本：`0.1.60`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -600,7 +600,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/pulse?apikey=你的MP_API_TOKE
 GET /api/v1/plugin/AgentResourceOfficer/assistant/toolbox?apikey=你的MP_API_TOKEN
 ```
 
-从 `0.1.55` 开始，`assistant/session` 和 `assistant/sessions` 支持低 token 回执；从 `0.1.56` 开始，`assistant/history` 和 `assistant/plans` 也支持同样的精简模式；从 `0.1.57` 开始，`assistant/actions`、`assistant/workflow` 和 `assistant/plan/execute` 也支持 `compact=true`；从 `0.1.58` 开始，启动入口 `assistant/capabilities` 和 `assistant/readiness` 也支持 `compact=true`；从 `0.1.59` 开始，`assistant/action` 单动作执行也支持 `compact=true`：
+从 `0.1.55` 开始，`assistant/session` 和 `assistant/sessions` 支持低 token 回执；从 `0.1.56` 开始，`assistant/history` 和 `assistant/plans` 也支持同样的精简模式；从 `0.1.57` 开始，`assistant/actions`、`assistant/workflow` 和 `assistant/plan/execute` 也支持 `compact=true`；从 `0.1.58` 开始，启动入口 `assistant/capabilities` 和 `assistant/readiness` 也支持 `compact=true`；从 `0.1.59` 开始，`assistant/action` 单动作执行也支持 `compact=true`；从 `0.1.60` 开始，`assistant/route` 和 `assistant/pick` 主交互链路也支持 `compact=true`：
 
 - `compact=true` 时不会再嵌套完整 `session_state`
 - `assistant/session` 返回当前会话阶段、恢复建议、待执行计划和待继续 115 任务摘要
@@ -613,6 +613,8 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/toolbox?apikey=你的MP_API_TO
 - `assistant/capabilities` 返回能力、工作流和 Tool 名称清单
 - `assistant/readiness` 返回服务布尔状态、待执行计划和恢复建议
 - `assistant/action` 返回单动作执行摘要，适合 action_template 原样回放
+- `assistant/route` 返回搜索、直链、115 状态等智能入口摘要
+- `assistant/pick` 返回选择、详情、翻页、解锁落盘等继续处理摘要
 
 示例：
 
@@ -623,6 +625,10 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/session?apikey=你的MP_API_TO
 GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions?apikey=你的MP_API_TOKEN&compact=true
 GET /api/v1/plugin/AgentResourceOfficer/assistant/history?apikey=你的MP_API_TOKEN&compact=true
 GET /api/v1/plugin/AgentResourceOfficer/assistant/plans?apikey=你的MP_API_TOKEN&compact=true
+POST /api/v1/plugin/AgentResourceOfficer/assistant/route?apikey=你的MP_API_TOKEN
+{"text":"盘搜搜索 大君夫人","compact":true}
+POST /api/v1/plugin/AgentResourceOfficer/assistant/pick?apikey=你的MP_API_TOKEN
+{"session":"default","choice":1,"compact":true}
 POST /api/v1/plugin/AgentResourceOfficer/assistant/action?apikey=你的MP_API_TOKEN
 {"name":"show_115_status","compact":true}
 POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow?apikey=你的MP_API_TOKEN

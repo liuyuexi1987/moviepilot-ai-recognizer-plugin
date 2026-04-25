@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.59",
+    "version": "0.1.60",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.60": "assistant/route 与 assistant/pick 新增 compact=true 低 token 回执，减少智能入口搜索、选择、翻页和落盘主链路的嵌套负载。",
       "0.1.59": "assistant/action 新增 compact=true 低 token 回执，外部智能体原样回放 action_template 时可直接获取单动作摘要。",
       "0.1.58": "assistant/capabilities 与 assistant/readiness 新增 compact=true 低 token 回执，减少外部智能体启动阶段的能力发现和就绪检查负载。",
       "0.1.57": "assistant/actions、assistant/workflow 与 assistant/plan/execute 新增 compact=true 低 token 回执，减少批量执行、工作流计划和计划执行链路的嵌套负载。",

@@ -36,6 +36,7 @@ class AssistantRouteToolInput(BaseModel):
     year: Optional[str] = Field(default=None, description="结构化年份")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
     action: Optional[str] = Field(default=None, description="结构化动作：p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel / assistant_help")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
 
 class AssistantPickToolInput(BaseModel):
@@ -44,6 +45,7 @@ class AssistantPickToolInput(BaseModel):
     choice: int = Field(default=0, description="选择的编号，从 1 开始；详情或翻页时可为 0")
     action: Optional[str] = Field(default=None, description="可选动作：detail/details/review/详情/审查 或 next/n/下一页")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则沿用会话目录")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
 
 class AssistantHelpToolInput(BaseModel):
