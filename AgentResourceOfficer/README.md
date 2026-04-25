@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.41`
+- 当前版本：`0.1.42`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -440,22 +440,31 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow
 
 这个接口会记录最近的批量动作和预设工作流执行摘要，包括会话、动作名、成功状态、时间、简短结果和每步摘要。外部智能体在断线、超时或用户询问“刚才跑到哪了”时，可以先查它再决定是否继续、重试或清理会话。
 
-从 `0.1.41` 开始，`POST /assistant/workflow` 支持 `dry_run=true`：
+从 `0.1.41` 开始，`POST /assistant/workflow` 支持 `dry_run=true`；从 `0.1.42` 开始，`dry_run` 会持久化计划并返回 `plan_id`：
 
 - 只生成 `workflow_actions`
 - 不实际搜索、解锁或转存
 - 返回 `execute_body`，外部智能体确认后可原样改为 `dry_run=false` 执行
+- 返回 `execute_plan_body`，外部智能体也可以只携带 `plan_id` 调用 `/assistant/plan/execute`
 
 例如：
 
 ```json
-POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow
+POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow?apikey=你的MP_API_TOKEN
 {
   "session": "demo-plan",
   "name": "pansou_transfer",
   "keyword": "大君夫人",
   "choice": 1,
-  "dry_run": true,
-  "apikey": "你的 MP API Token"
+  "dry_run": true
+}
+```
+
+随后可直接执行保存的计划：
+
+```json
+POST /api/v1/plugin/AgentResourceOfficer/assistant/plan/execute?apikey=你的MP_API_TOKEN
+{
+  "plan_id": "plan-..."
 }
 ```

@@ -9,6 +9,7 @@ from .schemas import (
     AssistantCapabilitiesToolInput,
     AssistantExecuteActionToolInput,
     AssistantExecuteActionsToolInput,
+    AssistantExecutePlanToolInput,
     AssistantHistoryToolInput,
     AssistantHelpToolInput,
     AssistantPickToolInput,
@@ -361,6 +362,31 @@ class AssistantWorkflowTool(MoviePilotTool):
             year=year,
             client_type=client_type,
             dry_run=dry_run,
+            stop_on_error=stop_on_error,
+            include_raw_results=include_raw_results,
+        )
+
+
+class AssistantExecutePlanTool(MoviePilotTool):
+    name: str = "agent_resource_officer_execute_plan"
+    description: str = "Execute a saved Agent资源官 dry-run workflow plan by plan_id without resending the whole action list."
+    args_schema: Type[BaseModel] = AssistantExecutePlanToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return f"正在执行 Agent资源官 已保存计划：{kwargs.get('plan_id', '')}"
+
+    async def run(
+        self,
+        plan_id: str,
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_execute_plan(
+            plan_id=plan_id,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
         )

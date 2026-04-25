@@ -33,6 +33,7 @@ from .agenttool import (
     AssistantCapabilitiesTool,
     AssistantExecuteActionTool,
     AssistantExecuteActionsTool,
+    AssistantExecutePlanTool,
     AssistantHistoryTool,
     AssistantHelpTool,
     AssistantPickTool,
@@ -68,7 +69,12 @@ class _JsonRequestShim:
 
 class _RequestContextShim:
     def __init__(self, headers: Optional[Dict[str, Any]] = None, query_params: Optional[Dict[str, Any]] = None) -> None:
-        self.headers = headers or {}
+        default_headers = dict(headers or {})
+        if settings is not None and not default_headers.get("Authorization"):
+            token = str(getattr(settings, "API_TOKEN", "") or "").strip()
+            if token:
+                default_headers["Authorization"] = f"Bearer {token}"
+        self.headers = default_headers
         self.query_params = query_params or {}
 
 
@@ -76,7 +82,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.41"
+    plugin_version = "0.1.42"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -112,6 +118,9 @@ class AgentResourceOfficer(_PluginBase):
     _execution_history_store_key = "assistant_execution_history"
     _execution_history_limit = 100
     _execution_history: List[Dict[str, Any]] = []
+    _workflow_plan_store_key = "assistant_workflow_plans"
+    _workflow_plan_limit = 50
+    _workflow_plans: Dict[str, Dict[str, Any]] = {}
 
     @staticmethod
     def _extract_first_url(text: str) -> str:
@@ -213,6 +222,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         self._restore_persisted_sessions()
         self._restore_execution_history()
+        self._restore_workflow_plans()
         self._agent_tools_reloaded = False
 
     def get_state(self) -> bool:
@@ -226,6 +236,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantCapabilitiesTool,
             AssistantExecuteActionTool,
             AssistantExecuteActionsTool,
+            AssistantExecutePlanTool,
             AssistantReadinessTool,
             AssistantHistoryTool,
             AssistantHelpTool,
@@ -719,6 +730,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_workflow,
                 "methods": ["GET", "POST"],
                 "summary": "运行预设工作流，适合外部智能体用更短参数完成常见资源任务",
+            },
+            {
+                "path": "/assistant/plan/execute",
+                "endpoint": self.api_assistant_plan_execute,
+                "methods": ["POST"],
+                "summary": "执行 dry_run 保存的工作流计划，避免外部智能体重复携带大 JSON",
             },
             {
                 "path": "/assistant/session",
@@ -1413,6 +1430,70 @@ class AgentResourceOfficer(_PluginBase):
                 ]
         except Exception:
             self._execution_history = []
+
+    def _persist_workflow_plans(self) -> None:
+        try:
+            items = sorted(
+                (dict(item) for item in (self._workflow_plans or {}).values() if isinstance(item, dict)),
+                key=lambda item: self._safe_int(item.get("created_at"), 0),
+                reverse=True,
+            )[:self._workflow_plan_limit]
+            self._workflow_plans = {
+                self._clean_text(item.get("plan_id")): item
+                for item in items
+                if self._clean_text(item.get("plan_id"))
+            }
+            self.save_data(key=self._workflow_plan_store_key, value=self._workflow_plans)
+        except Exception:
+            pass
+
+    def _restore_workflow_plans(self) -> None:
+        try:
+            restored = self.get_data(self._workflow_plan_store_key) or {}
+            if isinstance(restored, dict):
+                self._workflow_plans = {
+                    self._clean_text(plan_id): dict(payload)
+                    for plan_id, payload in restored.items()
+                    if self._clean_text(plan_id) and isinstance(payload, dict)
+                }
+        except Exception:
+            self._workflow_plans = {}
+
+    def _save_workflow_plan(
+        self,
+        *,
+        workflow: str,
+        session: str,
+        session_id: str = "",
+        actions: List[Dict[str, Any]],
+        execute_body: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        plan_id = self._new_session_id("plan")
+        created_at = int(time.time())
+        session_name, normalized_session_id = self._normalize_assistant_session_ref(
+            session=session,
+            session_id=session_id,
+        )
+        plan = {
+            "plan_id": plan_id,
+            "workflow": self._clean_text(workflow),
+            "session": session_name,
+            "session_id": normalized_session_id,
+            "actions": [dict(item or {}) for item in (actions or [])],
+            "execute_body": dict(execute_body or {}),
+            "created_at": created_at,
+            "created_at_text": self._format_unix_time(created_at),
+            "executed_at": 0,
+            "executed_at_text": "",
+            "executed": False,
+        }
+        self._workflow_plans[plan_id] = plan
+        self._persist_workflow_plans()
+        return dict(plan)
+
+    def _load_workflow_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
+        plan = (self._workflow_plans or {}).get(self._clean_text(plan_id))
+        return dict(plan) if isinstance(plan, dict) else None
 
     def _record_assistant_execution(
         self,
@@ -2454,12 +2535,20 @@ class AgentResourceOfficer(_PluginBase):
                 ],
             },
             "assistant_workflow": self._assistant_workflow_catalog(),
+            "assistant_plan_execute": {
+                "fields": [
+                    "plan_id",
+                    "stop_on_error",
+                    "include_raw_results",
+                ],
+            },
             "session_tools": [
                 "assistant/readiness",
                 "assistant/history",
                 "assistant/action",
                 "assistant/actions",
                 "assistant/workflow",
+                "assistant/plan/execute",
                 "assistant/sessions",
                 "assistant/sessions/clear",
                 "assistant/session",
@@ -2484,6 +2573,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_history",
                 "agent_resource_officer_execute_action",
                 "agent_resource_officer_execute_actions",
+                "agent_resource_officer_execute_plan",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
@@ -2522,6 +2612,7 @@ class AgentResourceOfficer(_PluginBase):
             "动作执行入口：assistant/action，可直接执行 action_templates 里的 name + body",
             "批量动作入口：assistant/actions，可一次执行多步 action_body，默认只返回精简执行摘要，减少外部智能体往返和 token 消耗",
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景",
+            "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
@@ -3476,6 +3567,26 @@ class AgentResourceOfficer(_PluginBase):
             )
         )
         return str(result.get("message") or "工作流执行完成")
+
+    async def tool_assistant_execute_plan(
+        self,
+        plan_id: str,
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_plan_execute(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "plan_id": self._clean_text(plan_id),
+                    "stop_on_error": bool(stop_on_error),
+                    "include_raw_results": bool(include_raw_results),
+                },
+            )
+        )
+        return str(result.get("message") or "计划执行完成")
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
@@ -4488,6 +4599,7 @@ class AgentResourceOfficer(_PluginBase):
         if not isinstance(actions, list) or not actions:
             return {"success": False, "message": "缺少 actions 数组"}
 
+        apikey = self._extract_apikey(request, body)
         requested_count = min(len(actions), 20)
         stop_on_error = bool(body.get("stop_on_error", True))
         include_raw_results = bool(body.get("include_raw_results", False))
@@ -4505,6 +4617,8 @@ class AgentResourceOfficer(_PluginBase):
                 payload["session"] = batch_session
             if not payload.get("session_id") and batch_session_id:
                 payload["session_id"] = batch_session_id
+            if apikey and not payload.get("apikey") and not payload.get("api_key"):
+                payload["apikey"] = apikey
             action_name = self._clean_text(payload.get("name") or payload.get("action_name"))
             result = await self.api_assistant_action(_JsonRequestShim(request, payload))
             summaries.append(self._assistant_action_result_summary(index=idx, name=action_name, result=result))
@@ -4729,23 +4843,36 @@ class AgentResourceOfficer(_PluginBase):
 
         session = self._clean_text(body.get("session")) or "default"
         if bool(body.get("dry_run")):
+            execute_body = {
+                **{key: value for key, value in body.items() if key not in {"apikey", "dry_run"}},
+                "dry_run": False,
+            }
+            plan = self._save_workflow_plan(
+                workflow=workflow_name,
+                session=session,
+                session_id=self._clean_text(body.get("session_id")),
+                actions=actions,
+                execute_body=execute_body,
+            )
             data = self._assistant_response_data(session=session, data={
                 "action": "workflow_plan",
                 "ok": True,
+                "plan_id": plan.get("plan_id"),
                 "workflow": workflow_name,
                 "dry_run": True,
                 "workflow_actions": actions,
                 "estimated_steps": len(actions),
                 "ready_to_execute": True,
                 "execute_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
-                "execute_body": {
-                    **{key: value for key, value in body.items() if key not in {"apikey", "dry_run"}},
-                    "dry_run": False,
-                },
+                "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                "execute_plan_body": {"plan_id": plan.get("plan_id")},
+                "execute_body": execute_body,
+                "plan_created_at": plan.get("created_at"),
+                "plan_created_at_text": plan.get("created_at_text"),
             })
             return {
                 "success": True,
-                "message": f"工作流 {workflow_name} 计划已生成，共 {len(actions)} 步，未实际执行。",
+                "message": f"工作流 {workflow_name} 计划已生成：{plan.get('plan_id')}，共 {len(actions)} 步，未实际执行。",
                 "data": data,
             }
 
@@ -4759,6 +4886,7 @@ class AgentResourceOfficer(_PluginBase):
                     "session_id": self._clean_text(body.get("session_id")),
                     "stop_on_error": bool(body.get("stop_on_error", True)),
                     "include_raw_results": bool(body.get("include_raw_results", False)),
+                    "apikey": self._extract_apikey(request, body),
                 },
             )
         )
@@ -4770,6 +4898,72 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": bool(result.get("success")),
             "message": f"工作流 {workflow_name} 执行完成\n{result.get('message') or ''}".strip(),
+            "data": data,
+        }
+
+    async def api_assistant_plan_execute(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        plan_id = self._clean_text(body.get("plan_id"))
+        if not plan_id:
+            return {"success": False, "message": "缺少 plan_id"}
+
+        plan = self._load_workflow_plan(plan_id)
+        if not plan:
+            return {"success": False, "message": f"计划不存在或已过期：{plan_id}"}
+
+        actions = plan.get("actions") or []
+        if not isinstance(actions, list) or not actions:
+            return {"success": False, "message": f"计划没有可执行动作：{plan_id}"}
+
+        workflow_name = self._clean_text(plan.get("workflow")) or "saved_plan"
+        session = self._clean_text(plan.get("session")) or "default"
+        session_id = self._clean_text(plan.get("session_id"))
+        result = await self.api_assistant_actions(
+            _JsonRequestShim(
+                request,
+                {
+                    "actions": actions,
+                    "workflow": workflow_name,
+                    "session": session,
+                    "session_id": session_id,
+                    "stop_on_error": bool(body.get("stop_on_error", True)),
+                    "include_raw_results": bool(body.get("include_raw_results", False)),
+                    "apikey": self._extract_apikey(request, body),
+                },
+            )
+        )
+
+        executed_at = int(time.time())
+        plan.update({
+            "executed": True,
+            "executed_at": executed_at,
+            "executed_at_text": self._format_unix_time(executed_at),
+            "last_success": bool(result.get("success")),
+            "last_message": self._assistant_result_message_head(result.get("message")),
+        })
+        self._workflow_plans[plan_id] = plan
+        self._persist_workflow_plans()
+
+        data = dict(result.get("data") or {})
+        data.update({
+            "action": "execute_plan",
+            "plan_id": plan_id,
+            "workflow": workflow_name,
+            "workflow_actions": actions,
+            "plan_created_at": plan.get("created_at"),
+            "plan_created_at_text": plan.get("created_at_text"),
+            "plan_executed_at": executed_at,
+            "plan_executed_at_text": plan.get("executed_at_text"),
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": f"计划 {plan_id} 执行完成\n{result.get('message') or ''}".strip(),
             "data": data,
         }
 
