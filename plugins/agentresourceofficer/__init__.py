@@ -33,6 +33,7 @@ from .agenttool import (
     AssistantCapabilitiesTool,
     AssistantExecuteActionTool,
     AssistantExecuteActionsTool,
+    AssistantHistoryTool,
     AssistantHelpTool,
     AssistantPickTool,
     AssistantReadinessTool,
@@ -75,7 +76,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.39"
+    plugin_version = "0.1.40"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -108,6 +109,9 @@ class AgentResourceOfficer(_PluginBase):
     _candidate_actor_cache_lock = threading.Lock()
     _session_store_key = "assistant_session_cache"
     _session_retention_seconds = 7 * 24 * 60 * 60
+    _execution_history_store_key = "assistant_execution_history"
+    _execution_history_limit = 100
+    _execution_history: List[Dict[str, Any]] = []
 
     @staticmethod
     def _extract_first_url(text: str) -> str:
@@ -208,6 +212,7 @@ class AgentResourceOfficer(_PluginBase):
             prefer_direct=self._p115_prefer_direct,
         )
         self._restore_persisted_sessions()
+        self._restore_execution_history()
         self._agent_tools_reloaded = False
 
     def get_state(self) -> bool:
@@ -222,6 +227,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantExecuteActionTool,
             AssistantExecuteActionsTool,
             AssistantReadinessTool,
+            AssistantHistoryTool,
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
@@ -689,6 +695,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_readiness,
                 "methods": ["GET"],
                 "summary": "检查 Agent资源官 是否已准备好给外部智能体调用",
+            },
+            {
+                "path": "/assistant/history",
+                "endpoint": self.api_assistant_history,
+                "methods": ["GET"],
+                "summary": "查看最近执行历史，便于外部智能体判断上一步是否完成",
             },
             {
                 "path": "/assistant/action",
@@ -1381,6 +1393,106 @@ class AgentResourceOfficer(_PluginBase):
                         self._session_cache[str(session_id)] = dict(payload)
         except Exception:
             pass
+
+    def _persist_execution_history(self) -> None:
+        try:
+            history = list(self._execution_history or [])[-self._execution_history_limit:]
+            self._execution_history = history
+            self.save_data(key=self._execution_history_store_key, value=history)
+        except Exception:
+            pass
+
+    def _restore_execution_history(self) -> None:
+        try:
+            restored = self.get_data(self._execution_history_store_key) or []
+            if isinstance(restored, list):
+                self._execution_history = [
+                    dict(item)
+                    for item in restored[-self._execution_history_limit:]
+                    if isinstance(item, dict)
+                ]
+        except Exception:
+            self._execution_history = []
+
+    def _record_assistant_execution(
+        self,
+        *,
+        action: str,
+        session: str = "default",
+        session_id: str = "",
+        success: bool = False,
+        message: str = "",
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        session_name, normalized_session_id = self._normalize_assistant_session_ref(
+            session=session,
+            session_id=session_id,
+        )
+        entry = {
+            "id": self._new_session_id("exec"),
+            "time": int(time.time()),
+            "time_text": self._format_unix_time(int(time.time())),
+            "action": self._clean_text(action),
+            "session": session_name,
+            "session_id": normalized_session_id,
+            "success": bool(success),
+            "message_head": self._assistant_result_message_head(message),
+            "summary": dict(summary or {}),
+        }
+        self._execution_history.append(entry)
+        self._execution_history = self._execution_history[-self._execution_history_limit:]
+        self._persist_execution_history()
+
+    def _assistant_history_public_data(
+        self,
+        *,
+        session: str = "",
+        session_id: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        max_limit = min(max(1, self._safe_int(limit, 20)), 100)
+        session_filter = ""
+        session_id_filter = ""
+        if self._clean_text(session) or self._clean_text(session_id):
+            session_filter, session_id_filter = self._normalize_assistant_session_ref(
+                session=session,
+                session_id=session_id,
+            )
+        items: List[Dict[str, Any]] = []
+        for entry in reversed(self._execution_history or []):
+            current = dict(entry or {})
+            if session_id_filter and self._clean_text(current.get("session_id")) != session_id_filter:
+                continue
+            items.append(current)
+            if len(items) >= max_limit:
+                break
+        return {
+            "total": len(self._execution_history or []),
+            "limit": max_limit,
+            "session": session_filter,
+            "session_id": session_id_filter,
+            "items": items,
+        }
+
+    def _format_assistant_history_text(
+        self,
+        *,
+        session: str = "",
+        session_id: str = "",
+        limit: int = 20,
+    ) -> str:
+        data = self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
+        items = data.get("items") or []
+        if not items:
+            return "当前没有 Agent资源官 执行历史。"
+        lines = [f"最近执行历史：{len(items)} 条"]
+        for index, item in enumerate(items, 1):
+            status = "成功" if item.get("success") else "失败"
+            line = f"{index}. {item.get('time_text') or '-'} | {status} | {item.get('action') or '-'} | {item.get('session') or '-'}"
+            if item.get("message_head"):
+                line = f"{line} | {item.get('message_head')}"
+            lines.append(line)
+        return "\n".join(lines)
 
     def _is_session_expired(self, payload: Optional[Dict[str, Any]]) -> bool:
         session = dict(payload or {})
@@ -2344,6 +2456,7 @@ class AgentResourceOfficer(_PluginBase):
             "assistant_workflow": self._assistant_workflow_catalog(),
             "session_tools": [
                 "assistant/readiness",
+                "assistant/history",
                 "assistant/action",
                 "assistant/actions",
                 "assistant/workflow",
@@ -2368,6 +2481,7 @@ class AgentResourceOfficer(_PluginBase):
             "agent_tools": [
                 "agent_resource_officer_capabilities",
                 "agent_resource_officer_readiness",
+                "agent_resource_officer_history",
                 "agent_resource_officer_execute_action",
                 "agent_resource_officer_execute_actions",
                 "agent_resource_officer_run_workflow",
@@ -2399,6 +2513,7 @@ class AgentResourceOfficer(_PluginBase):
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
             "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用",
+            "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
             "smart_entry 结构化模式：pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
@@ -3240,6 +3355,11 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_readiness_text()
+
+    async def tool_assistant_history(self, session: str = "", session_id: str = "", limit: int = 20) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_history_text(session=session, session_id=session_id, limit=limit)
 
     async def tool_assistant_execute_action(
         self,
@@ -4428,6 +4548,19 @@ class AgentResourceOfficer(_PluginBase):
         }
         if include_raw_results:
             data["raw_results"] = raw_results
+        self._record_assistant_execution(
+            action=self._clean_text(body.get("workflow")) or "execute_actions",
+            session=session_name,
+            success=success,
+            message="\n".join(message_lines),
+            summary={
+                "executed_count": len(summaries),
+                "requested_count": requested_count,
+                "stopped_on_error": halted,
+                "halted_at": halted_at,
+                "results": summaries,
+            },
+        )
         return {
             "success": success,
             "message": "\n".join(message_lines),
@@ -4598,6 +4731,7 @@ class AgentResourceOfficer(_PluginBase):
                 request,
                 {
                     "actions": actions,
+                    "workflow": workflow_name,
                     "session": session,
                     "session_id": self._clean_text(body.get("session_id")),
                     "stop_on_error": bool(body.get("stop_on_error", True)),
@@ -4847,6 +4981,24 @@ class AgentResourceOfficer(_PluginBase):
             "data": self._assistant_response_data(session="default", data={
                 "action": "readiness",
                 "ok": bool(data.get("can_start")),
+                **data,
+            }),
+        }
+
+    async def api_assistant_history(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        session = self._clean_text(request.query_params.get("session"))
+        session_id = self._clean_text(request.query_params.get("session_id"))
+        limit = self._safe_int(request.query_params.get("limit"), 20)
+        data = self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
+        return {
+            "success": True,
+            "message": self._format_assistant_history_text(session=session, session_id=session_id, limit=limit),
+            "data": self._assistant_response_data(session=session or "default", data={
+                "action": "history",
+                "ok": True,
                 **data,
             }),
         }

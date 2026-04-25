@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.39`
+- 当前版本：`0.1.40`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -114,6 +114,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/pick`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness`
+- `GET /api/v1/plugin/AgentResourceOfficer/assistant/history`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/action`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/actions`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
@@ -135,6 +136,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_help`
 - `agent_resource_officer_capabilities`
 - `agent_resource_officer_readiness`
+- `agent_resource_officer_history`
 - `agent_resource_officer_execute_action`
 - `agent_resource_officer_execute_actions`
 - `agent_resource_officer_run_workflow`
@@ -430,3 +432,10 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow
 - `agent_resource_officer_readiness`
 
 这个接口是给外部智能体启动前使用的轻量探针，会返回插件版本、是否启用、115/影巢/夸克状态、活跃会话数量、推荐入口和启动提示。外部智能体可以先调它，看到 `can_start=true` 后再进入 `assistant/workflow` 或 `assistant/actions`。
+
+从 `0.1.40` 开始，还新增了：
+
+- `GET /assistant/history`
+- `agent_resource_officer_history`
+
+这个接口会记录最近的批量动作和预设工作流执行摘要，包括会话、动作名、成功状态、时间、简短结果和每步摘要。外部智能体在断线、超时或用户询问“刚才跑到哪了”时，可以先查它再决定是否继续、重试或清理会话。

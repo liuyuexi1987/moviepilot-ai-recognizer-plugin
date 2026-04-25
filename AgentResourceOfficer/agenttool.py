@@ -9,6 +9,7 @@ from .schemas import (
     AssistantCapabilitiesToolInput,
     AssistantExecuteActionToolInput,
     AssistantExecuteActionsToolInput,
+    AssistantHistoryToolInput,
     AssistantHelpToolInput,
     AssistantPickToolInput,
     AssistantReadinessToolInput,
@@ -216,6 +217,21 @@ class AssistantReadinessTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_readiness()
+
+
+class AssistantHistoryTool(MoviePilotTool):
+    name: str = "agent_resource_officer_history"
+    description: str = "Show recent Agent资源官 assistant executions so external agents can debug progress, retries, and the last completed action."
+    args_schema: Type[BaseModel] = AssistantHistoryToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在查看 Agent资源官 最近执行历史"
+
+    async def run(self, session: str = None, session_id: str = None, limit: int = 20, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_history(session=session, session_id=session_id, limit=limit)
 
 
 class AssistantExecuteActionTool(MoviePilotTool):

@@ -69,6 +69,12 @@ class AssistantReadinessToolInput(BaseModel):
     pass
 
 
+class AssistantHistoryToolInput(BaseModel):
+    session: Optional[str] = Field(default=None, description="可选会话名；不填则返回全部最近执行记录")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    limit: Optional[int] = Field(default=20, description="最多返回多少条执行记录")
+
+
 class AssistantExecuteActionToolInput(BaseModel):
     name: str = Field(..., description="要执行的动作模板名，例如 pick_pansou_result / candidate_next_page / resume_pending_115")
     session: Optional[str] = Field(default="default", description="可选会话名")
