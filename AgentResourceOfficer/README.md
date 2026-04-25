@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.37`
+- 当前版本：`0.1.38`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -115,6 +115,8 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/action`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/actions`
+- `GET /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
+- `POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/session`
@@ -133,6 +135,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_capabilities`
 - `agent_resource_officer_execute_action`
 - `agent_resource_officer_execute_actions`
+- `agent_resource_officer_run_workflow`
 - `agent_resource_officer_route_share`
 - `agent_resource_officer_sessions`
 - `agent_resource_officer_sessions_clear`
@@ -386,6 +389,35 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/actions
     }
   ],
   "stop_on_error": true,
+  "apikey": "你的 MP API Token"
+}
+```
+
+从 `0.1.38` 开始，还新增了：
+
+- `GET /assistant/workflow`
+- `POST /assistant/workflow`
+- `agent_resource_officer_run_workflow`
+
+这样外部智能体可以直接按预设场景调用，不需要自己拼 `actions` 数组。当前内置工作流包括：
+
+- `pansou_search`
+- `pansou_transfer`
+- `hdhive_candidates`
+- `hdhive_unlock`
+- `share_transfer`
+- `p115_login_start`
+- `p115_status`
+
+例如：
+
+```json
+POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow
+{
+  "session": "demo-workflow",
+  "name": "pansou_transfer",
+  "keyword": "大君夫人",
+  "choice": 1,
   "apikey": "你的 MP API Token"
 }
 ```

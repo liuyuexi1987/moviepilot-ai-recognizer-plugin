@@ -40,6 +40,7 @@ from .agenttool import (
     AssistantSessionsClearTool,
     AssistantSessionsTool,
     AssistantSessionStateTool,
+    AssistantWorkflowTool,
     HDHiveSearchSessionTool,
     HDHiveSessionPickTool,
     P115CancelPendingTool,
@@ -73,7 +74,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.37"
+    plugin_version = "0.1.38"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -222,6 +223,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
+            AssistantWorkflowTool,
             AssistantSessionsTool,
             AssistantSessionStateTool,
             AssistantSessionClearTool,
@@ -691,6 +693,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_actions,
                 "methods": ["POST"],
                 "summary": "批量执行多个动作模板，适合外部智能体一次请求串起多步工作流，减少往返",
+            },
+            {
+                "path": "/assistant/workflow",
+                "endpoint": self.api_assistant_workflow,
+                "methods": ["GET", "POST"],
+                "summary": "运行预设工作流，适合外部智能体用更短参数完成常见资源任务",
             },
             {
                 "path": "/assistant/session",
@@ -2325,9 +2333,11 @@ class AgentResourceOfficer(_PluginBase):
                     "include_raw_results",
                 ],
             },
+            "assistant_workflow": self._assistant_workflow_catalog(),
             "session_tools": [
                 "assistant/action",
                 "assistant/actions",
+                "assistant/workflow",
                 "assistant/sessions",
                 "assistant/sessions/clear",
                 "assistant/session",
@@ -2350,6 +2360,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_capabilities",
                 "agent_resource_officer_execute_action",
                 "agent_resource_officer_execute_actions",
+                "agent_resource_officer_run_workflow",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
                 "agent_resource_officer_smart_pick",
@@ -2384,6 +2395,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_pick 动作：detail / next_page",
             "动作执行入口：assistant/action，可直接执行 action_templates 里的 name + body",
             "批量动作入口：assistant/actions，可一次执行多步 action_body，默认只返回精简执行摘要，减少外部智能体往返和 token 消耗",
+            "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
@@ -3200,6 +3212,50 @@ class AgentResourceOfficer(_PluginBase):
             )
         )
         return str(result.get("message") or "批量动作执行完成")
+
+    async def tool_assistant_workflow(
+        self,
+        name: str,
+        session: str = "default",
+        session_id: str = "",
+        keyword: str = "",
+        choice: Optional[int] = None,
+        candidate_choice: Optional[int] = None,
+        resource_choice: Optional[int] = None,
+        target_path: str = "",
+        share_url: str = "",
+        access_code: str = "",
+        media_type: str = "",
+        year: str = "",
+        client_type: str = "",
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_workflow(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "name": self._clean_text(name),
+                    "session": self._clean_text(session) or "default",
+                    "session_id": self._clean_text(session_id),
+                    "keyword": self._clean_text(keyword),
+                    "choice": choice,
+                    "candidate_choice": candidate_choice,
+                    "resource_choice": resource_choice,
+                    "path": self._clean_text(target_path),
+                    "url": self._clean_text(share_url),
+                    "access_code": self._clean_text(access_code),
+                    "media_type": self._clean_text(media_type),
+                    "year": self._clean_text(year),
+                    "client_type": self._clean_text(client_type),
+                    "stop_on_error": bool(stop_on_error),
+                    "include_raw_results": bool(include_raw_results),
+                },
+            )
+        )
+        return str(result.get("message") or "工作流执行完成")
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
@@ -4109,6 +4165,12 @@ class AgentResourceOfficer(_PluginBase):
                 "client_type": body.get("client_type"),
             })
             return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
+        if name == "route_share":
+            route_payload.update({
+                "url": body.get("url") or body.get("share_url"),
+                "access_code": body.get("access_code"),
+            })
+            return await self.api_assistant_route(_JsonRequestShim(request, route_payload))
         if name == "inspect_session_state":
             return await self.api_assistant_session_state(_JsonRequestShim(request, {
                 "session": body.get("session"),
@@ -4272,6 +4334,188 @@ class AgentResourceOfficer(_PluginBase):
             "success": success,
             "message": "\n".join(message_lines),
             "data": self._assistant_response_data(session=session_name, data=data),
+        }
+
+    @staticmethod
+    def _assistant_workflow_catalog() -> Dict[str, Any]:
+        return {
+            "workflows": [
+                {
+                    "name": "pansou_search",
+                    "description": "按关键词执行盘搜，只返回候选结果并保留会话",
+                    "fields": ["session", "keyword"],
+                },
+                {
+                    "name": "pansou_transfer",
+                    "description": "按关键词盘搜并直接选择指定编号转存，choice 默认 1",
+                    "fields": ["session", "keyword", "choice", "path"],
+                },
+                {
+                    "name": "hdhive_candidates",
+                    "description": "按关键词搜索影巢候选影片，等待下一步选片",
+                    "fields": ["session", "keyword", "media_type", "year", "path"],
+                },
+                {
+                    "name": "hdhive_unlock",
+                    "description": "按关键词搜索影巢，选择候选影片，再选择资源解锁落盘",
+                    "fields": ["session", "keyword", "candidate_choice", "resource_choice", "media_type", "year", "path"],
+                },
+                {
+                    "name": "share_transfer",
+                    "description": "识别 115 或夸克分享链接并直接转存",
+                    "fields": ["session", "url", "access_code", "path"],
+                },
+                {
+                    "name": "p115_login_start",
+                    "description": "发起 115 扫码登录",
+                    "fields": ["session", "client_type"],
+                },
+                {
+                    "name": "p115_status",
+                    "description": "查看 115 当前可用状态",
+                    "fields": ["session"],
+                },
+            ]
+        }
+
+    def _assistant_workflow_actions(self, name: str, body: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], str]:
+        workflow_name = self._clean_text(name).lower()
+        session = self._clean_text(body.get("session")) or "default"
+        session_id = self._clean_text(body.get("session_id"))
+        path = self._clean_text(body.get("path") or body.get("target_path"))
+        keyword = self._clean_text(body.get("keyword") or body.get("title"))
+        media_type = self._clean_text(body.get("media_type") or "movie")
+        year = self._clean_text(body.get("year"))
+
+        def base(payload: Dict[str, Any]) -> Dict[str, Any]:
+            current = dict(payload)
+            current.setdefault("session", session)
+            if session_id:
+                current.setdefault("session_id", session_id)
+            if path and "path" not in current:
+                current["path"] = path
+            return current
+
+        if workflow_name == "pansou_search":
+            if not keyword:
+                return [], "pansou_search 缺少 keyword"
+            return [base({"name": "start_pansou_search", "keyword": keyword})], ""
+
+        if workflow_name == "pansou_transfer":
+            if not keyword:
+                return [], "pansou_transfer 缺少 keyword"
+            choice = self._safe_int(body.get("choice"), 1)
+            return [
+                base({"name": "start_pansou_search", "keyword": keyword}),
+                base({"name": "pick_pansou_result", "choice": max(1, choice)}),
+            ], ""
+
+        if workflow_name == "hdhive_candidates":
+            if not keyword:
+                return [], "hdhive_candidates 缺少 keyword"
+            return [
+                base({
+                    "name": "start_hdhive_search",
+                    "keyword": keyword,
+                    "media_type": media_type,
+                    "year": year,
+                })
+            ], ""
+
+        if workflow_name == "hdhive_unlock":
+            if not keyword:
+                return [], "hdhive_unlock 缺少 keyword"
+            candidate_choice = self._safe_int(body.get("candidate_choice") or body.get("choice"), 0)
+            resource_choice = self._safe_int(body.get("resource_choice"), 0)
+            if candidate_choice <= 0 or resource_choice <= 0:
+                return [], "hdhive_unlock 需要 candidate_choice 和 resource_choice"
+            return [
+                base({
+                    "name": "start_hdhive_search",
+                    "keyword": keyword,
+                    "media_type": media_type,
+                    "year": year,
+                }),
+                base({"name": "pick_hdhive_candidate", "choice": candidate_choice}),
+                base({"name": "pick_hdhive_resource", "choice": resource_choice}),
+            ], ""
+
+        if workflow_name == "share_transfer":
+            share_url = self._clean_text(body.get("url") or body.get("share_url"))
+            if not share_url:
+                return [], "share_transfer 缺少 url"
+            return [
+                base({
+                    "name": "route_share",
+                    "url": share_url,
+                    "access_code": self._clean_text(body.get("access_code")),
+                })
+            ], ""
+
+        if workflow_name == "p115_login_start":
+            return [
+                base({
+                    "name": "start_115_login",
+                    "client_type": self._clean_text(body.get("client_type")),
+                })
+            ], ""
+
+        if workflow_name == "p115_status":
+            return [base({"name": "show_115_status"})], ""
+
+        return [], f"不支持的工作流：{name}"
+
+    async def api_assistant_workflow(self, request: Request):
+        if request.method.upper() == "GET":
+            ok, message = self._check_api_access(request)
+            if not ok:
+                return {"success": False, "message": message}
+            return {
+                "success": True,
+                "message": "Agent资源官 预设工作流目录",
+                "data": self._assistant_response_data(session="default", data={
+                    "action": "workflow_catalog",
+                    "ok": True,
+                    **self._assistant_workflow_catalog(),
+                }),
+            }
+
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        workflow_name = self._clean_text(body.get("name") or body.get("workflow"))
+        if not workflow_name:
+            return {"success": False, "message": "缺少工作流名 name"}
+        actions, build_error = self._assistant_workflow_actions(workflow_name, body)
+        if build_error:
+            return {"success": False, "message": build_error}
+
+        session = self._clean_text(body.get("session")) or "default"
+        result = await self.api_assistant_actions(
+            _JsonRequestShim(
+                request,
+                {
+                    "actions": actions,
+                    "session": session,
+                    "session_id": self._clean_text(body.get("session_id")),
+                    "stop_on_error": bool(body.get("stop_on_error", True)),
+                    "include_raw_results": bool(body.get("include_raw_results", False)),
+                },
+            )
+        )
+        data = dict(result.get("data") or {})
+        data.update({
+            "workflow": workflow_name,
+            "workflow_actions": actions,
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": f"工作流 {workflow_name} 执行完成\n{result.get('message') or ''}".strip(),
+            "data": data,
         }
 
     async def api_assistant_pick(self, request: Request):

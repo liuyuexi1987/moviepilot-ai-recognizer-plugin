@@ -92,6 +92,24 @@ class AssistantExecuteActionsToolInput(BaseModel):
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带每一步原始返回；默认关闭以减少 token 与负载")
 
 
+class AssistantWorkflowToolInput(BaseModel):
+    name: str = Field(..., description="预设工作流名，例如 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status")
+    session: Optional[str] = Field(default="default", description="工作流会话名")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    keyword: Optional[str] = Field(default=None, description="搜索关键词")
+    choice: Optional[int] = Field(default=None, description="通用选择编号，盘搜转存默认使用 1")
+    candidate_choice: Optional[int] = Field(default=None, description="影巢候选影片编号")
+    resource_choice: Optional[int] = Field(default=None, description="影巢资源编号")
+    path: Optional[str] = Field(default=None, description="可选目标目录")
+    url: Optional[str] = Field(default=None, description="分享链接")
+    access_code: Optional[str] = Field(default=None, description="提取码")
+    media_type: Optional[str] = Field(default=None, description="媒体类型，movie 或 tv")
+    year: Optional[str] = Field(default=None, description="年份")
+    client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
+    stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否停止")
+    include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果")
+
+
 class AssistantSessionsToolInput(BaseModel):
     kind: Optional[str] = Field(default=None, description="按会话类型过滤，例如 assistant_pansou / assistant_hdhive / assistant_p115_login")
     has_pending_p115: Optional[bool] = Field(default=None, description="是否只看带待继续 115 任务的会话")

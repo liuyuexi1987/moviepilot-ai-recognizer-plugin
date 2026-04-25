@@ -16,6 +16,7 @@ from .schemas import (
     AssistantSessionsClearToolInput,
     AssistantSessionsToolInput,
     AssistantSessionStateToolInput,
+    AssistantWorkflowToolInput,
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
     P115CancelPendingToolInput,
@@ -277,6 +278,55 @@ class AssistantExecuteActionsTool(MoviePilotTool):
             actions=actions,
             session=session,
             session_id=session_id,
+            stop_on_error=stop_on_error,
+            include_raw_results=include_raw_results,
+        )
+
+
+class AssistantWorkflowTool(MoviePilotTool):
+    name: str = "agent_resource_officer_run_workflow"
+    description: str = "Run a preset Agent资源官 workflow such as pansou_transfer, hdhive_candidates, hdhive_unlock, share_transfer, or p115_status with compact inputs."
+    args_schema: Type[BaseModel] = AssistantWorkflowToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return f"正在运行 Agent资源官 预设工作流：{kwargs.get('name', '')}"
+
+    async def run(
+        self,
+        name: str,
+        session: str = "default",
+        session_id: str = None,
+        keyword: str = None,
+        choice: int = None,
+        candidate_choice: int = None,
+        resource_choice: int = None,
+        path: str = None,
+        url: str = None,
+        access_code: str = None,
+        media_type: str = None,
+        year: str = None,
+        client_type: str = None,
+        stop_on_error: bool = True,
+        include_raw_results: bool = False,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_workflow(
+            name=name,
+            session=session,
+            session_id=session_id,
+            keyword=keyword,
+            choice=choice,
+            candidate_choice=candidate_choice,
+            resource_choice=resource_choice,
+            target_path=path,
+            share_url=url,
+            access_code=access_code,
+            media_type=media_type,
+            year=year,
+            client_type=client_type,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
         )
