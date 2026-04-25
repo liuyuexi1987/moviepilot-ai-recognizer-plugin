@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.75`
+- 当前版本：`0.1.76`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -379,6 +379,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.73` 开始，新增 `assistant/maintain` 与 `agent_resource_officer_maintain`，支持 dry-run 查看低风险维护建议，也支持 `execute=true` 执行过期会话和已执行计划清理。
 从 `0.1.74` 开始，`assistant/selfcheck` 会检查 `assistant/maintain` endpoint 和 `agent_resource_officer_maintain` Tool 是否已正确出现在工具清单中。
 从 `0.1.75` 开始，`assistant/capabilities` 增加 `assistant_maintain` 字段说明，并把 `assistant/maintain` 纳入 compact endpoint 和推荐启动链路。
+从 `0.1.76` 开始，`assistant/maintain` 的 GET 请求固定为 dry-run，即使带 `execute=true` 也不会执行清理；只有 POST `execute=true` 才会实际维护。
 
 从 `0.1.36` 开始，还新增了：
 

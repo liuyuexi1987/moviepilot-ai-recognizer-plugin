@@ -90,7 +90,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.75"
+    plugin_version = "0.1.76"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -7130,12 +7130,16 @@ class AgentResourceOfficer(_PluginBase):
         ok, message = self._check_api_access(request, body)
         if not ok:
             return {"success": False, "message": message}
-        execute = self._parse_bool_value(
+        requested_execute = self._parse_bool_value(
             body.get("execute") if "execute" in body else request.query_params.get("execute"),
             False,
         )
+        execute = requested_execute and request.method.upper() != "GET"
         limit = self._safe_int(body.get("limit") or request.query_params.get("limit"), 100)
         data = self._assistant_maintain_public_data(execute=execute, limit=limit)
+        if requested_execute and request.method.upper() == "GET":
+            data["execute_ignored"] = True
+            data["warning"] = "GET 请求只返回 dry-run 维护建议；如需执行维护请使用 POST execute=true。"
         return {
             "success": bool(data.get("ok")),
             "message": self._format_assistant_maintain_text(data),
