@@ -35,6 +35,7 @@ from .agenttool import (
     AssistantPickTool,
     AssistantRouteTool,
     AssistantSessionClearTool,
+    AssistantSessionsClearTool,
     AssistantSessionsTool,
     AssistantSessionStateTool,
     HDHiveSearchSessionTool,
@@ -69,7 +70,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.33"
+    plugin_version = "0.1.34"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -219,6 +220,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantSessionsTool,
             AssistantSessionStateTool,
             AssistantSessionClearTool,
+            AssistantSessionsClearTool,
             HDHiveSearchSessionTool,
             HDHiveSessionPickTool,
             ShareRouteTool,
@@ -690,6 +692,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_sessions,
                 "methods": ["GET"],
                 "summary": "列出当前活跃的统一智能入口会话，便于外部智能体恢复和接续",
+            },
+            {
+                "path": "/assistant/sessions/clear",
+                "endpoint": self.api_assistant_sessions_clear,
+                "methods": ["POST"],
+                "summary": "按 session_id、类型或过滤条件批量清理统一智能入口会话",
             },
             {
                 "path": "/session/hdhive/search",
@@ -1386,6 +1394,26 @@ class AgentResourceOfficer(_PluginBase):
         session = self._clean_text(session) or "default"
         return f"assistant::{session}"
 
+    def _assistant_session_name_from_id(self, session_id: str) -> str:
+        clean_session_id = self._clean_text(session_id)
+        if clean_session_id.startswith("assistant::"):
+            return clean_session_id.split("assistant::", 1)[1] or "default"
+        return clean_session_id or "default"
+
+    def _normalize_assistant_session_ref(
+        self,
+        *,
+        session: Any = None,
+        session_id: Any = None,
+        fallback: str = "default",
+    ) -> Tuple[str, str]:
+        clean_session_id = self._clean_text(session_id)
+        if clean_session_id:
+            session_name = self._assistant_session_name_from_id(clean_session_id)
+            return session_name, self._assistant_session_id(session_name)
+        session_name = self._clean_text(session) or fallback
+        return session_name, self._assistant_session_id(session_name)
+
     def _p115_status_snapshot(self) -> Dict[str, Any]:
         health_ok, result, health_message = self._ensure_p115_service().health()
         return {
@@ -1763,6 +1791,62 @@ class AgentResourceOfficer(_PluginBase):
                 lines.append("   " + " | ".join(detail_parts))
         return "\n".join(lines)
 
+    def _clear_assistant_sessions(
+        self,
+        *,
+        session: str = "",
+        session_id: str = "",
+        kind: str = "",
+        has_pending_p115: Optional[bool] = None,
+        stale_only: bool = False,
+        all_sessions: bool = False,
+        limit: int = 100,
+    ) -> Dict[str, Any]:
+        max_limit = min(max(1, self._safe_int(limit, 100)), 500)
+        cleared_ids: List[str] = []
+        if self._clean_text(session_id) or self._clean_text(session):
+            _, cache_key = self._normalize_assistant_session_ref(session=session, session_id=session_id)
+            if cache_key in self._session_cache:
+                self._session_cache.pop(cache_key, None)
+                cleared_ids.append(cache_key)
+            self._persist_relevant_sessions()
+            return {
+                "cleared_count": len(cleared_ids),
+                "cleared_session_ids": cleared_ids,
+                "limit": max_limit,
+            }
+
+        kind_filter = self._clean_text(kind)
+        for current_session_id, payload in list((self._session_cache or {}).items()):
+            if len(cleared_ids) >= max_limit:
+                break
+            if not str(current_session_id).startswith("assistant::"):
+                continue
+            current = dict(payload or {})
+            expired = self._is_session_expired(current)
+            if stale_only and not expired:
+                continue
+            if not stale_only and expired:
+                continue
+            if not all_sessions:
+                if kind_filter and self._clean_text(current.get("kind")) != kind_filter:
+                    continue
+                if has_pending_p115 is not None:
+                    has_pending = bool(self._clean_text(((current.get("pending_p115") or {}).get("share_url"))))
+                    if has_pending != bool(has_pending_p115):
+                        continue
+                if not kind_filter and has_pending_p115 is None and not stale_only:
+                    continue
+            self._session_cache.pop(current_session_id, None)
+            cleared_ids.append(str(current_session_id))
+
+        self._persist_relevant_sessions()
+        return {
+            "cleared_count": len(cleared_ids),
+            "cleared_session_ids": cleared_ids,
+            "limit": max_limit,
+        }
+
     def _format_assistant_session_summary(self, session: str = "default") -> str:
         data = self._assistant_session_public_data(session=session)
         if not data.get("has_session"):
@@ -1972,6 +2056,7 @@ class AgentResourceOfficer(_PluginBase):
                 ],
                 "structured_fields": [
                     "session",
+                    "session_id",
                     "path",
                     "mode",
                     "keyword",
@@ -1984,11 +2069,12 @@ class AgentResourceOfficer(_PluginBase):
                 ],
             },
             "smart_pick": {
-                "fields": ["session", "choice", "action", "path"],
+                "fields": ["session", "session_id", "choice", "action", "path"],
                 "actions": ["detail", "next_page"],
             },
             "session_tools": [
                 "assistant/sessions",
+                "assistant/sessions/clear",
                 "assistant/session",
                 "assistant/session/clear",
             ],
@@ -2009,6 +2095,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_smart_entry",
                 "agent_resource_officer_smart_pick",
                 "agent_resource_officer_sessions",
+                "agent_resource_officer_sessions_clear",
                 "agent_resource_officer_session_state",
                 "agent_resource_officer_session_clear",
             ],
@@ -2031,10 +2118,10 @@ class AgentResourceOfficer(_PluginBase):
             f"- 115：{defaults.get('p115_path')}",
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
-            "smart_entry 结构化字段：session / path / mode / keyword / url / access_code / media_type / year / client_type / action",
+            "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
             "smart_entry 结构化模式：pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
-            "smart_pick 字段：session / choice / action / path",
+            "smart_pick 字段：session / session_id / choice / action / path",
             "smart_pick 动作：detail / next_page",
             "统一回执字段：action / ok / session / session_id / session_state / next_actions",
         ]
@@ -2712,6 +2799,7 @@ class AgentResourceOfficer(_PluginBase):
         self,
         text: str = "",
         session: str = "default",
+        session_id: str = "",
         target_path: str = "",
         mode: str = "",
         keyword: str = "",
@@ -2730,6 +2818,7 @@ class AgentResourceOfficer(_PluginBase):
                 {
                     "text": self._clean_text(text),
                     "session": self._clean_text(session) or "default",
+                    "session_id": self._clean_text(session_id),
                     "path": self._clean_text(target_path),
                     "mode": self._clean_text(mode),
                     "keyword": self._clean_text(keyword),
@@ -2747,6 +2836,7 @@ class AgentResourceOfficer(_PluginBase):
     async def tool_assistant_pick(
         self,
         session: str = "default",
+        session_id: str = "",
         index: int = 0,
         action: str = "",
         target_path: str = "",
@@ -2758,6 +2848,7 @@ class AgentResourceOfficer(_PluginBase):
                 _RequestContextShim(),
                 {
                     "session": self._clean_text(session) or "default",
+                    "session_id": self._clean_text(session_id),
                     "choice": index,
                     "action": self._clean_text(action),
                     "path": self._clean_text(target_path),
@@ -2766,20 +2857,22 @@ class AgentResourceOfficer(_PluginBase):
         )
         return str(result.get("message") or "继续处理完成")
 
-    async def tool_assistant_help(self, session: str = "default") -> str:
+    async def tool_assistant_help(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
-        return self._format_assistant_help_text(session=session)
+        session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
+        return self._format_assistant_help_text(session=session_name)
 
     async def tool_assistant_capabilities(self) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_capabilities_text()
 
-    async def tool_assistant_session_state(self, session: str = "default") -> str:
+    async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
-        return self._format_assistant_session_summary(session=session)
+        session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
+        return self._format_assistant_session_summary(session=session_name)
 
     async def tool_assistant_sessions(
         self,
@@ -2795,17 +2888,44 @@ class AgentResourceOfficer(_PluginBase):
             limit=limit,
         )
 
-    async def tool_assistant_session_clear(self, session: str = "default") -> str:
+    async def tool_assistant_session_clear(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
-        session_name = self._clean_text(session) or "default"
-        session_id = self._assistant_session_id(session_name)
-        existing = self._load_session(session_id)
+        session_name, cache_key = self._normalize_assistant_session_ref(session=session, session_id=session_id)
+        existing = self._load_session(cache_key)
         if not existing:
             return "当前没有需要清理的会话。"
-        self._session_cache.pop(session_id, None)
+        self._session_cache.pop(cache_key, None)
         self._persist_relevant_sessions()
         return f"已清理会话：{session_name}"
+
+    async def tool_assistant_sessions_clear(
+        self,
+        session: str = "",
+        session_id: str = "",
+        kind: str = "",
+        has_pending_p115: Optional[bool] = None,
+        stale_only: bool = False,
+        all_sessions: bool = False,
+        limit: int = 100,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        result = await self.api_assistant_sessions_clear(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "session": self._clean_text(session),
+                    "session_id": self._clean_text(session_id),
+                    "kind": self._clean_text(kind),
+                    "has_pending_p115": has_pending_p115,
+                    "stale_only": bool(stale_only),
+                    "all_sessions": bool(all_sessions),
+                    "limit": self._safe_int(limit, 100),
+                },
+            )
+        )
+        return str(result.get("message") or "会话清理完成")
 
     async def tool_p115_qrcode_start(self, client_type: str = "alipaymini") -> str:
         if not self._enabled:
@@ -3218,16 +3338,18 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
 
-        session = self._clean_text(
-            body.get("session")
-            or body.get("chat_id")
-            or body.get("user_id")
-            or body.get("conversation_id")
-            or "default"
+        session, cache_key = self._normalize_assistant_session_ref(
+            session=(
+                body.get("session")
+                or body.get("chat_id")
+                or body.get("user_id")
+                or body.get("conversation_id")
+                or "default"
+            ),
+            session_id=body.get("session_id"),
         )
         text = self._clean_text(body.get("text") or body.get("query") or body.get("message") or "")
         parsed = self._merge_assistant_structured_input(body, self._parse_assistant_text(text))
-        cache_key = self._assistant_session_id(session)
         state = self._load_session(cache_key) or {}
         target_path = parsed.get("path") or ""
         route_action = self._normalize_pick_action(text)
@@ -3617,12 +3739,15 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
 
-        session = self._clean_text(
-            body.get("session")
-            or body.get("chat_id")
-            or body.get("user_id")
-            or body.get("conversation_id")
-            or "default"
+        session, cache_key = self._normalize_assistant_session_ref(
+            session=(
+                body.get("session")
+                or body.get("chat_id")
+                or body.get("user_id")
+                or body.get("conversation_id")
+                or "default"
+            ),
+            session_id=body.get("session_id"),
         )
         index = self._safe_int(
             body.get("index")
@@ -3633,7 +3758,6 @@ class AgentResourceOfficer(_PluginBase):
         )
         action = self._normalize_pick_action(body.get("action") or body.get("pick_action"))
         target_path = self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path")))
-        cache_key = self._assistant_session_id(session)
         state = self._load_session(cache_key)
         if not state:
             return {"success": False, "message": "没有可继续的缓存，请先发起搜索或发送分享链接。"}
@@ -3839,12 +3963,15 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
-        session = self._clean_text(
-            (body or {}).get("session")
-            or request.query_params.get("session")
-            or request.query_params.get("chat_id")
-            or request.query_params.get("user_id")
-            or "default"
+        session, _ = self._normalize_assistant_session_ref(
+            session=(
+                (body or {}).get("session")
+                or request.query_params.get("session")
+                or request.query_params.get("chat_id")
+                or request.query_params.get("user_id")
+                or "default"
+            ),
+            session_id=(body or {}).get("session_id") or request.query_params.get("session_id"),
         )
         summary = self._format_assistant_session_summary(session=session)
         data = self._assistant_session_public_data(session=session)
@@ -3857,22 +3984,24 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
-        session = self._clean_text(
-            body.get("session")
-            or body.get("chat_id")
-            or body.get("user_id")
-            or body.get("conversation_id")
-            or "default"
+        session, cache_key = self._normalize_assistant_session_ref(
+            session=(
+                body.get("session")
+                or body.get("chat_id")
+                or body.get("user_id")
+                or body.get("conversation_id")
+                or "default"
+            ),
+            session_id=body.get("session_id"),
         )
-        session_id = self._assistant_session_id(session)
-        existing = self._load_session(session_id)
+        existing = self._load_session(cache_key)
         if not existing:
             return {
                 "success": True,
                 "message": "当前没有需要清理的会话。",
-                "data": {"session": session, "session_id": session_id, "cleared": False},
+                "data": self._assistant_response_data(session=session, data={"cleared": False}),
             }
-        self._session_cache.pop(session_id, None)
+        self._session_cache.pop(cache_key, None)
         self._persist_relevant_sessions()
         return {
             "success": True,
@@ -3905,6 +4034,35 @@ class AgentResourceOfficer(_PluginBase):
                 limit=limit,
             ),
             "data": data,
+        }
+
+    async def api_assistant_sessions_clear(self, request: Request):
+        body = await request.json()
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        result = self._clear_assistant_sessions(
+            session=body.get("session"),
+            session_id=body.get("session_id"),
+            kind=body.get("kind"),
+            has_pending_p115=body.get("has_pending_p115"),
+            stale_only=bool(body.get("stale_only")),
+            all_sessions=bool(body.get("all_sessions")),
+            limit=self._safe_int(body.get("limit"), 100),
+        )
+        cleared_count = self._safe_int(result.get("cleared_count"), 0)
+        if cleared_count <= 0:
+            return {
+                "success": True,
+                "message": "没有匹配到需要清理的 assistant 会话。",
+                "data": result,
+            }
+        return {
+            "success": True,
+            "message": f"已清理 {cleared_count} 个 assistant 会话。",
+            "data": result,
         }
 
     async def api_session_hdhive_search(self, request: Request):

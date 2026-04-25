@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.33`
+- 当前版本：`0.1.34`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -114,6 +114,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/pick`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions`
+- `POST /api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/session`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/session`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/session/clear`
@@ -130,6 +131,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_capabilities`
 - `agent_resource_officer_route_share`
 - `agent_resource_officer_sessions`
+- `agent_resource_officer_sessions_clear`
 - `agent_resource_officer_session_state`
 - `agent_resource_officer_session_clear`
 - `agent_resource_officer_p115_qrcode_start`
@@ -333,3 +335,11 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 - `agent_resource_officer_sessions`
 
 这样外部智能体在重启、断线或多会话并行时，可以先列出当前活跃会话，再决定恢复哪个 session 继续执行。
+
+从 `0.1.34` 开始：
+
+- `smart_entry / smart_pick / help / session / clear` 都支持直接传 `session_id`
+- 新增 `POST /assistant/sessions/clear`
+- 新增 `agent_resource_officer_sessions_clear`
+
+这样外部智能体既可以按 `session_id` 精准恢复指定会话，也可以在需要时按类型、待继续 115 状态、过期状态或全量方式批量清理 assistant 会话。

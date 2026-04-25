@@ -11,6 +11,7 @@ from .schemas import (
     AssistantPickToolInput,
     AssistantRouteToolInput,
     AssistantSessionClearToolInput,
+    AssistantSessionsClearToolInput,
     AssistantSessionsToolInput,
     AssistantSessionStateToolInput,
     HDHiveSearchSessionToolInput,
@@ -104,6 +105,7 @@ class AssistantRouteTool(MoviePilotTool):
         self,
         text: str = None,
         session: str = "default",
+        session_id: str = None,
         path: str = None,
         mode: str = None,
         keyword: str = None,
@@ -121,6 +123,7 @@ class AssistantRouteTool(MoviePilotTool):
         return await plugin.tool_assistant_route(
             text=text,
             session=session,
+            session_id=session_id,
             target_path=path,
             mode=mode,
             keyword=keyword,
@@ -148,6 +151,7 @@ class AssistantPickTool(MoviePilotTool):
     async def run(
         self,
         session: str = "default",
+        session_id: str = None,
         choice: int = 0,
         action: str = None,
         path: str = None,
@@ -158,6 +162,7 @@ class AssistantPickTool(MoviePilotTool):
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_pick(
             session=session,
+            session_id=session_id,
             index=choice,
             action=action,
             target_path=path,
@@ -172,11 +177,11 @@ class AssistantHelpTool(MoviePilotTool):
     def get_tool_message(self, **kwargs) -> Optional[str]:
         return "正在查看 Agent资源官 使用帮助"
 
-    async def run(self, session: str = "default", **kwargs) -> str:
+    async def run(self, session: str = "default", session_id: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_help(session=session)
+        return await plugin.tool_assistant_help(session=session, session_id=session_id)
 
 
 class AssistantCapabilitiesTool(MoviePilotTool):
@@ -203,11 +208,11 @@ class AssistantSessionStateTool(MoviePilotTool):
         session = kwargs.get("session", "default")
         return f"正在查看 Agent资源官 会话状态：{session}"
 
-    async def run(self, session: str = "default", **kwargs) -> str:
+    async def run(self, session: str = "default", session_id: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_session_state(session=session)
+        return await plugin.tool_assistant_session_state(session=session, session_id=session_id)
 
 
 class AssistantSessionClearTool(MoviePilotTool):
@@ -219,11 +224,11 @@ class AssistantSessionClearTool(MoviePilotTool):
         session = kwargs.get("session", "default")
         return f"正在清理 Agent资源官 会话：{session}"
 
-    async def run(self, session: str = "default", **kwargs) -> str:
+    async def run(self, session: str = "default", session_id: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_session_clear(session=session)
+        return await plugin.tool_assistant_session_clear(session=session, session_id=session_id)
 
 
 class AssistantSessionsTool(MoviePilotTool):
@@ -241,6 +246,39 @@ class AssistantSessionsTool(MoviePilotTool):
         return await plugin.tool_assistant_sessions(
             kind=kind,
             has_pending_p115=has_pending_p115,
+            limit=limit,
+        )
+
+
+class AssistantSessionsClearTool(MoviePilotTool):
+    name: str = "agent_resource_officer_sessions_clear"
+    description: str = "Clear one or more Agent资源官 assistant sessions by session_id, session name, filters, or full reset."
+    args_schema: Type[BaseModel] = AssistantSessionsClearToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在清理 Agent资源官 活跃会话"
+
+    async def run(
+        self,
+        session: str = None,
+        session_id: str = None,
+        kind: str = None,
+        has_pending_p115: bool = None,
+        stale_only: bool = False,
+        all_sessions: bool = False,
+        limit: int = 100,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_sessions_clear(
+            session=session,
+            session_id=session_id,
+            kind=kind,
+            has_pending_p115=has_pending_p115,
+            stale_only=stale_only,
+            all_sessions=all_sessions,
             limit=limit,
         )
 
