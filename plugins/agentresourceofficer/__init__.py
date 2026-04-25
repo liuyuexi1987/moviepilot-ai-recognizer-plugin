@@ -90,7 +90,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.76"
+    plugin_version = "0.1.77"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4290,16 +4290,38 @@ class AgentResourceOfficer(_PluginBase):
         )
         pulse = self._assistant_pulse_public_data()
         toolbox = self._assistant_toolbox_public_data()
+        maintain = self._assistant_maintain_public_data(execute=False)
+        maintenance_templates = maintain.get("action_templates") or []
+        maintenance_template_names = {
+            self._clean_text(item.get("name"))
+            for item in maintenance_templates
+            if isinstance(item, dict)
+        }
+        maintenance_templates_compact_ok = all(
+            (item.get("body") or {}).get("compact") is True
+            and (item.get("action_body") or {}).get("compact") is True
+            for item in maintenance_templates
+            if isinstance(item, dict)
+        )
+        maintain_dry_run_ok = (
+            maintain.get("action") == "maintain"
+            and maintain.get("execute_requested") is False
+            and maintain.get("executed") is False
+            and {"clear_stale_sessions", "clear_executed_plans"}.issubset(maintenance_template_names)
+        )
         protocol_ok = (
             pulse.get("protocol_version") == "assistant.v1"
             and toolbox.get("protocol_version") == "assistant.v1"
             and pulse.get("action") == "pulse"
             and toolbox.get("action") == "toolbox"
+            and maintain.get("protocol_version") == "assistant.v1"
         )
         checks = {
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
             "protocol": protocol_ok,
+            "maintain_dry_run": maintain_dry_run_ok,
+            "maintenance_templates_compact": maintenance_templates_compact_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_maintain_tool": bool((toolbox.get("tools") or {}).get("maintain")),
