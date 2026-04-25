@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.60"
+    plugin_version = "0.1.61"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2355,6 +2355,24 @@ class AgentResourceOfficer(_PluginBase):
         method: str = "POST",
         tool: str = "",
     ) -> Dict[str, Any]:
+        body_payload = dict(body or {})
+        compact_paths = [
+            "/assistant/action",
+            "/assistant/actions",
+            "/assistant/workflow",
+            "/assistant/plan/execute",
+            "/assistant/recover",
+            "/assistant/route",
+            "/assistant/pick",
+            "/assistant/session",
+            "/assistant/sessions",
+            "/assistant/history",
+            "/assistant/plans",
+            "/assistant/readiness",
+            "/assistant/capabilities",
+        ]
+        if "compact" not in body_payload and any(path in endpoint for path in compact_paths):
+            body_payload["compact"] = True
         action_body: Dict[str, Any] = {"name": name}
         for key in [
             "session",
@@ -2374,16 +2392,17 @@ class AgentResourceOfficer(_PluginBase):
             "limit",
             "plan_id",
             "prefer_unexecuted",
+            "compact",
         ]:
-            if key in body:
-                action_body[key] = body.get(key)
+            if key in body_payload:
+                action_body[key] = body_payload.get(key)
         return {
             "name": name,
             "description": description,
             "endpoint": endpoint,
             "method": method,
             "tool": tool,
-            "body": body,
+            "body": body_payload,
             "action_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
             "action_tool": "agent_resource_officer_execute_action",
             "action_body": action_body,
