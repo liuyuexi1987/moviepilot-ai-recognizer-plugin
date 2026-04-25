@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.54"
+    plugin_version = "0.1.55"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2786,6 +2786,89 @@ class AgentResourceOfficer(_PluginBase):
         })
         return payload
 
+    def _assistant_session_compact_data(self, session_state: Dict[str, Any]) -> Dict[str, Any]:
+        state = dict(session_state or {})
+        recovery = dict(state.get("recovery") or {})
+        saved_plan = dict(state.get("saved_plan") or {})
+        pending_p115 = dict(state.get("pending_p115") or {})
+        payload: Dict[str, Any] = {
+            "protocol_version": "assistant.v1",
+            "action": "session_state",
+            "ok": True,
+            "compact": True,
+            "has_session": bool(state.get("has_session")),
+            "session": self._clean_text(state.get("session")) or "default",
+            "session_id": self._clean_text(state.get("session_id")),
+            "kind": self._clean_text(state.get("kind")),
+            "stage": self._clean_text(state.get("stage")),
+            "keyword": self._clean_text(state.get("keyword")),
+            "target_path": self._clean_text(state.get("target_path")),
+            "updated_at": state.get("updated_at"),
+            "updated_at_text": state.get("updated_at_text"),
+            "saved_plan": {
+                "has_pending": bool(saved_plan.get("has_pending")),
+                "plan_id": self._clean_text((saved_plan.get("latest") or {}).get("plan_id") or saved_plan.get("plan_id")),
+            },
+            "pending_p115": {
+                "has_pending": bool(pending_p115.get("has_pending")),
+                "target_path": self._clean_text(pending_p115.get("target_path")),
+                "retry_count": pending_p115.get("retry_count"),
+            },
+            "recovery": recovery,
+            "next_actions": state.get("suggested_actions") or [],
+            "action_templates": [recovery.get("action_template")] if isinstance(recovery.get("action_template"), dict) else [],
+        }
+        for key in [
+            "result_count",
+            "total_candidates",
+            "page",
+            "total_pages",
+            "selected_candidate",
+            "total_resources",
+            "resource_count_115",
+            "resource_count_quark",
+            "client_type",
+        ]:
+            if key in state:
+                payload[key] = state.get(key)
+        return payload
+
+    def _assistant_sessions_compact_data(self, sessions_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(sessions_data or {})
+        items: List[Dict[str, Any]] = []
+        for item in data.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            recovery = dict(item.get("recovery") or {})
+            items.append({
+                "session": self._clean_text(item.get("session")),
+                "session_id": self._clean_text(item.get("session_id")),
+                "kind": self._clean_text(item.get("kind")),
+                "stage": self._clean_text(item.get("stage")),
+                "keyword": self._clean_text(item.get("keyword")),
+                "target_path": self._clean_text(item.get("target_path")),
+                "updated_at": item.get("updated_at"),
+                "updated_at_text": item.get("updated_at_text"),
+                "has_pending_plan": bool(item.get("has_pending_plan")),
+                "has_pending_p115": bool(item.get("has_pending_p115")),
+                "recovery_mode": self._clean_text(recovery.get("mode")),
+                "recommended_action": self._clean_text(recovery.get("recommended_action")),
+            })
+        recovery = dict(data.get("recovery") or {})
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "sessions",
+            "ok": True,
+            "compact": True,
+            "total": data.get("total") or 0,
+            "limit": data.get("limit") or len(items),
+            "filters": data.get("filters") or {},
+            "items": items,
+            "recovery": recovery,
+            "next_actions": [recovery.get("recommended_action")] if recovery.get("recommended_action") else [],
+            "action_templates": [recovery.get("action_template")] if isinstance(recovery.get("action_template"), dict) else [],
+        }
+
     def _format_assistant_sessions_text(
         self,
         *,
@@ -3111,6 +3194,14 @@ class AgentResourceOfficer(_PluginBase):
             "smart_pick": {
                 "fields": ["session", "session_id", "choice", "action", "path"],
                 "actions": ["detail", "next_page"],
+            },
+            "assistant_session": {
+                "fields": ["session", "session_id", "compact"],
+                "description": "compact=true 时返回低 token 会话快照，不嵌套完整 session_state。",
+            },
+            "assistant_sessions": {
+                "fields": ["kind", "has_pending_p115", "compact", "limit"],
+                "description": "compact=true 时返回低 token 会话列表，不嵌套 default session_state。",
             },
             "assistant_action": {
                 "fields": [
@@ -4541,20 +4632,37 @@ class AgentResourceOfficer(_PluginBase):
         )
         return str(result.get("message") or "恢复检查完成")
 
-    async def tool_assistant_session_state(self, session: str = "default", session_id: str = "") -> str:
+    async def tool_assistant_session_state(self, session: str = "default", session_id: str = "", compact: bool = True) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
         session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
+        if compact:
+            state = self._assistant_session_compact_data(self._assistant_session_public_data(session=session_name))
+            recovery = state.get("recovery") or {}
+            parts = [
+                f"会话：{state.get('session')}",
+                f"阶段：{state.get('kind') or '-'} / {state.get('stage') or '-'}",
+                f"恢复：{recovery.get('mode') or '-'}",
+            ]
+            if recovery.get("recommended_action"):
+                parts.append(f"推荐动作：{recovery.get('recommended_action')}")
+            return "\n".join(parts)
         return self._format_assistant_session_summary(session=session_name)
 
     async def tool_assistant_sessions(
         self,
         kind: str = "",
         has_pending_p115: Optional[bool] = None,
+        compact: bool = True,
         limit: int = 20,
     ) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
+        if compact:
+            data = self._assistant_sessions_compact_data(
+                self._assistant_sessions_public_data(kind=kind, has_pending_p115=has_pending_p115, limit=limit)
+            )
+            return f"活跃会话：{data.get('total') or 0} 个；展示 {len(data.get('items') or [])} 个"
         return self._format_assistant_sessions_text(
             kind=kind,
             has_pending_p115=has_pending_p115,
@@ -6424,8 +6532,19 @@ class AgentResourceOfficer(_PluginBase):
             ),
             session_id=(body or {}).get("session_id") or request.query_params.get("session_id"),
         )
+        compact = bool(
+            self._parse_optional_bool((body or {}).get("compact"))
+            if "compact" in (body or {})
+            else self._parse_optional_bool(request.query_params.get("compact"))
+        )
         summary = self._format_assistant_session_summary(session=session)
         session_state = self._assistant_session_public_data(session=session)
+        if compact:
+            return {
+                "success": True,
+                "message": summary,
+                "data": self._assistant_session_compact_data(session_state),
+            }
         data = self._assistant_response_data(session=session, data={
             "action": "session_state",
             "ok": True,
@@ -6477,12 +6596,23 @@ class AgentResourceOfficer(_PluginBase):
         has_pending_p115: Optional[bool] = None
         if has_pending_p115_raw is not None:
             has_pending_p115 = str(has_pending_p115_raw).strip().lower() in {"1", "true", "yes", "y"}
+        compact = bool(self._parse_optional_bool(request.query_params.get("compact")))
         limit = self._safe_int(request.query_params.get("limit"), 20)
         data = self._assistant_sessions_public_data(
             kind=kind,
             has_pending_p115=has_pending_p115,
             limit=limit,
         )
+        if compact:
+            return {
+                "success": True,
+                "message": self._format_assistant_sessions_text(
+                    kind=kind,
+                    has_pending_p115=has_pending_p115,
+                    limit=limit,
+                ),
+                "data": self._assistant_sessions_compact_data(data),
+            }
         return {
             "success": True,
             "message": self._format_assistant_sessions_text(

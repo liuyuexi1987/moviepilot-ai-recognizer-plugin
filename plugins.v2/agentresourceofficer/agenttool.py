@@ -543,11 +543,11 @@ class AssistantSessionStateTool(MoviePilotTool):
         session = kwargs.get("session", "default")
         return f"正在查看 Agent资源官 会话状态：{session}"
 
-    async def run(self, session: str = "default", session_id: str = None, **kwargs) -> str:
+    async def run(self, session: str = "default", session_id: str = None, compact: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_session_state(session=session, session_id=session_id)
+        return await plugin.tool_assistant_session_state(session=session, session_id=session_id, compact=compact)
 
 
 class AssistantSessionClearTool(MoviePilotTool):
@@ -574,13 +574,14 @@ class AssistantSessionsTool(MoviePilotTool):
     def get_tool_message(self, **kwargs) -> Optional[str]:
         return "正在查看 Agent资源官 活跃会话列表"
 
-    async def run(self, kind: str = None, has_pending_p115: bool = None, limit: int = 20, **kwargs) -> str:
+    async def run(self, kind: str = None, has_pending_p115: bool = None, compact: bool = True, limit: int = 20, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_sessions(
             kind=kind,
             has_pending_p115=has_pending_p115,
+            compact=compact,
             limit=limit,
         )
 

@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.54`
+- 当前版本：`0.1.55`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -598,4 +598,17 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/pulse?apikey=你的MP_API_TOKE
 
 ```text
 GET /api/v1/plugin/AgentResourceOfficer/assistant/toolbox?apikey=你的MP_API_TOKEN
+```
+
+从 `0.1.55` 开始，`assistant/session` 和 `assistant/sessions` 也支持低 token 回执：
+
+- `compact=true` 时不会再嵌套完整 `session_state`
+- `assistant/session` 返回当前会话阶段、恢复建议、待执行计划和待继续 115 任务摘要
+- `assistant/sessions` 返回活跃会话列表摘要，适合外部智能体做会话选择
+
+示例：
+
+```text
+GET /api/v1/plugin/AgentResourceOfficer/assistant/session?apikey=你的MP_API_TOKEN&session=default&compact=true
+GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions?apikey=你的MP_API_TOKEN&compact=true
 ```
