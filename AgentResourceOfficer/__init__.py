@@ -48,6 +48,7 @@ from .agenttool import (
     AssistantSessionsTool,
     AssistantSessionStateTool,
     AssistantSelfcheckTool,
+    AssistantStartupTool,
     AssistantToolboxTool,
     AssistantWorkflowTool,
     HDHiveSearchSessionTool,
@@ -88,7 +89,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.66"
+    plugin_version = "0.1.67"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -247,6 +248,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantPlansClearTool,
             AssistantRecoverTool,
             AssistantPulseTool,
+            AssistantStartupTool,
             AssistantToolboxTool,
             AssistantSelfcheckTool,
             AssistantReadinessTool,
@@ -742,6 +744,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_pulse,
                 "methods": ["GET"],
                 "summary": "轻量启动探针：返回版本、关键服务状态、警告和最佳恢复建议",
+            },
+            {
+                "path": "/assistant/startup",
+                "endpoint": self.api_assistant_startup,
+                "methods": ["GET"],
+                "summary": "启动聚合包：一次返回 pulse、自检、核心工具、端点、默认目录和恢复建议",
             },
             {
                 "path": "/assistant/toolbox",
@@ -3547,6 +3555,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "session_tools": [
                 "assistant/pulse",
+                "assistant/startup",
                 "assistant/toolbox",
                 "assistant/selfcheck",
                 "assistant/readiness",
@@ -3578,6 +3587,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "agent_tools": [
                 "agent_resource_officer_capabilities",
+                "agent_resource_officer_startup",
                 "agent_resource_officer_pulse",
                 "agent_resource_officer_toolbox",
                 "agent_resource_officer_selfcheck",
@@ -3610,6 +3620,7 @@ class AgentResourceOfficer(_PluginBase):
         ]
         compact_endpoints = [
             "assistant/capabilities",
+            "assistant/startup",
             "assistant/readiness",
             "assistant/recover",
             "assistant/session",
@@ -3633,13 +3644,14 @@ class AgentResourceOfficer(_PluginBase):
             "workflows": workflows,
             "recommended_start": [
                 "assistant/pulse",
+                "assistant/startup",
                 "assistant/selfcheck",
                 "assistant/toolbox",
                 "assistant/readiness?compact=true",
             ],
             "compact_endpoints": compact_endpoints,
             "agent_tools": data.get("agent_tools") or [],
-            "next_actions": ["assistant_readiness", "smart_entry", "assistant_workflow"],
+            "next_actions": ["assistant_startup", "assistant_readiness", "smart_entry", "assistant_workflow"],
         }
 
     def _format_assistant_capabilities_text(self) -> str:
@@ -3649,7 +3661,7 @@ class AgentResourceOfficer(_PluginBase):
             "Agent资源官 能力说明",
             f"版本：{data.get('version')}",
             "推荐上层调用顺序：",
-            "1. 先看 capabilities",
+            "1. 先看 capabilities 或 assistant/startup",
             "2. 如需恢复旧流程，可先看 assistant/sessions",
             "3. 再调用 smart_entry",
             "4. 之后用 assistant/session 或 session_state 判断下一步",
@@ -3659,6 +3671,7 @@ class AgentResourceOfficer(_PluginBase):
             f"- 115：{defaults.get('p115_path')}",
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
+            "启动聚合包：assistant/startup，一次返回 pulse、自检、核心工具、端点和恢复建议，适合外部智能体开场调用",
             "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
             "轻量工具清单：assistant/toolbox，返回推荐工具、端点、工作流和命令示例，适合外部智能体初始化系统提示",
             "轻量协议自检：assistant/selfcheck，返回 compact 模板、布尔解析和低 token 入口健康状态",
@@ -3897,6 +3910,7 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": recovery_compact.get("next_actions") or [],
             "action_templates": recovery_compact.get("action_templates") or [],
             "recommended_endpoints": {
+                "startup": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "selfcheck": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
                 "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
@@ -3925,6 +3939,74 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("提示：" + "；".join(str(item) for item in warnings if item))
         return "\n".join(lines)
 
+    def _assistant_startup_public_data(self) -> Dict[str, Any]:
+        pulse = self._assistant_pulse_public_data()
+        selfcheck = self._assistant_selfcheck_public_data()
+        toolbox = self._assistant_toolbox_public_data()
+        tools = toolbox.get("tools") or {}
+        endpoints = toolbox.get("endpoints") or {}
+        key_names = [
+            "startup",
+            "pulse",
+            "selfcheck",
+            "recover",
+            "workflow",
+            "route",
+            "pick",
+            "execute_action",
+            "execute_actions",
+        ]
+        key_tools = {name: tools.get(name) for name in key_names if tools.get(name)}
+        key_endpoints = {
+            name: endpoints.get(name)
+            for name in ["startup", "pulse", "selfcheck", "recover", "workflow", "action", "actions", "route", "pick"]
+            if endpoints.get(name)
+        }
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "startup",
+            "ok": bool(pulse.get("can_start")) and bool(selfcheck.get("ok")),
+            "compact": True,
+            "version": self.plugin_version,
+            "services": pulse.get("services") or {},
+            "warnings": pulse.get("warnings") or [],
+            "recovery": pulse.get("recovery") or {},
+            "selected_session": pulse.get("selected_session"),
+            "selfcheck": {
+                "ok": bool(selfcheck.get("ok")),
+                "checks": selfcheck.get("checks") or {},
+            },
+            "defaults": toolbox.get("defaults") or {},
+            "startup_order": toolbox.get("startup_order") or [],
+            "tools": key_tools,
+            "endpoints": key_endpoints,
+            "workflows": [item.get("name") for item in (toolbox.get("workflows") or []) if item.get("name")],
+            "actions": toolbox.get("actions") or [],
+            "command_examples": (toolbox.get("command_examples") or [])[:6],
+            "next_actions": ["assistant_recover", "assistant_workflow", "smart_entry"],
+            "recommended_endpoints": key_endpoints,
+        }
+
+    def _format_assistant_startup_text(self) -> str:
+        data = self._assistant_startup_public_data()
+        services = data.get("services") or {}
+        recovery = data.get("recovery") or {}
+        checks = (data.get("selfcheck") or {}).get("checks") or {}
+        failed = [key for key, value in checks.items() if not value]
+        lines = [
+            "Agent资源官 启动聚合包",
+            f"版本：{data.get('version')}",
+            f"可启动：{'是' if data.get('ok') else '否'}",
+            f"115：{'可用' if services.get('p115_ready') else '不可用'}；影巢：{'已配' if services.get('hdhive_configured') else '未配'}；夸克：{'已配' if services.get('quark_configured') else '未配'}",
+            f"自检：{'通过' if not failed else '失败 ' + ', '.join(failed)}",
+            f"恢复模式：{recovery.get('mode') or 'unknown'}",
+            "下一步：优先按 recovery 建议执行；没有待恢复任务时使用 workflow 或 smart_entry",
+        ]
+        warnings = data.get("warnings") or []
+        if warnings:
+            lines.append("提示：" + "；".join(str(item) for item in warnings if item))
+        return "\n".join(lines)
+
     def _assistant_toolbox_public_data(self) -> Dict[str, Any]:
         workflows = [dict(item or {}) for item in (self._assistant_workflow_catalog().get("workflows") or []) if isinstance(item, dict)]
         return {
@@ -3939,6 +4021,7 @@ class AgentResourceOfficer(_PluginBase):
                 "p115_client_type": self._p115_client_type,
             },
             "startup_order": [
+                "agent_resource_officer_startup",
                 "agent_resource_officer_pulse",
                 "agent_resource_officer_selfcheck",
                 "agent_resource_officer_recover",
@@ -3948,6 +4031,7 @@ class AgentResourceOfficer(_PluginBase):
             ],
             "endpoints": {
                 "pulse": "/api/v1/plugin/AgentResourceOfficer/assistant/pulse",
+                "startup": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
                 "selfcheck": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
@@ -3958,6 +4042,7 @@ class AgentResourceOfficer(_PluginBase):
                 "pick": "/api/v1/plugin/AgentResourceOfficer/assistant/pick",
             },
             "tools": {
+                "startup": "agent_resource_officer_startup",
                 "pulse": "agent_resource_officer_pulse",
                 "toolbox": "agent_resource_officer_toolbox",
                 "selfcheck": "agent_resource_officer_selfcheck",
@@ -4067,6 +4152,7 @@ class AgentResourceOfficer(_PluginBase):
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
             "protocol": protocol_ok,
+            "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_selfcheck_endpoint": bool((toolbox.get("endpoints") or {}).get("selfcheck")),
         }
         ok = all(bool(value) for value in checks.values())
@@ -4090,8 +4176,9 @@ class AgentResourceOfficer(_PluginBase):
                     "action_body_compact": (route_template.get("action_body") or {}).get("compact"),
                 },
             },
-            "next_actions": ["assistant_pulse", "assistant_toolbox", "assistant_readiness"],
+            "next_actions": ["assistant_startup", "assistant_pulse", "assistant_toolbox", "assistant_readiness"],
             "recommended_endpoints": {
+                "startup": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "pulse": "/api/v1/plugin/AgentResourceOfficer/assistant/pulse",
                 "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
                 "readiness": "/api/v1/plugin/AgentResourceOfficer/assistant/readiness?compact=true",
@@ -4885,6 +4972,11 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_pulse_text()
+
+    async def tool_assistant_startup(self) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_startup_text()
 
     async def tool_assistant_toolbox(self) -> str:
         if not self._enabled:
@@ -6845,6 +6937,17 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": bool(data.get("can_start")),
             "message": self._format_assistant_pulse_text(),
+            "data": data,
+        }
+
+    async def api_assistant_startup(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        data = self._assistant_startup_public_data()
+        return {
+            "success": bool(data.get("ok")),
+            "message": self._format_assistant_startup_text(),
             "data": data,
         }
 

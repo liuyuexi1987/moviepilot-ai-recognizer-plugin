@@ -76,6 +76,10 @@ class AssistantPulseToolInput(BaseModel):
     pass
 
 
+class AssistantStartupToolInput(BaseModel):
+    pass
+
+
 class AssistantToolboxToolInput(BaseModel):
     pass
 

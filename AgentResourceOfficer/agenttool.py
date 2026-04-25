@@ -24,6 +24,7 @@ from .schemas import (
     AssistantSessionsToolInput,
     AssistantSessionStateToolInput,
     AssistantSelfcheckToolInput,
+    AssistantStartupToolInput,
     AssistantToolboxToolInput,
     AssistantWorkflowToolInput,
     HDHiveSearchSessionToolInput,
@@ -243,6 +244,21 @@ class AssistantPulseTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_pulse()
+
+
+class AssistantStartupTool(MoviePilotTool):
+    name: str = "agent_resource_officer_startup"
+    description: str = "Return one compact startup bundle for external agents: pulse, self-check result, key tools, endpoints, defaults, and recovery hint."
+    args_schema: Type[BaseModel] = AssistantStartupToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在读取 Agent资源官 启动聚合信息"
+
+    async def run(self, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_startup()
 
 
 class AssistantToolboxTool(MoviePilotTool):

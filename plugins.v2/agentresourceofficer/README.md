@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.66`
+- 当前版本：`0.1.67`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -114,6 +114,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/pick`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness`
+- `GET /api/v1/plugin/AgentResourceOfficer/assistant/startup`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/selfcheck`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/history`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/action`
@@ -368,6 +369,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.64` 开始，新增 `assistant/selfcheck`，用于快速确认 compact 模板、布尔解析和协议字段是否健康。
 从 `0.1.65` 开始，`assistant/selfcheck` 也下沉为 MP 原生 Tool：`agent_resource_officer_selfcheck`。
 从 `0.1.66` 开始，`assistant/pulse` 和 compact `assistant/capabilities` 会把 `assistant/selfcheck` 放进推荐启动链路，外部智能体开场即可先做协议自检。
+从 `0.1.67` 开始，新增 `assistant/startup` 和 `agent_resource_officer_startup`，一次返回启动状态、自检结果、核心工具、端点、默认目录和恢复建议，减少外部智能体开场多次探测。
 
 从 `0.1.36` 开始，还新增了：
 
@@ -614,6 +616,14 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/selfcheck?apikey=你的MP_API_
 ```
 
 对应 MP 智能助手 Tool：`agent_resource_officer_selfcheck`
+
+从 `0.1.67` 开始，外部智能体更推荐先调用启动聚合包：
+
+```text
+GET /api/v1/plugin/AgentResourceOfficer/assistant/startup?apikey=你的MP_API_TOKEN
+```
+
+对应 MP 智能助手 Tool：`agent_resource_officer_startup`
 
 从 `0.1.55` 开始，`assistant/session` 和 `assistant/sessions` 支持低 token 回执；从 `0.1.56` 开始，`assistant/history` 和 `assistant/plans` 也支持同样的精简模式；从 `0.1.57` 开始，`assistant/actions`、`assistant/workflow` 和 `assistant/plan/execute` 也支持 `compact=true`；从 `0.1.58` 开始，启动入口 `assistant/capabilities` 和 `assistant/readiness` 也支持 `compact=true`；从 `0.1.59` 开始，`assistant/action` 单动作执行也支持 `compact=true`；从 `0.1.60` 开始，`assistant/route` 和 `assistant/pick` 主交互链路也支持 `compact=true`；从 `0.1.61` 开始，`action_templates` 默认携带 `compact=true`：
 
