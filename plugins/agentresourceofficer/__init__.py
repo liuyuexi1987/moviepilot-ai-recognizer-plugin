@@ -89,7 +89,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.71"
+    plugin_version = "0.1.72"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3955,6 +3955,16 @@ class AgentResourceOfficer(_PluginBase):
             for item in (self._workflow_plans or {}).values()
             if isinstance(item, dict) and not bool(item.get("executed"))
         )
+        executed_plan_count = sum(
+            1
+            for item in (self._workflow_plans or {}).values()
+            if isinstance(item, dict) and bool(item.get("executed"))
+        )
+        stale_session_count = sum(
+            1
+            for item in (self._session_cache or {}).values()
+            if isinstance(item, dict) and self._is_session_expired(item)
+        )
         maintenance_templates = [
             self._assistant_action_template(
                 name="clear_stale_sessions",
@@ -3970,6 +3980,14 @@ class AgentResourceOfficer(_PluginBase):
                 tool="agent_resource_officer_plans_clear",
                 body={"executed": True, "limit": 100},
             ),
+        ]
+        recommended_maintenance_actions = [
+            item.get("name")
+            for item in maintenance_templates
+            if (
+                (item.get("name") == "clear_stale_sessions" and stale_session_count > 0)
+                or (item.get("name") == "clear_executed_plans" and executed_plan_count > 0)
+            )
         ]
         tools = toolbox.get("tools") or {}
         endpoints = toolbox.get("endpoints") or {}
@@ -4005,8 +4023,11 @@ class AgentResourceOfficer(_PluginBase):
             "action_templates": pulse.get("action_templates") or [],
             "maintenance": {
                 "active_sessions": len(self._session_cache or {}),
+                "stale_sessions": stale_session_count,
                 "saved_plans_total": len(self._workflow_plans or {}),
                 "saved_plans_pending": pending_plan_count,
+                "saved_plans_executed": executed_plan_count,
+                "recommended_actions": recommended_maintenance_actions,
                 "action_templates": maintenance_templates,
             },
             "selfcheck": {
@@ -4038,12 +4059,16 @@ class AgentResourceOfficer(_PluginBase):
             f"自检：{'通过' if not failed else '失败 ' + ', '.join(failed)}",
             f"恢复模式：{recovery.get('mode') or 'unknown'}",
             f"可执行模板：{len(data.get('action_templates') or [])} 个",
-            "状态：活跃会话 {active_sessions}；保存计划 {saved_plans_total}；待执行计划 {saved_plans_pending}".format(**(data.get("maintenance") or {})),
+            "状态：活跃会话 {active_sessions}；过期会话 {stale_sessions}；保存计划 {saved_plans_total}；待执行计划 {saved_plans_pending}；已执行计划 {saved_plans_executed}".format(**(data.get("maintenance") or {})),
             "下一步：优先按 recovery 建议执行；没有待恢复任务时使用 workflow 或 smart_entry",
         ]
         warnings = data.get("warnings") or []
         if warnings:
             lines.append("提示：" + "；".join(str(item) for item in warnings if item))
+        maintenance = data.get("maintenance") or {}
+        recommended_actions = maintenance.get("recommended_actions") or []
+        if recommended_actions:
+            lines.append("维护建议：" + " / ".join(str(item) for item in recommended_actions if item))
         return "\n".join(lines)
 
     def _assistant_toolbox_public_data(self) -> Dict[str, Any]:

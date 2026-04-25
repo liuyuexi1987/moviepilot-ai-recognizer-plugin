@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.71`
+- 当前版本：`0.1.72`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -374,6 +374,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.69` 开始，`assistant/startup` 增加 `maintenance` 计数，直接返回活跃会话、保存计划和待执行计划数量，便于外部智能体判断是否需要恢复或清理。
 从 `0.1.70` 开始，`assistant/startup.maintenance` 增加低风险清理模板：清理过期会话、清理已执行计划；不会自动清理待执行计划。
 从 `0.1.71` 开始，`assistant/plans?compact=true` 的 `total` 表示当前过滤条件命中的计划数，同时返回 `total_all`，避免把全部计划数误判为待执行计划数。
+从 `0.1.72` 开始，`assistant/startup.maintenance` 增加 `stale_sessions`、`saved_plans_executed` 和 `recommended_actions`，外部智能体可直接判断当前是否值得做维护清理。
 
 从 `0.1.36` 开始，还新增了：
 
