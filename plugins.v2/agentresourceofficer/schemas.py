@@ -80,6 +80,11 @@ class AssistantStartupToolInput(BaseModel):
     pass
 
 
+class AssistantMaintainToolInput(BaseModel):
+    execute: Optional[bool] = Field(default=False, description="是否立即执行低风险维护；默认只返回建议")
+    limit: Optional[int] = Field(default=100, description="单次最多清理多少条")
+
+
 class AssistantToolboxToolInput(BaseModel):
     pass
 

@@ -12,6 +12,7 @@ from .schemas import (
     AssistantExecutePlanToolInput,
     AssistantHistoryToolInput,
     AssistantHelpToolInput,
+    AssistantMaintainToolInput,
     AssistantPickToolInput,
     AssistantPlansClearToolInput,
     AssistantPlansToolInput,
@@ -259,6 +260,21 @@ class AssistantStartupTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_startup()
+
+
+class AssistantMaintainTool(MoviePilotTool):
+    name: str = "agent_resource_officer_maintain"
+    description: str = "Inspect or execute low-risk Agent资源官 maintenance: clear stale assistant sessions and executed saved plans."
+    args_schema: Type[BaseModel] = AssistantMaintainToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在检查 Agent资源官 维护建议"
+
+    async def run(self, execute: bool = False, limit: int = 100, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_maintain(execute=execute, limit=limit)
 
 
 class AssistantToolboxTool(MoviePilotTool):

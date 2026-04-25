@@ -36,6 +36,7 @@ from .agenttool import (
     AssistantExecutePlanTool,
     AssistantHistoryTool,
     AssistantHelpTool,
+    AssistantMaintainTool,
     AssistantPickTool,
     AssistantPlansClearTool,
     AssistantPlansTool,
@@ -89,7 +90,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.72"
+    plugin_version = "0.1.73"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -249,6 +250,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantRecoverTool,
             AssistantPulseTool,
             AssistantStartupTool,
+            AssistantMaintainTool,
             AssistantToolboxTool,
             AssistantSelfcheckTool,
             AssistantReadinessTool,
@@ -750,6 +752,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_startup,
                 "methods": ["GET"],
                 "summary": "启动聚合包：一次返回 pulse、自检、核心工具、端点、默认目录和恢复建议",
+            },
+            {
+                "path": "/assistant/maintain",
+                "endpoint": self.api_assistant_maintain,
+                "methods": ["GET", "POST"],
+                "summary": "低风险维护：查看或执行过期会话、已执行计划清理",
             },
             {
                 "path": "/assistant/toolbox",
@@ -3561,6 +3569,7 @@ class AgentResourceOfficer(_PluginBase):
             "session_tools": [
                 "assistant/pulse",
                 "assistant/startup",
+                "assistant/maintain",
                 "assistant/toolbox",
                 "assistant/selfcheck",
                 "assistant/readiness",
@@ -3593,6 +3602,7 @@ class AgentResourceOfficer(_PluginBase):
             "agent_tools": [
                 "agent_resource_officer_capabilities",
                 "agent_resource_officer_startup",
+                "agent_resource_officer_maintain",
                 "agent_resource_officer_pulse",
                 "agent_resource_officer_toolbox",
                 "agent_resource_officer_selfcheck",
@@ -3946,10 +3956,8 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("提示：" + "；".join(str(item) for item in warnings if item))
         return "\n".join(lines)
 
-    def _assistant_startup_public_data(self) -> Dict[str, Any]:
-        pulse = self._assistant_pulse_public_data()
-        selfcheck = self._assistant_selfcheck_public_data()
-        toolbox = self._assistant_toolbox_public_data()
+    def _assistant_maintenance_snapshot(self, limit: int = 100) -> Dict[str, Any]:
+        max_limit = min(max(1, self._safe_int(limit, 100)), 500)
         pending_plan_count = sum(
             1
             for item in (self._workflow_plans or {}).values()
@@ -3965,34 +3973,104 @@ class AgentResourceOfficer(_PluginBase):
             for item in (self._session_cache or {}).values()
             if isinstance(item, dict) and self._is_session_expired(item)
         )
-        maintenance_templates = [
+        action_templates = [
             self._assistant_action_template(
                 name="clear_stale_sessions",
                 description="清理过期 assistant 会话，不影响仍有效的当前会话",
                 endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear",
                 tool="agent_resource_officer_sessions_clear",
-                body={"stale_only": True, "limit": 100},
+                body={"stale_only": True, "limit": max_limit},
             ),
             self._assistant_action_template(
                 name="clear_executed_plans",
                 description="清理已执行的保存计划，不影响待执行计划",
                 endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plans/clear",
                 tool="agent_resource_officer_plans_clear",
-                body={"executed": True, "limit": 100},
+                body={"executed": True, "limit": max_limit},
             ),
         ]
-        recommended_maintenance_actions = [
+        recommended_actions = [
             item.get("name")
-            for item in maintenance_templates
+            for item in action_templates
             if (
                 (item.get("name") == "clear_stale_sessions" and stale_session_count > 0)
                 or (item.get("name") == "clear_executed_plans" and executed_plan_count > 0)
             )
         ]
+        return {
+            "active_sessions": len(self._session_cache or {}),
+            "stale_sessions": stale_session_count,
+            "saved_plans_total": len(self._workflow_plans or {}),
+            "saved_plans_pending": pending_plan_count,
+            "saved_plans_executed": executed_plan_count,
+            "recommended_actions": recommended_actions,
+            "action_templates": action_templates,
+            "limit": max_limit,
+        }
+
+    def _assistant_maintain_public_data(self, execute: bool = False, limit: int = 100) -> Dict[str, Any]:
+        before = self._assistant_maintenance_snapshot(limit=limit)
+        executed_actions: List[Dict[str, Any]] = []
+        if execute:
+            if before.get("stale_sessions", 0) > 0:
+                result = self._clear_assistant_sessions(stale_only=True, limit=before.get("limit") or limit)
+                executed_actions.append({
+                    "name": "clear_stale_sessions",
+                    "success": True,
+                    "removed": result.get("cleared_count") or 0,
+                })
+            if before.get("saved_plans_executed", 0) > 0:
+                result = self._clear_workflow_plans(executed=True, limit=before.get("limit") or limit)
+                executed_actions.append({
+                    "name": "clear_executed_plans",
+                    "success": bool(result.get("ok")),
+                    "removed": result.get("removed") or 0,
+                })
+        after = self._assistant_maintenance_snapshot(limit=limit)
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "maintain",
+            "ok": True,
+            "compact": True,
+            "version": self.plugin_version,
+            "execute_requested": bool(execute),
+            "executed": bool(executed_actions),
+            "executed_actions": executed_actions,
+            "before": before,
+            "after": after,
+            "next_actions": after.get("recommended_actions") or [],
+            "action_templates": after.get("action_templates") or [],
+        }
+
+    def _format_assistant_maintain_text(self, data: Optional[Dict[str, Any]] = None) -> str:
+        payload = data or self._assistant_maintain_public_data(execute=False)
+        before = payload.get("before") or {}
+        after = payload.get("after") or before
+        lines = [
+            "Agent资源官 低风险维护",
+            f"版本：{payload.get('version')}",
+            f"执行：{'是' if payload.get('execute_requested') else '否'}",
+            "维护前：过期会话 {stale_sessions}；已执行计划 {saved_plans_executed}；待执行计划 {saved_plans_pending}".format(**before),
+            "维护后：过期会话 {stale_sessions}；已执行计划 {saved_plans_executed}；待执行计划 {saved_plans_pending}".format(**after),
+        ]
+        executed_actions = payload.get("executed_actions") or []
+        if executed_actions:
+            lines.append("已执行：" + " / ".join(f"{item.get('name')}({item.get('removed')})" for item in executed_actions))
+        recommended = after.get("recommended_actions") or []
+        if recommended:
+            lines.append("仍建议：" + " / ".join(str(item) for item in recommended if item))
+        return "\n".join(lines)
+
+    def _assistant_startup_public_data(self) -> Dict[str, Any]:
+        pulse = self._assistant_pulse_public_data()
+        selfcheck = self._assistant_selfcheck_public_data()
+        toolbox = self._assistant_toolbox_public_data()
+        maintenance = self._assistant_maintenance_snapshot(limit=100)
         tools = toolbox.get("tools") or {}
         endpoints = toolbox.get("endpoints") or {}
         key_names = [
             "startup",
+            "maintain",
             "pulse",
             "selfcheck",
             "recover",
@@ -4005,7 +4083,7 @@ class AgentResourceOfficer(_PluginBase):
         key_tools = {name: tools.get(name) for name in key_names if tools.get(name)}
         key_endpoints = {
             name: endpoints.get(name)
-            for name in ["startup", "pulse", "selfcheck", "recover", "workflow", "action", "actions", "route", "pick"]
+            for name in ["startup", "maintain", "pulse", "selfcheck", "recover", "workflow", "action", "actions", "route", "pick"]
             if endpoints.get(name)
         }
         return {
@@ -4021,15 +4099,7 @@ class AgentResourceOfficer(_PluginBase):
             "recovery": pulse.get("recovery") or {},
             "selected_session": pulse.get("selected_session"),
             "action_templates": pulse.get("action_templates") or [],
-            "maintenance": {
-                "active_sessions": len(self._session_cache or {}),
-                "stale_sessions": stale_session_count,
-                "saved_plans_total": len(self._workflow_plans or {}),
-                "saved_plans_pending": pending_plan_count,
-                "saved_plans_executed": executed_plan_count,
-                "recommended_actions": recommended_maintenance_actions,
-                "action_templates": maintenance_templates,
-            },
+            "maintenance": maintenance,
             "selfcheck": {
                 "ok": bool(selfcheck.get("ok")),
                 "checks": selfcheck.get("checks") or {},
@@ -4086,6 +4156,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "startup_order": [
                 "agent_resource_officer_startup",
+                "agent_resource_officer_maintain",
                 "agent_resource_officer_pulse",
                 "agent_resource_officer_selfcheck",
                 "agent_resource_officer_recover",
@@ -4096,6 +4167,7 @@ class AgentResourceOfficer(_PluginBase):
             "endpoints": {
                 "pulse": "/api/v1/plugin/AgentResourceOfficer/assistant/pulse",
                 "startup": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
+                "maintain": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
                 "selfcheck": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
@@ -4107,6 +4179,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "tools": {
                 "startup": "agent_resource_officer_startup",
+                "maintain": "agent_resource_officer_maintain",
                 "pulse": "agent_resource_officer_pulse",
                 "toolbox": "agent_resource_officer_toolbox",
                 "selfcheck": "agent_resource_officer_selfcheck",
@@ -5043,6 +5116,12 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_startup_text()
+
+    async def tool_assistant_maintain(self, execute: bool = False, limit: int = 100) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        data = self._assistant_maintain_public_data(execute=execute, limit=limit)
+        return self._format_assistant_maintain_text(data)
 
     async def tool_assistant_toolbox(self) -> str:
         if not self._enabled:
@@ -7026,6 +7105,28 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": bool(data.get("ok")),
             "message": self._format_assistant_startup_text(),
+            "data": data,
+        }
+
+    async def api_assistant_maintain(self, request: Request):
+        body: Dict[str, Any] = {}
+        if request.method.upper() != "GET":
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        execute = self._parse_bool_value(
+            body.get("execute") if "execute" in body else request.query_params.get("execute"),
+            False,
+        )
+        limit = self._safe_int(body.get("limit") or request.query_params.get("limit"), 100)
+        data = self._assistant_maintain_public_data(execute=execute, limit=limit)
+        return {
+            "success": bool(data.get("ok")),
+            "message": self._format_assistant_maintain_text(data),
             "data": data,
         }
 
