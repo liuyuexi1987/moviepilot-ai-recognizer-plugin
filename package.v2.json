@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.78",
+    "version": "0.1.79",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.79": "assistant/startup.maintenance 直接返回 safe_to_execute、execute_method、dry_run_method、execute_endpoint 和 execute_body，外部智能体无需猜维护调用方式。",
       "0.1.78": "assistant/maintain 在 POST 执行维护后写入 assistant/history，方便外部智能体审计维护动作；GET dry-run 仍不写历史。",
       "0.1.77": "assistant/selfcheck 新增 maintain dry-run 和维护模板 compact 检查，确保维护协议本身也纳入健康检查。",
       "0.1.76": "assistant/maintain 的 GET 请求固定为 dry-run，即使带 execute=true 也不会执行清理；只有 POST execute=true 才会实际维护。",

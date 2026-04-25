@@ -90,7 +90,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.78"
+    plugin_version = "0.1.79"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4014,6 +4014,12 @@ class AgentResourceOfficer(_PluginBase):
             "saved_plans_executed": executed_plan_count,
             "recommended_actions": recommended_actions,
             "action_templates": action_templates,
+            "safe_to_execute": bool(recommended_actions),
+            "dry_run_method": "GET",
+            "execute_method": "POST",
+            "execute_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
+            "execute_body": {"execute": True, "limit": max_limit},
+            "execution_note": "GET 只返回 dry-run；只有 POST execute=true 会实际清理，并写入 assistant/history。",
             "limit": max_limit,
         }
 
