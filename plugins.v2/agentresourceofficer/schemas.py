@@ -112,6 +112,7 @@ class AssistantExecuteActionsToolInput(BaseModel):
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
     stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否立即停止后续执行")
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带每一步原始返回；默认关闭以减少 token 与负载")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
 
 class AssistantWorkflowToolInput(BaseModel):
@@ -131,6 +132,7 @@ class AssistantWorkflowToolInput(BaseModel):
     dry_run: Optional[bool] = Field(default=False, description="只生成工作流计划，不实际执行")
     stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否停止")
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
 
 class AssistantExecutePlanToolInput(BaseModel):
@@ -140,6 +142,7 @@ class AssistantExecutePlanToolInput(BaseModel):
     prefer_unexecuted: Optional[bool] = Field(default=True, description="自动选计划时是否优先只选未执行计划")
     stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否停止")
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
 
 class AssistantPlansToolInput(BaseModel):

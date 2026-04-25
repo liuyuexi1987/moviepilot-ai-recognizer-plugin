@@ -353,6 +353,7 @@ class AssistantExecuteActionsTool(MoviePilotTool):
         session_id: str = None,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
+        compact: bool = True,
         **kwargs,
     ) -> str:
         plugin = _get_plugin()
@@ -364,6 +365,7 @@ class AssistantExecuteActionsTool(MoviePilotTool):
             session_id=session_id,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
+            compact=compact,
         )
 
 
@@ -393,6 +395,7 @@ class AssistantWorkflowTool(MoviePilotTool):
         dry_run: bool = False,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
+        compact: bool = True,
         **kwargs,
     ) -> str:
         plugin = _get_plugin()
@@ -415,6 +418,7 @@ class AssistantWorkflowTool(MoviePilotTool):
             dry_run=dry_run,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
+            compact=compact,
         )
 
 
@@ -434,6 +438,7 @@ class AssistantExecutePlanTool(MoviePilotTool):
         prefer_unexecuted: bool = True,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
+        compact: bool = True,
         **kwargs,
     ) -> str:
         plugin = _get_plugin()
@@ -446,6 +451,7 @@ class AssistantExecutePlanTool(MoviePilotTool):
             prefer_unexecuted=prefer_unexecuted,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
+            compact=compact,
         )
 
 
