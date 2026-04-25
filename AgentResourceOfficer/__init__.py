@@ -84,7 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.48"
+    plugin_version = "0.1.49"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2019,6 +2019,89 @@ class AgentResourceOfficer(_PluginBase):
             "last_error": self._clean_text(pending.get("last_error")),
         }
 
+    @staticmethod
+    def _assistant_find_action_template(
+        templates: Optional[List[Dict[str, Any]]],
+        names: List[str],
+    ) -> Optional[Dict[str, Any]]:
+        rows = [dict(item or {}) for item in (templates or []) if isinstance(item, dict)]
+        for current_name in names:
+            for item in rows:
+                if str(item.get("name") or "").strip() == current_name:
+                    return item
+        return None
+
+    def _assistant_recovery_public_data(
+        self,
+        *,
+        session_state: Optional[Dict[str, Any]] = None,
+        action_templates: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        state = dict(session_state or {})
+        templates = [dict(item or {}) for item in (action_templates or state.get("action_templates") or []) if isinstance(item, dict)]
+        saved_plan = dict(state.get("saved_plan") or {})
+        pending_p115 = dict(state.get("pending_p115") or {})
+        has_session = bool(state.get("has_session"))
+        kind = self._clean_text(state.get("kind"))
+        stage = self._clean_text(state.get("stage"))
+        mode = ""
+        reason = ""
+        template: Optional[Dict[str, Any]] = None
+
+        if saved_plan.get("has_pending"):
+            mode = "resume_saved_plan"
+            reason = "当前会话存在待执行计划"
+            template = self._assistant_find_action_template(templates, [
+                "execute_latest_plan",
+                "execute_plan",
+                "execute_session_latest_plan",
+            ])
+        elif pending_p115.get("has_pending"):
+            mode = "resume_pending_115"
+            reason = "当前会话存在待继续的 115 任务"
+            template = self._assistant_find_action_template(templates, [
+                "resume_pending_115",
+                "check_115_login",
+            ])
+        elif has_session and kind == "assistant_pansou":
+            mode = "continue_pansou"
+            reason = "当前会话停留在盘搜结果列表"
+            template = self._assistant_find_action_template(templates, ["pick_pansou_result"])
+        elif has_session and kind == "assistant_hdhive" and stage == "candidate":
+            mode = "continue_hdhive_candidate"
+            reason = "当前会话停留在影巢候选列表"
+            template = self._assistant_find_action_template(templates, ["pick_hdhive_candidate"])
+        elif has_session and kind == "assistant_hdhive" and stage == "resource":
+            mode = "continue_hdhive_resource"
+            reason = "当前会话停留在影巢资源列表"
+            template = self._assistant_find_action_template(templates, ["pick_hdhive_resource"])
+        elif has_session and kind == "assistant_p115_login":
+            mode = "continue_115_login"
+            reason = "当前会话停留在 115 登录检查阶段"
+            template = self._assistant_find_action_template(templates, ["check_115_login", "show_115_status"])
+        else:
+            mode = "start_new"
+            reason = "当前没有待恢复的执行状态，可直接开始新任务"
+            template = self._assistant_find_action_template(templates, [
+                "start_pansou_search",
+                "start_hdhive_search",
+                "start_115_login",
+            ])
+
+        return {
+            "mode": mode,
+            "reason": reason,
+            "can_resume": bool(template),
+            "recommended_action": self._clean_text((template or {}).get("name")),
+            "recommended_tool": self._clean_text((template or {}).get("tool")),
+            "action_template": template or None,
+            "alternatives": [
+                self._clean_text(item.get("name"))
+                for item in templates[:6]
+                if self._clean_text(item.get("name"))
+            ],
+        }
+
     def _assistant_session_public_data(self, session: str = "default") -> Dict[str, Any]:
         session_name = self._clean_text(session) or "default"
         session_id = self._assistant_session_id(session_name)
@@ -2033,6 +2116,7 @@ class AgentResourceOfficer(_PluginBase):
                 "suggested_actions": ["execute_plan.session", "smart_entry"] if saved_plan.get("has_pending") else ["smart_entry"],
             }
             payload["action_templates"] = self._assistant_action_templates(payload)
+            payload["recovery"] = self._assistant_recovery_public_data(session_state=payload)
             return payload
 
         kind = self._clean_text(state.get("kind"))
@@ -2137,6 +2221,7 @@ class AgentResourceOfficer(_PluginBase):
         if saved_plan.get("has_pending"):
             payload["suggested_actions"] = ["execute_plan.session", *list(payload.get("suggested_actions") or [])]
         payload["action_templates"] = self._assistant_action_templates(payload)
+        payload["recovery"] = self._assistant_recovery_public_data(session_state=payload)
         return payload
 
     def _assistant_session_brief_public_data(self, session_id: str, state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -2177,6 +2262,29 @@ class AgentResourceOfficer(_PluginBase):
                 result["total_resources"] = len(resources)
         elif result["kind"] == "assistant_p115_login":
             result["client_type"] = self._clean_text(payload.get("client_type")) or self._p115_client_type
+        result["recovery"] = self._assistant_recovery_public_data(
+            session_state={
+                **result,
+                "pending_p115": self._pending_p115_public_data(payload),
+                "saved_plan": saved_plan,
+            },
+            action_templates=[
+                self._assistant_action_template(
+                    name="execute_session_latest_plan",
+                    description="按 session_id 执行该会话最近一条待执行计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                    tool="agent_resource_officer_execute_plan",
+                    body={"session_id": result.get("session_id"), "prefer_unexecuted": True},
+                ),
+                self._assistant_action_template(
+                    name="inspect_session",
+                    description="查看某个会话的详细状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/session",
+                    tool="agent_resource_officer_session_state",
+                    body={"session_id": result.get("session_id")},
+                ),
+            ],
+        )
         return result
 
     def _assistant_plan_only_session_brief_public_data(self, session_id: str) -> Dict[str, Any]:
@@ -2196,6 +2304,21 @@ class AgentResourceOfficer(_PluginBase):
             "has_saved_plan": bool(saved_plan.get("has_plan")),
             "has_pending_plan": bool(saved_plan.get("has_pending")),
             "saved_plan": latest or None,
+            "recovery": {
+                "mode": "resume_saved_plan" if saved_plan.get("has_pending") else "inspect_plan_only_session",
+                "reason": "当前会话只有 dry_run 计划，尚未生成交互会话缓存",
+                "can_resume": bool(saved_plan.get("has_pending")),
+                "recommended_action": "execute_session_latest_plan" if saved_plan.get("has_pending") else "inspect_session",
+                "recommended_tool": "agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_session_state",
+                "action_template": self._assistant_action_template(
+                    name="execute_session_latest_plan" if saved_plan.get("has_pending") else "inspect_session",
+                    description="按 session_id 执行该会话最近一条待执行计划" if saved_plan.get("has_pending") else "查看某个会话的详细状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute" if saved_plan.get("has_pending") else "/api/v1/plugin/AgentResourceOfficer/assistant/session",
+                    tool="agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_session_state",
+                    body={"session_id": self._assistant_session_id(session_name), "prefer_unexecuted": True} if saved_plan.get("has_pending") else {"session_id": self._assistant_session_id(session_name)},
+                ),
+                "alternatives": ["execute_session_latest_plan", "inspect_session"],
+            },
         }
 
     @staticmethod
@@ -2484,6 +2607,19 @@ class AgentResourceOfficer(_PluginBase):
                     body={"session_id": "<assistant::session_id>"},
                 ),
             ],
+            "recovery": (
+                dict((items[:max_limit][0] or {}).get("recovery") or {})
+                if (items[:max_limit] and isinstance(items[:max_limit][0], dict))
+                else {
+                    "mode": "start_new",
+                    "reason": "当前没有活跃会话，可直接开始新任务",
+                    "can_resume": False,
+                    "recommended_action": "",
+                    "recommended_tool": "",
+                    "action_template": None,
+                    "alternatives": [],
+                }
+            ),
         }
 
     def _format_assistant_sessions_text(
@@ -3012,6 +3148,31 @@ class AgentResourceOfficer(_PluginBase):
                 "pending_preview": pending_plans.get("items") or [],
                 "action_templates": pending_plan_templates,
             },
+            "recovery": (
+                {
+                    "mode": "resume_saved_plan",
+                    "reason": "当前存在待执行计划，可直接恢复",
+                    "can_resume": True,
+                    "recommended_action": self._clean_text((pending_plan_templates[0] or {}).get("name")) if pending_plan_templates else "",
+                    "recommended_tool": self._clean_text((pending_plan_templates[0] or {}).get("tool")) if pending_plan_templates else "",
+                    "action_template": pending_plan_templates[0] if pending_plan_templates else None,
+                    "alternatives": [
+                        self._clean_text(item.get("name"))
+                        for item in pending_plan_templates[:5]
+                        if self._clean_text(item.get("name"))
+                    ],
+                }
+                if pending_plan_templates
+                else {
+                    "mode": "start_new",
+                    "reason": "当前没有待恢复计划，可直接开始新任务",
+                    "can_resume": False,
+                    "recommended_action": "",
+                    "recommended_tool": "",
+                    "action_template": None,
+                    "alternatives": [],
+                }
+            ),
             "recommended_entrypoints": [
                 "GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness",
                 "GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities",
@@ -3076,6 +3237,7 @@ class AgentResourceOfficer(_PluginBase):
         payload["session_state"] = session_state
         payload["next_actions"] = session_state.get("suggested_actions") or []
         payload["action_templates"] = session_state.get("action_templates") or []
+        payload["recovery"] = payload.get("recovery") or session_state.get("recovery") or self._assistant_recovery_public_data(session_state=session_state)
         return payload
 
     def _merge_assistant_structured_input(self, body: Dict[str, Any], parsed: Dict[str, str]) -> Dict[str, str]:
@@ -4919,7 +5081,7 @@ class AgentResourceOfficer(_PluginBase):
                 "session_id": body.get("session_id"),
                 "apikey": self._extract_apikey(request, body),
             }))
-        if name in {"execute_latest_plan", "execute_plan"}:
+        if name in {"execute_latest_plan", "execute_plan", "execute_session_latest_plan"}:
             return await self.api_assistant_plan_execute(_JsonRequestShim(request, {
                 "plan_id": body.get("plan_id"),
                 "session": body.get("session"),
