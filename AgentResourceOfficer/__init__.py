@@ -84,7 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.46"
+    plugin_version = "0.1.48"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2143,6 +2143,7 @@ class AgentResourceOfficer(_PluginBase):
         payload = dict(state or {})
         name = str(session_id or "")
         session_name = name.split("assistant::", 1)[1] if name.startswith("assistant::") else name or "default"
+        saved_plan = self._session_workflow_plan_public_data(session=session_name, session_id=name)
         result: Dict[str, Any] = {
             "session": session_name,
             "session_id": name or self._assistant_session_id(session_name),
@@ -2153,6 +2154,9 @@ class AgentResourceOfficer(_PluginBase):
             "keyword": self._clean_text(payload.get("keyword")),
             "target_path": self._clean_text(payload.get("target_path")),
             "has_pending_p115": bool(self._clean_text(((payload.get("pending_p115") or {}).get("share_url")))),
+            "has_saved_plan": bool(saved_plan.get("has_plan")),
+            "has_pending_plan": bool(saved_plan.get("has_pending")),
+            "saved_plan": saved_plan.get("latest"),
         }
         if result["kind"] == "assistant_pansou":
             result["result_count"] = len(payload.get("items") or [])
@@ -2174,6 +2178,25 @@ class AgentResourceOfficer(_PluginBase):
         elif result["kind"] == "assistant_p115_login":
             result["client_type"] = self._clean_text(payload.get("client_type")) or self._p115_client_type
         return result
+
+    def _assistant_plan_only_session_brief_public_data(self, session_id: str) -> Dict[str, Any]:
+        session_name = self._assistant_session_name_from_id(session_id)
+        saved_plan = self._session_workflow_plan_public_data(session=session_name, session_id=session_id)
+        latest = dict(saved_plan.get("latest") or {})
+        return {
+            "session": session_name,
+            "session_id": self._assistant_session_id(session_name),
+            "kind": "assistant_workflow_plan",
+            "stage": "planned",
+            "updated_at": self._safe_int(latest.get("created_at"), 0),
+            "updated_at_text": self._clean_text(latest.get("created_at_text")),
+            "keyword": "",
+            "target_path": "",
+            "has_pending_p115": False,
+            "has_saved_plan": bool(saved_plan.get("has_plan")),
+            "has_pending_plan": bool(saved_plan.get("has_pending")),
+            "saved_plan": latest or None,
+        }
 
     @staticmethod
     def _assistant_action_template(
@@ -2401,7 +2424,7 @@ class AgentResourceOfficer(_PluginBase):
     ) -> Dict[str, Any]:
         kind_filter = self._clean_text(kind)
         max_limit = min(max(1, self._safe_int(limit, 20)), 100)
-        items: List[Dict[str, Any]] = []
+        items_by_session: Dict[str, Dict[str, Any]] = {}
         for session_id, payload in (self._session_cache or {}).items():
             if not str(session_id).startswith("assistant::"):
                 continue
@@ -2409,6 +2432,21 @@ class AgentResourceOfficer(_PluginBase):
             if self._is_session_expired(session):
                 continue
             brief = self._assistant_session_brief_public_data(str(session_id), session)
+            items_by_session[brief.get("session_id") or str(session_id)] = brief
+        for plan in (self._workflow_plans or {}).values():
+            current = dict(plan or {})
+            plan_session_id = self._clean_text(current.get("session_id"))
+            if not plan_session_id:
+                continue
+            brief = items_by_session.get(plan_session_id)
+            if brief:
+                if not brief.get("has_saved_plan"):
+                    refreshed = self._assistant_session_brief_public_data(plan_session_id, self._load_session(plan_session_id) or {})
+                    items_by_session[plan_session_id] = refreshed
+                continue
+            items_by_session[plan_session_id] = self._assistant_plan_only_session_brief_public_data(plan_session_id)
+        items: List[Dict[str, Any]] = []
+        for brief in items_by_session.values():
             if kind_filter and brief.get("kind") != kind_filter:
                 continue
             if has_pending_p115 is not None and bool(brief.get("has_pending_p115")) != bool(has_pending_p115):
@@ -2424,6 +2462,13 @@ class AgentResourceOfficer(_PluginBase):
                 "has_pending_p115": has_pending_p115,
             },
             "action_templates": [
+                self._assistant_action_template(
+                    name="execute_session_latest_plan",
+                    description="按 session_id 执行该会话最近一条待执行计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                    tool="agent_resource_officer_execute_plan",
+                    body={"session_id": "<assistant::session_id>", "prefer_unexecuted": True},
+                ),
                 self._assistant_action_template(
                     name="inspect_session",
                     description="查看某个会话的详细状态",
@@ -2458,7 +2503,7 @@ class AgentResourceOfficer(_PluginBase):
             return "当前没有活跃的 Agent资源官 会话。"
         lines = [
             f"当前活跃会话：{data.get('total') or 0} 个",
-            "可直接用 assistant/session 查看单个会话详情，或继续用 smart_pick 接着执行。",
+            "可直接用 assistant/session 查看单个会话详情，也可按 session_id 直接恢复最近计划。",
         ]
         for idx, item in enumerate(items, 1):
             line = f"{idx}. {item.get('session')} | {item.get('kind') or '-'} | {item.get('stage') or '-'}"
@@ -2472,6 +2517,8 @@ class AgentResourceOfficer(_PluginBase):
                 detail_parts.append(f"更新:{item.get('updated_at_text')}")
             if item.get("has_pending_p115"):
                 detail_parts.append("含待继续115任务")
+            if item.get("has_pending_plan"):
+                detail_parts.append("含待执行计划")
             if item.get("selected_title"):
                 detail_parts.append(f"已选:{item.get('selected_title')}")
             if item.get("result_count"):

@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.46`
+- 当前版本：`0.1.48`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -522,3 +522,15 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/action?apikey=你的MP_API_TO
   "prefer_unexecuted": true
 }
 ```
+
+从 `0.1.47` 开始，`assistant/sessions` 也会直接暴露计划恢复信号：
+
+- 每个会话摘要会带 `has_pending_plan` 和最近计划摘要
+- `assistant/sessions` 的 `action_templates` 会包含 `execute_session_latest_plan`
+- 外部智能体拿到 `session_id` 后，可以直接按模板恢复该会话最近计划
+
+从 `0.1.48` 开始，`assistant/sessions` 也会列出“只有计划、没有会话缓存”的 session：
+
+- `dry_run` 之后即使还没产生会话状态，也能从 `assistant/sessions` 看到该 session
+- 这类会话会显示为 `assistant_workflow_plan / planned`
+- 外部智能体可以从会话列表直接恢复，不必先调用 `assistant/plans`
