@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.49`
+- 当前版本：`0.1.50`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -540,3 +540,9 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/action?apikey=你的MP_API_TO
 - `assistant/session`、统一回执、`assistant/readiness`、`assistant/sessions` 都会带 `recovery`
 - `recovery` 会明确给出当前最推荐的恢复模式、推荐动作、推荐 Tool 和可直接复用的 `action_template`
 - `assistant/action` 现在也支持 `execute_session_latest_plan`，会话列表里的恢复模板可以原样回放
+
+从 `0.1.50` 开始，`assistant/session` 与 `assistant/sessions` 也回到统一包裹形状：
+
+- 返回里会有标准字段：`protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates / recovery`
+- 同时继续保留原有的会话摘要字段，避免已有调用方断掉
+- 外部智能体现在可以把 `session / sessions / readiness / route / pick` 全部按同一套回执协议消费

@@ -84,7 +84,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.49"
+    plugin_version = "0.1.50"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3235,8 +3235,8 @@ class AgentResourceOfficer(_PluginBase):
         payload["session"] = session_name
         payload["session_id"] = session_state.get("session_id") or self._assistant_session_id(session_name)
         payload["session_state"] = session_state
-        payload["next_actions"] = session_state.get("suggested_actions") or []
-        payload["action_templates"] = session_state.get("action_templates") or []
+        payload["next_actions"] = payload.get("next_actions") or session_state.get("suggested_actions") or []
+        payload["action_templates"] = payload.get("action_templates") or session_state.get("action_templates") or []
         payload["recovery"] = payload.get("recovery") or session_state.get("recovery") or self._assistant_recovery_public_data(session_state=session_state)
         return payload
 
@@ -5906,7 +5906,13 @@ class AgentResourceOfficer(_PluginBase):
             session_id=(body or {}).get("session_id") or request.query_params.get("session_id"),
         )
         summary = self._format_assistant_session_summary(session=session)
-        data = self._assistant_session_public_data(session=session)
+        session_state = self._assistant_session_public_data(session=session)
+        data = self._assistant_response_data(session=session, data={
+            "action": "session_state",
+            "ok": True,
+            "session_snapshot": session_state,
+            **session_state,
+        })
         return {"success": True, "message": summary, "data": data}
 
     async def api_assistant_session_clear(self, request: Request):
@@ -5965,7 +5971,11 @@ class AgentResourceOfficer(_PluginBase):
                 has_pending_p115=has_pending_p115,
                 limit=limit,
             ),
-            "data": data,
+            "data": self._assistant_response_data(session="default", data={
+                "action": "sessions",
+                "ok": True,
+                **data,
+            }),
         }
 
     async def api_assistant_sessions_clear(self, request: Request):
