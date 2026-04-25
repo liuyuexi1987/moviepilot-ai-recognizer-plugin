@@ -90,7 +90,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.73"
+    plugin_version = "0.1.74"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4292,6 +4292,8 @@ class AgentResourceOfficer(_PluginBase):
             "bool_parser": bool_parse_ok,
             "protocol": protocol_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
+            "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
+            "toolbox_maintain_tool": bool((toolbox.get("tools") or {}).get("maintain")),
             "toolbox_selfcheck_endpoint": bool((toolbox.get("endpoints") or {}).get("selfcheck")),
         }
         ok = all(bool(value) for value in checks.values())
@@ -4315,9 +4317,10 @@ class AgentResourceOfficer(_PluginBase):
                     "action_body_compact": (route_template.get("action_body") or {}).get("compact"),
                 },
             },
-            "next_actions": ["assistant_startup", "assistant_pulse", "assistant_toolbox", "assistant_readiness"],
+            "next_actions": ["assistant_startup", "assistant_maintain", "assistant_pulse", "assistant_toolbox", "assistant_readiness"],
             "recommended_endpoints": {
                 "startup": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
+                "maintain": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "pulse": "/api/v1/plugin/AgentResourceOfficer/assistant/pulse",
                 "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
                 "readiness": "/api/v1/plugin/AgentResourceOfficer/assistant/readiness?compact=true",
