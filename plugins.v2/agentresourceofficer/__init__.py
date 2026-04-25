@@ -89,7 +89,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.70"
+    plugin_version = "0.1.71"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1662,16 +1662,19 @@ class AgentResourceOfficer(_PluginBase):
             reverse=True,
         )
         items: List[Dict[str, Any]] = []
+        matching_total = 0
         for plan in plans:
             if session_id_filter and self._clean_text(plan.get("session_id")) != session_id_filter:
                 continue
             if executed is not None and bool(plan.get("executed")) != bool(executed):
                 continue
-            items.append(self._workflow_plan_public_item(plan, include_actions=include_actions))
-            if len(items) >= max_limit:
-                break
+            matching_total += 1
+            if len(items) < max_limit:
+                items.append(self._workflow_plan_public_item(plan, include_actions=include_actions))
         return {
-            "total": len(self._workflow_plans or {}),
+            "total": matching_total,
+            "total_matching": matching_total,
+            "total_all": len(self._workflow_plans or {}),
             "limit": max_limit,
             "session": session_filter,
             "session_id": session_id_filter,
@@ -2981,7 +2984,9 @@ class AgentResourceOfficer(_PluginBase):
             "action": "plans",
             "ok": True,
             "compact": True,
-            "total": data.get("total") or 0,
+            "total": data.get("total_matching") if data.get("total_matching") is not None else (data.get("total") or 0),
+            "total_matching": data.get("total_matching") if data.get("total_matching") is not None else (data.get("total") or 0),
+            "total_all": data.get("total_all") if data.get("total_all") is not None else (data.get("total") or 0),
             "limit": data.get("limit") or len(items),
             "session": self._clean_text(data.get("session")),
             "session_id": self._clean_text(data.get("session_id")),
