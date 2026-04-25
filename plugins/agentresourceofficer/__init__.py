@@ -89,7 +89,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.68"
+    plugin_version = "0.1.69"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3945,6 +3945,11 @@ class AgentResourceOfficer(_PluginBase):
         pulse = self._assistant_pulse_public_data()
         selfcheck = self._assistant_selfcheck_public_data()
         toolbox = self._assistant_toolbox_public_data()
+        pending_plan_count = sum(
+            1
+            for item in (self._workflow_plans or {}).values()
+            if isinstance(item, dict) and not bool(item.get("executed"))
+        )
         tools = toolbox.get("tools") or {}
         endpoints = toolbox.get("endpoints") or {}
         key_names = [
@@ -3977,6 +3982,11 @@ class AgentResourceOfficer(_PluginBase):
             "recovery": pulse.get("recovery") or {},
             "selected_session": pulse.get("selected_session"),
             "action_templates": pulse.get("action_templates") or [],
+            "maintenance": {
+                "active_sessions": len(self._session_cache or {}),
+                "saved_plans_total": len(self._workflow_plans or {}),
+                "saved_plans_pending": pending_plan_count,
+            },
             "selfcheck": {
                 "ok": bool(selfcheck.get("ok")),
                 "checks": selfcheck.get("checks") or {},
@@ -4006,6 +4016,7 @@ class AgentResourceOfficer(_PluginBase):
             f"自检：{'通过' if not failed else '失败 ' + ', '.join(failed)}",
             f"恢复模式：{recovery.get('mode') or 'unknown'}",
             f"可执行模板：{len(data.get('action_templates') or [])} 个",
+            "状态：活跃会话 {active_sessions}；保存计划 {saved_plans_total}；待执行计划 {saved_plans_pending}".format(**(data.get("maintenance") or {})),
             "下一步：优先按 recovery 建议执行；没有待恢复任务时使用 workflow 或 smart_entry",
         ]
         warnings = data.get("warnings") or []
