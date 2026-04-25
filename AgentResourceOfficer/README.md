@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.69`
+- 当前版本：`0.1.70`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -372,6 +372,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.67` 开始，新增 `assistant/startup` 和 `agent_resource_officer_startup`，一次返回启动状态、自检结果、核心工具、端点、默认目录和恢复建议，减少外部智能体开场多次探测。
 从 `0.1.68` 开始，`assistant/startup` 会直接携带恢复用的 `session` / `session_id` / `action_templates`，外部智能体拿到启动包后可直接执行推荐恢复动作。
 从 `0.1.69` 开始，`assistant/startup` 增加 `maintenance` 计数，直接返回活跃会话、保存计划和待执行计划数量，便于外部智能体判断是否需要恢复或清理。
+从 `0.1.70` 开始，`assistant/startup.maintenance` 增加低风险清理模板：清理过期会话、清理已执行计划；不会自动清理待执行计划。
 
 从 `0.1.36` 开始，还新增了：
 

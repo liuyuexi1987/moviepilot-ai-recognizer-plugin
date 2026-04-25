@@ -89,7 +89,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.69"
+    plugin_version = "0.1.70"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3950,6 +3950,22 @@ class AgentResourceOfficer(_PluginBase):
             for item in (self._workflow_plans or {}).values()
             if isinstance(item, dict) and not bool(item.get("executed"))
         )
+        maintenance_templates = [
+            self._assistant_action_template(
+                name="clear_stale_sessions",
+                description="清理过期 assistant 会话，不影响仍有效的当前会话",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear",
+                tool="agent_resource_officer_sessions_clear",
+                body={"stale_only": True, "limit": 100},
+            ),
+            self._assistant_action_template(
+                name="clear_executed_plans",
+                description="清理已执行的保存计划，不影响待执行计划",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plans/clear",
+                tool="agent_resource_officer_plans_clear",
+                body={"executed": True, "limit": 100},
+            ),
+        ]
         tools = toolbox.get("tools") or {}
         endpoints = toolbox.get("endpoints") or {}
         key_names = [
@@ -3986,6 +4002,7 @@ class AgentResourceOfficer(_PluginBase):
                 "active_sessions": len(self._session_cache or {}),
                 "saved_plans_total": len(self._workflow_plans or {}),
                 "saved_plans_pending": pending_plan_count,
+                "action_templates": maintenance_templates,
             },
             "selfcheck": {
                 "ok": bool(selfcheck.get("ok")),
@@ -4092,6 +4109,8 @@ class AgentResourceOfficer(_PluginBase):
                 "resume_pending_115",
                 "execute_latest_plan",
                 "execute_session_latest_plan",
+                "clear_stale_sessions",
+                "clear_executed_plans",
             ],
             "command_examples": [
                 "盘搜搜索 大君夫人",
@@ -6252,6 +6271,18 @@ class AgentResourceOfficer(_PluginBase):
         if name == "clear_session_by_id":
             return await finish(self.api_assistant_sessions_clear(_JsonRequestShim(request, {
                 "session_id": body.get("session_id"),
+                "apikey": self._extract_apikey(request, body),
+            })))
+        if name == "clear_stale_sessions":
+            return await finish(self.api_assistant_sessions_clear(_JsonRequestShim(request, {
+                "stale_only": True,
+                "limit": body.get("limit") or 100,
+                "apikey": self._extract_apikey(request, body),
+            })))
+        if name == "clear_executed_plans":
+            return await finish(self.api_assistant_plans_clear(_JsonRequestShim(request, {
+                "executed": True,
+                "limit": body.get("limit") or 100,
                 "apikey": self._extract_apikey(request, body),
             })))
 
