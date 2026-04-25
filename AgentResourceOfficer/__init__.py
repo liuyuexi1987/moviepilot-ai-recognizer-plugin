@@ -47,6 +47,7 @@ from .agenttool import (
     AssistantSessionsClearTool,
     AssistantSessionsTool,
     AssistantSessionStateTool,
+    AssistantSelfcheckTool,
     AssistantToolboxTool,
     AssistantWorkflowTool,
     HDHiveSearchSessionTool,
@@ -87,7 +88,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.64"
+    plugin_version = "0.1.65"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -247,6 +248,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantRecoverTool,
             AssistantPulseTool,
             AssistantToolboxTool,
+            AssistantSelfcheckTool,
             AssistantReadinessTool,
             AssistantHistoryTool,
             AssistantHelpTool,
@@ -3578,6 +3580,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_capabilities",
                 "agent_resource_officer_pulse",
                 "agent_resource_officer_toolbox",
+                "agent_resource_officer_selfcheck",
                 "agent_resource_officer_readiness",
                 "agent_resource_officer_history",
                 "agent_resource_officer_execute_action",
@@ -3930,6 +3933,7 @@ class AgentResourceOfficer(_PluginBase):
             },
             "startup_order": [
                 "agent_resource_officer_pulse",
+                "agent_resource_officer_selfcheck",
                 "agent_resource_officer_recover",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_smart_entry",
@@ -3949,6 +3953,7 @@ class AgentResourceOfficer(_PluginBase):
             "tools": {
                 "pulse": "agent_resource_officer_pulse",
                 "toolbox": "agent_resource_officer_toolbox",
+                "selfcheck": "agent_resource_officer_selfcheck",
                 "recover": "agent_resource_officer_recover",
                 "workflow": "agent_resource_officer_run_workflow",
                 "route": "agent_resource_officer_smart_entry",
@@ -4878,6 +4883,11 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_toolbox_text()
+
+    async def tool_assistant_selfcheck(self) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_selfcheck_text()
 
     async def tool_assistant_history(
         self,

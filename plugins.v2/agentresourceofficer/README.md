@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.64`
+- 当前版本：`0.1.65`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -366,6 +366,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.62` 开始，POST JSON 里的 `compact` 也会按布尔语义解析，`"false"`、`"0"`、`"off"` 不会再被误判为开启。
 从 `0.1.63` 开始，`dry_run`、`stop_on_error`、`include_raw_results`、`prefer_unexecuted`、`all_plans`、`stale_only`、`all_sessions`、`execute` 等 POST 布尔字段也统一按同样规则解析。
 从 `0.1.64` 开始，新增 `assistant/selfcheck`，用于快速确认 compact 模板、布尔解析和协议字段是否健康。
+从 `0.1.65` 开始，`assistant/selfcheck` 也下沉为 MP 原生 Tool：`agent_resource_officer_selfcheck`。
 
 从 `0.1.36` 开始，还新增了：
 
@@ -610,6 +611,8 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/toolbox?apikey=你的MP_API_TO
 ```text
 GET /api/v1/plugin/AgentResourceOfficer/assistant/selfcheck?apikey=你的MP_API_TOKEN
 ```
+
+对应 MP 智能助手 Tool：`agent_resource_officer_selfcheck`
 
 从 `0.1.55` 开始，`assistant/session` 和 `assistant/sessions` 支持低 token 回执；从 `0.1.56` 开始，`assistant/history` 和 `assistant/plans` 也支持同样的精简模式；从 `0.1.57` 开始，`assistant/actions`、`assistant/workflow` 和 `assistant/plan/execute` 也支持 `compact=true`；从 `0.1.58` 开始，启动入口 `assistant/capabilities` 和 `assistant/readiness` 也支持 `compact=true`；从 `0.1.59` 开始，`assistant/action` 单动作执行也支持 `compact=true`；从 `0.1.60` 开始，`assistant/route` 和 `assistant/pick` 主交互链路也支持 `compact=true`；从 `0.1.61` 开始，`action_templates` 默认携带 `compact=true`：
 

@@ -23,6 +23,7 @@ from .schemas import (
     AssistantSessionsClearToolInput,
     AssistantSessionsToolInput,
     AssistantSessionStateToolInput,
+    AssistantSelfcheckToolInput,
     AssistantToolboxToolInput,
     AssistantWorkflowToolInput,
     HDHiveSearchSessionToolInput,
@@ -257,6 +258,21 @@ class AssistantToolboxTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_toolbox()
+
+
+class AssistantSelfcheckTool(MoviePilotTool):
+    name: str = "agent_resource_officer_selfcheck"
+    description: str = "Run a compact Agent资源官 protocol self-check for compact templates, boolean parsing, and basic assistant protocol health."
+    args_schema: Type[BaseModel] = AssistantSelfcheckToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在执行 Agent资源官 协议自检"
+
+    async def run(self, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_selfcheck()
 
 
 class AssistantHistoryTool(MoviePilotTool):

@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.64",
+    "version": "0.1.65",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.65": "新增 agent_resource_officer_selfcheck 原生 Tool，让 MP 智能助手可直接执行 Agent资源官 compact 协议自检。",
       "0.1.64": "新增 assistant/selfcheck 轻量协议自检，快速确认 compact 模板、布尔解析和基础协议字段是否健康。",
       "0.1.63": "统一 dry_run、stop_on_error、include_raw_results、prefer_unexecuted、all_plans、stale_only、all_sessions、execute 等 POST 布尔字段解析，避免字符串 false/0/off 被误判。",
       "0.1.62": "统一 POST JSON compact 参数的布尔解析，避免外部智能体传入字符串 false/0/off 时被误判为开启精简回执。",
