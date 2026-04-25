@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.63"
+    plugin_version = "0.1.64"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -746,6 +746,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_toolbox,
                 "methods": ["GET"],
                 "summary": "轻量工具清单：返回推荐工具、端点、工作流、动作名、默认目录和命令示例",
+            },
+            {
+                "path": "/assistant/selfcheck",
+                "endpoint": self.api_assistant_selfcheck,
+                "methods": ["GET"],
+                "summary": "轻量自检：确认 compact 协议、模板默认 compact 和布尔字符串解析是否正常",
             },
             {
                 "path": "/assistant/history",
@@ -3540,6 +3546,7 @@ class AgentResourceOfficer(_PluginBase):
             "session_tools": [
                 "assistant/pulse",
                 "assistant/toolbox",
+                "assistant/selfcheck",
                 "assistant/readiness",
                 "assistant/history",
                 "assistant/action",
@@ -3646,6 +3653,7 @@ class AgentResourceOfficer(_PluginBase):
             f"- 115 客户端：{defaults.get('p115_client_type')}",
             "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
             "轻量工具清单：assistant/toolbox，返回推荐工具、端点、工作流和命令示例，适合外部智能体初始化系统提示",
+            "轻量协议自检：assistant/selfcheck，返回 compact 模板、布尔解析和低 token 入口健康状态",
             "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用；compact=true 可减少嵌套回执",
             "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要；compact=true 可减少嵌套回执",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
@@ -3930,6 +3938,7 @@ class AgentResourceOfficer(_PluginBase):
             "endpoints": {
                 "pulse": "/api/v1/plugin/AgentResourceOfficer/assistant/pulse",
                 "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
+                "selfcheck": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
                 "workflow": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
                 "action": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
@@ -3993,6 +4002,101 @@ class AgentResourceOfficer(_PluginBase):
             "常用工作流：" + " / ".join(str(item.get("name")) for item in workflows if item.get("name")),
             "默认目录：115={p115_path}；夸克={quark_path}；影巢={hdhive_path}".format(**(data.get("defaults") or {})),
         ]
+        return "\n".join(lines)
+
+    def _assistant_selfcheck_public_data(self) -> Dict[str, Any]:
+        action_template = self._assistant_action_template(
+            name="show_115_status",
+            description="自检模板：查看 115 状态",
+            endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+            tool="agent_resource_officer_execute_action",
+            body={"session": "selfcheck"},
+        )
+        route_template = self._assistant_action_template(
+            name="start_hdhive_search",
+            description="自检模板：发起影巢搜索",
+            endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+            tool="agent_resource_officer_smart_entry",
+            body={"session": "selfcheck", "keyword": "蜘蛛侠", "media_type": "movie"},
+        )
+        bool_cases = {
+            "true": self._parse_bool_value("true", False),
+            "false": self._parse_bool_value("false", True),
+            "one": self._parse_bool_value("1", False),
+            "zero": self._parse_bool_value("0", True),
+            "off": self._parse_bool_value("off", True),
+            "default_true": self._parse_bool_value(None, True),
+            "default_false": self._parse_bool_value(None, False),
+        }
+        compact_templates_ok = all([
+            (action_template.get("body") or {}).get("compact") is True,
+            (action_template.get("action_body") or {}).get("compact") is True,
+            (route_template.get("body") or {}).get("compact") is True,
+            (route_template.get("action_body") or {}).get("compact") is True,
+        ])
+        bool_parse_ok = (
+            bool_cases["true"] is True
+            and bool_cases["false"] is False
+            and bool_cases["one"] is True
+            and bool_cases["zero"] is False
+            and bool_cases["off"] is False
+            and bool_cases["default_true"] is True
+            and bool_cases["default_false"] is False
+        )
+        pulse = self._assistant_pulse_public_data()
+        toolbox = self._assistant_toolbox_public_data()
+        protocol_ok = (
+            pulse.get("protocol_version") == "assistant.v1"
+            and toolbox.get("protocol_version") == "assistant.v1"
+            and pulse.get("action") == "pulse"
+            and toolbox.get("action") == "toolbox"
+        )
+        checks = {
+            "compact_templates": compact_templates_ok,
+            "bool_parser": bool_parse_ok,
+            "protocol": protocol_ok,
+            "toolbox_selfcheck_endpoint": bool((toolbox.get("endpoints") or {}).get("selfcheck")),
+        }
+        ok = all(bool(value) for value in checks.values())
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "selfcheck",
+            "ok": ok,
+            "compact": True,
+            "version": self.plugin_version,
+            "checks": checks,
+            "bool_cases": bool_cases,
+            "template_samples": {
+                "action": {
+                    "name": action_template.get("name"),
+                    "body_compact": (action_template.get("body") or {}).get("compact"),
+                    "action_body_compact": (action_template.get("action_body") or {}).get("compact"),
+                },
+                "route": {
+                    "name": route_template.get("name"),
+                    "body_compact": (route_template.get("body") or {}).get("compact"),
+                    "action_body_compact": (route_template.get("action_body") or {}).get("compact"),
+                },
+            },
+            "next_actions": ["assistant_pulse", "assistant_toolbox", "assistant_readiness"],
+            "recommended_endpoints": {
+                "pulse": "/api/v1/plugin/AgentResourceOfficer/assistant/pulse",
+                "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
+                "readiness": "/api/v1/plugin/AgentResourceOfficer/assistant/readiness?compact=true",
+            },
+        }
+
+    def _format_assistant_selfcheck_text(self) -> str:
+        data = self._assistant_selfcheck_public_data()
+        checks = data.get("checks") or {}
+        failed = [key for key, value in checks.items() if not value]
+        lines = [
+            "Agent资源官 协议自检",
+            f"版本：{data.get('version')}",
+            f"结果：{'通过' if data.get('ok') else '失败'}",
+        ]
+        if failed:
+            lines.append("失败项：" + " / ".join(failed))
         return "\n".join(lines)
 
     def _assistant_response_data(
@@ -6735,6 +6839,17 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": True,
             "message": self._format_assistant_toolbox_text(),
+            "data": data,
+        }
+
+    async def api_assistant_selfcheck(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        data = self._assistant_selfcheck_public_data()
+        return {
+            "success": bool(data.get("ok")),
+            "message": self._format_assistant_selfcheck_text(),
             "data": data,
         }
 
