@@ -85,7 +85,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.51"
+    plugin_version = "0.1.52"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -2737,6 +2737,39 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("如需直接恢复，可调用 assistant/recover 并传 execute=true。")
         return "\n".join(lines)
 
+    def _assistant_recover_response_data(self, data: Dict[str, Any], compact: bool = False) -> Dict[str, Any]:
+        if not compact:
+            return self._assistant_response_data(session=(data or {}).get("session") or "default", data=data)
+
+        payload = dict(data or {})
+        session_state = dict(payload.pop("session_state", {}) or {})
+        payload.pop("sessions", None)
+        recovery = dict(payload.get("recovery") or {})
+        selected = payload.get("selected_session")
+        if isinstance(selected, dict) and selected.get("recovery"):
+            selected = dict(selected)
+            selected.pop("recovery", None)
+            payload["selected_session"] = selected
+
+        session_name = self._clean_text(payload.get("session") or session_state.get("session")) or "default"
+        session_id = self._clean_text(payload.get("session_id") or session_state.get("session_id")) or self._assistant_session_id(session_name)
+        action_template = recovery.get("action_template") if isinstance(recovery.get("action_template"), dict) else None
+        payload.update({
+            "protocol_version": "assistant.v1",
+            "compact": True,
+            "session": session_name,
+            "session_id": session_id,
+            "next_actions": [
+                item for item in [
+                    recovery.get("recommended_action"),
+                    *(session_state.get("suggested_actions") or []),
+                ]
+                if item
+            ][:6],
+            "action_templates": [action_template] if action_template else [],
+        })
+        return payload
+
     def _format_assistant_sessions_text(
         self,
         *,
@@ -3132,9 +3165,10 @@ class AgentResourceOfficer(_PluginBase):
                     "prefer_unexecuted",
                     "stop_on_error",
                     "include_raw_results",
+                    "compact",
                     "limit",
                 ],
-                "description": "单入口恢复协议：不传 session 时自动挑选最值得恢复的会话或计划；execute=true 时直接执行推荐动作。",
+                "description": "单入口恢复协议：不传 session 时自动挑选最值得恢复的会话或计划；execute=true 时直接执行推荐动作；compact=true 可返回低 token 回执。",
             },
             "session_tools": [
                 "assistant/readiness",
@@ -3214,7 +3248,7 @@ class AgentResourceOfficer(_PluginBase):
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景",
             "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id",
             "计划管理入口：assistant/plans 与 assistant/plans/clear，可查询或清理 dry_run 保存的计划",
-            "单入口恢复：assistant/recover，可自动选择最值得恢复的会话或计划；execute=true 时直接执行推荐动作",
+            "单入口恢复：assistant/recover，可自动选择最值得恢复的会话或计划；execute=true 时直接执行推荐动作；compact=true 可减少回执字段",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
         ]
         return "\n".join(lines)
@@ -4299,6 +4333,7 @@ class AgentResourceOfficer(_PluginBase):
         prefer_unexecuted: bool = True,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
+        compact: bool = True,
         limit: int = 20,
     ) -> str:
         if not self._enabled:
@@ -4313,6 +4348,7 @@ class AgentResourceOfficer(_PluginBase):
                     "prefer_unexecuted": bool(prefer_unexecuted),
                     "stop_on_error": bool(stop_on_error),
                     "include_raw_results": bool(include_raw_results),
+                    "compact": bool(compact),
                     "limit": self._safe_int(limit, 20),
                 },
             )
@@ -6076,6 +6112,11 @@ class AgentResourceOfficer(_PluginBase):
             if "include_raw_results" in body
             else False
         )
+        compact = bool(
+            self._parse_optional_bool(body.get("compact"))
+            if "compact" in body
+            else self._parse_optional_bool(request.query_params.get("compact"))
+        )
         limit = self._safe_int(body.get("limit") or request.query_params.get("limit"), 20)
         data = self._assistant_recover_public_data(
             session=session,
@@ -6093,7 +6134,7 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": True,
                 "message": self._format_assistant_recover_text(data),
-                "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
+                "data": self._assistant_recover_response_data(data, compact=compact),
             }
 
         recovery = dict(data.get("recovery") or {})
@@ -6103,7 +6144,7 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": False,
                 "message": str(data["execute_error"]),
-                "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
+                "data": self._assistant_recover_response_data(data, compact=compact),
             }
 
         template = dict(recovery.get("action_template") or {})
@@ -6116,7 +6157,7 @@ class AgentResourceOfficer(_PluginBase):
             return {
                 "success": False,
                 "message": data["execute_error"],
-                "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
+                "data": self._assistant_recover_response_data(data, compact=compact),
             }
 
         action_body.setdefault("session", data.get("session") or "default")
@@ -6150,7 +6191,7 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": bool(result.get("success")),
             "message": f"恢复动作 {action_body.get('name')} 执行完成\n{result.get('message') or ''}".strip(),
-            "data": self._assistant_response_data(session=data.get("session") or "default", data=data),
+            "data": self._assistant_recover_response_data(data, compact=compact),
         }
 
     async def api_assistant_session_state(self, request: Request):

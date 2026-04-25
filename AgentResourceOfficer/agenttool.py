@@ -483,6 +483,7 @@ class AssistantRecoverTool(MoviePilotTool):
         prefer_unexecuted: bool = True,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
+        compact: bool = True,
         limit: int = 20,
         **kwargs,
     ) -> str:
@@ -496,6 +497,7 @@ class AssistantRecoverTool(MoviePilotTool):
             prefer_unexecuted=prefer_unexecuted,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
+            compact=compact,
             limit=limit,
         )
 

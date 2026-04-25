@@ -156,6 +156,7 @@ class AssistantRecoverToolInput(BaseModel):
     prefer_unexecuted: Optional[bool] = Field(default=True, description="执行保存计划时是否优先选择未执行计划")
     stop_on_error: Optional[bool] = Field(default=True, description="执行恢复动作时遇到失败是否停止")
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果；默认关闭以减少 token")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启，只返回恢复所需关键字段")
     limit: Optional[int] = Field(default=20, description="全局恢复扫描时最多查看多少个会话")
 
 

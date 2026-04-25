@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.51`
+- 当前版本：`0.1.52`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -562,4 +562,16 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/recover?apikey=你的MP_API_T
   "session": "demo-plan",
   "execute": true
 }
+```
+
+从 `0.1.52` 开始，`assistant/recover` 支持低 token 回执：
+
+- 传 `compact=true` 时不会返回完整 `session_state` 和 `sessions`
+- 只保留恢复模式、推荐动作、推荐 Tool、当前 session、最小 `action_templates`
+- `agent_resource_officer_recover` 默认使用低 token 回执，适合外部智能体高频轮询
+
+示例：
+
+```text
+GET /api/v1/plugin/AgentResourceOfficer/assistant/recover?apikey=你的MP_API_TOKEN&compact=true
 ```
