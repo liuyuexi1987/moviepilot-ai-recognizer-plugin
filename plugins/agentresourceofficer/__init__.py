@@ -87,7 +87,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.62"
+    plugin_version = "0.1.63"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -1301,7 +1301,7 @@ class AgentResourceOfficer(_PluginBase):
 
         service = self._ensure_hdhive_service()
         checkin_ok, result, checkin_message = service.perform_checkin(
-            is_gambler=bool(body.get("is_gambler")),
+            is_gambler=self._parse_bool_value(body.get("is_gambler"), False),
             trigger="Agent资源官 API",
         )
         if not checkin_ok:
@@ -1310,7 +1310,7 @@ class AgentResourceOfficer(_PluginBase):
                 if fallback_cookie:
                     fallback_ok, fallback_result, fallback_message = service.perform_web_checkin_with_fallback(
                         cookie_string=fallback_cookie,
-                        is_gambler=bool(body.get("is_gambler")),
+                        is_gambler=self._parse_bool_value(body.get("is_gambler"), False),
                         trigger="Agent资源官 网页兜底",
                     )
                     if fallback_ok:
@@ -6079,8 +6079,8 @@ class AgentResourceOfficer(_PluginBase):
 
         apikey = self._extract_apikey(request, body)
         requested_count = min(len(actions), 20)
-        stop_on_error = bool(body.get("stop_on_error", True))
-        include_raw_results = bool(body.get("include_raw_results", False))
+        stop_on_error = self._parse_bool_value(body.get("stop_on_error"), True)
+        include_raw_results = self._parse_bool_value(body.get("include_raw_results"), False)
         compact = self._parse_bool_value(body.get("compact"), False)
         batch_session = self._clean_text(body.get("session")) or "default"
         batch_session_id = self._clean_text(body.get("session_id"))
@@ -6323,7 +6323,7 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": build_error}
 
         session = self._clean_text(body.get("session")) or "default"
-        if bool(body.get("dry_run")):
+        if self._parse_bool_value(body.get("dry_run"), False):
             execute_body = {
                 **{key: value for key, value in body.items() if key not in {"apikey", "dry_run"}},
                 "dry_run": False,
@@ -6365,8 +6365,8 @@ class AgentResourceOfficer(_PluginBase):
                     "workflow": workflow_name,
                     "session": session,
                     "session_id": self._clean_text(body.get("session_id")),
-                    "stop_on_error": bool(body.get("stop_on_error", True)),
-                    "include_raw_results": bool(body.get("include_raw_results", False)),
+                    "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
+                    "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
                     "compact": compact,
                     "apikey": self._extract_apikey(request, body),
                 },
@@ -6393,7 +6393,7 @@ class AgentResourceOfficer(_PluginBase):
         plan_id = self._clean_text(body.get("plan_id"))
         session = self._clean_text(body.get("session"))
         session_id = self._clean_text(body.get("session_id"))
-        prefer_unexecuted = bool(body.get("prefer_unexecuted", True))
+        prefer_unexecuted = self._parse_bool_value(body.get("prefer_unexecuted"), True)
         compact = self._parse_bool_value(body.get("compact"), False)
         plan = self._find_workflow_plan(
             plan_id=plan_id,
@@ -6428,8 +6428,8 @@ class AgentResourceOfficer(_PluginBase):
                     "workflow": workflow_name,
                     "session": session,
                     "session_id": session_id,
-                    "stop_on_error": bool(body.get("stop_on_error", True)),
-                    "include_raw_results": bool(body.get("include_raw_results", False)),
+                    "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
+                    "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
                     "compact": compact,
                     "apikey": self._extract_apikey(request, body),
                 },
@@ -6812,7 +6812,7 @@ class AgentResourceOfficer(_PluginBase):
             session=body.get("session"),
             session_id=body.get("session_id"),
             executed=self._parse_optional_bool(body.get("executed")),
-            all_plans=bool(body.get("all_plans")),
+            all_plans=self._parse_bool_value(body.get("all_plans"), False),
             limit=self._safe_int(body.get("limit"), 100),
         )
         if not result.get("ok"):
@@ -6846,25 +6846,21 @@ class AgentResourceOfficer(_PluginBase):
 
         session = self._clean_text(body.get("session") or request.query_params.get("session"))
         session_id = self._clean_text(body.get("session_id") or request.query_params.get("session_id"))
-        execute = bool(
-            self._parse_optional_bool(body.get("execute"))
-            if "execute" in body
-            else self._parse_optional_bool(request.query_params.get("execute"))
+        execute = self._parse_bool_value(
+            body.get("execute") if "execute" in body else request.query_params.get("execute"),
+            False,
         )
-        prefer_unexecuted = bool(
-            self._parse_optional_bool(body.get("prefer_unexecuted"))
-            if "prefer_unexecuted" in body
-            else True
+        prefer_unexecuted = self._parse_bool_value(
+            body.get("prefer_unexecuted") if "prefer_unexecuted" in body else None,
+            True,
         )
-        stop_on_error = bool(
-            self._parse_optional_bool(body.get("stop_on_error"))
-            if "stop_on_error" in body
-            else True
+        stop_on_error = self._parse_bool_value(
+            body.get("stop_on_error") if "stop_on_error" in body else None,
+            True,
         )
-        include_raw_results = bool(
-            self._parse_optional_bool(body.get("include_raw_results"))
-            if "include_raw_results" in body
-            else False
+        include_raw_results = self._parse_bool_value(
+            body.get("include_raw_results") if "include_raw_results" in body else None,
+            False,
         )
         compact = bool(
             self._parse_optional_bool(body.get("compact"))
@@ -7077,8 +7073,8 @@ class AgentResourceOfficer(_PluginBase):
             session_id=body.get("session_id"),
             kind=body.get("kind"),
             has_pending_p115=body.get("has_pending_p115"),
-            stale_only=bool(body.get("stale_only")),
-            all_sessions=bool(body.get("all_sessions")),
+            stale_only=self._parse_bool_value(body.get("stale_only"), False),
+            all_sessions=self._parse_bool_value(body.get("all_sessions"), False),
             limit=self._safe_int(body.get("limit"), 100),
         )
         cleared_count = self._safe_int(result.get("cleared_count"), 0)
