@@ -11,6 +11,7 @@ from .schemas import (
     AssistantPickToolInput,
     AssistantRouteToolInput,
     AssistantSessionClearToolInput,
+    AssistantSessionsToolInput,
     AssistantSessionStateToolInput,
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
@@ -223,6 +224,25 @@ class AssistantSessionClearTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_session_clear(session=session)
+
+
+class AssistantSessionsTool(MoviePilotTool):
+    name: str = "agent_resource_officer_sessions"
+    description: str = "List active Agent资源官 assistant sessions so external agents can recover, inspect, and resume the right workflow."
+    args_schema: Type[BaseModel] = AssistantSessionsToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在查看 Agent资源官 活跃会话列表"
+
+    async def run(self, kind: str = None, has_pending_p115: bool = None, limit: int = 20, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_sessions(
+            kind=kind,
+            has_pending_p115=has_pending_p115,
+            limit=limit,
+        )
 
 
 class P115QRCodeStartTool(MoviePilotTool):

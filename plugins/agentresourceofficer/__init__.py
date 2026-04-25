@@ -35,6 +35,7 @@ from .agenttool import (
     AssistantPickTool,
     AssistantRouteTool,
     AssistantSessionClearTool,
+    AssistantSessionsTool,
     AssistantSessionStateTool,
     HDHiveSearchSessionTool,
     HDHiveSessionPickTool,
@@ -68,7 +69,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.32"
+    plugin_version = "0.1.33"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -215,6 +216,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantHelpTool,
             AssistantRouteTool,
             AssistantPickTool,
+            AssistantSessionsTool,
             AssistantSessionStateTool,
             AssistantSessionClearTool,
             HDHiveSearchSessionTool,
@@ -682,6 +684,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_session_clear,
                 "methods": ["POST"],
                 "summary": "清理统一智能入口当前会话缓存",
+            },
+            {
+                "path": "/assistant/sessions",
+                "endpoint": self.api_assistant_sessions,
+                "methods": ["GET"],
+                "summary": "列出当前活跃的统一智能入口会话，便于外部智能体恢复和接续",
             },
             {
                 "path": "/session/hdhive/search",
@@ -1317,7 +1325,7 @@ class AgentResourceOfficer(_PluginBase):
                 session = dict(payload or {})
                 if self._is_session_expired(session):
                     continue
-                if session.get("pending_p115") or str(session.get("kind") or "").strip() == "assistant_p115_login":
+                if str(session_id).startswith("assistant::") or session.get("pending_p115") or str(session.get("kind") or "").strip() == "assistant_p115_login":
                     data[session_id] = session
             self.save_data(key=self._session_store_key, value=data)
         except Exception:
@@ -1643,6 +1651,118 @@ class AgentResourceOfficer(_PluginBase):
             payload["suggested_actions"] = ["smart_entry", "session_clear"]
         return payload
 
+    def _assistant_session_brief_public_data(self, session_id: str, state: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        payload = dict(state or {})
+        name = str(session_id or "")
+        session_name = name.split("assistant::", 1)[1] if name.startswith("assistant::") else name or "default"
+        result: Dict[str, Any] = {
+            "session": session_name,
+            "session_id": name or self._assistant_session_id(session_name),
+            "kind": self._clean_text(payload.get("kind")),
+            "stage": self._clean_text(payload.get("stage")),
+            "updated_at": self._safe_int(payload.get("updated_at"), 0),
+            "updated_at_text": self._format_unix_time(payload.get("updated_at")),
+            "keyword": self._clean_text(payload.get("keyword")),
+            "target_path": self._clean_text(payload.get("target_path")),
+            "has_pending_p115": bool(self._clean_text(((payload.get("pending_p115") or {}).get("share_url")))),
+        }
+        if result["kind"] == "assistant_pansou":
+            result["result_count"] = len(payload.get("items") or [])
+        elif result["kind"] == "assistant_hdhive":
+            if result["stage"] == "candidate":
+                candidates = payload.get("candidates") or []
+                page_size = max(1, self._safe_int(payload.get("page_size"), self._hdhive_candidate_page_size))
+                current_page = max(1, self._safe_int(payload.get("page"), 1))
+                total_pages = max(1, (len(candidates) + page_size - 1) // page_size) if candidates else 1
+                result["total_candidates"] = len(candidates)
+                result["page"] = current_page
+                result["total_pages"] = total_pages
+            elif result["stage"] == "resource":
+                selected = dict(payload.get("selected_candidate") or {})
+                resources = payload.get("resources") or []
+                result["selected_title"] = self._clean_text(selected.get("title"))
+                result["selected_year"] = self._clean_text(selected.get("year"))
+                result["total_resources"] = len(resources)
+        elif result["kind"] == "assistant_p115_login":
+            result["client_type"] = self._clean_text(payload.get("client_type")) or self._p115_client_type
+        return result
+
+    def _assistant_sessions_public_data(
+        self,
+        *,
+        kind: str = "",
+        has_pending_p115: Optional[bool] = None,
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        kind_filter = self._clean_text(kind)
+        max_limit = min(max(1, self._safe_int(limit, 20)), 100)
+        items: List[Dict[str, Any]] = []
+        for session_id, payload in (self._session_cache or {}).items():
+            if not str(session_id).startswith("assistant::"):
+                continue
+            session = dict(payload or {})
+            if self._is_session_expired(session):
+                continue
+            brief = self._assistant_session_brief_public_data(str(session_id), session)
+            if kind_filter and brief.get("kind") != kind_filter:
+                continue
+            if has_pending_p115 is not None and bool(brief.get("has_pending_p115")) != bool(has_pending_p115):
+                continue
+            items.append(brief)
+        items.sort(key=lambda item: self._safe_int(item.get("updated_at"), 0), reverse=True)
+        return {
+            "total": len(items),
+            "limit": max_limit,
+            "items": items[:max_limit],
+            "filters": {
+                "kind": kind_filter,
+                "has_pending_p115": has_pending_p115,
+            },
+        }
+
+    def _format_assistant_sessions_text(
+        self,
+        *,
+        kind: str = "",
+        has_pending_p115: Optional[bool] = None,
+        limit: int = 20,
+    ) -> str:
+        data = self._assistant_sessions_public_data(
+            kind=kind,
+            has_pending_p115=has_pending_p115,
+            limit=limit,
+        )
+        items = data.get("items") or []
+        if not items:
+            return "当前没有活跃的 Agent资源官 会话。"
+        lines = [
+            f"当前活跃会话：{data.get('total') or 0} 个",
+            "可直接用 assistant/session 查看单个会话详情，或继续用 smart_pick 接着执行。",
+        ]
+        for idx, item in enumerate(items, 1):
+            line = f"{idx}. {item.get('session')} | {item.get('kind') or '-'} | {item.get('stage') or '-'}"
+            if item.get("keyword"):
+                line = f"{line} | {item.get('keyword')}"
+            lines.append(line)
+            detail_parts: List[str] = []
+            if item.get("target_path"):
+                detail_parts.append(f"目录:{item.get('target_path')}")
+            if item.get("updated_at_text"):
+                detail_parts.append(f"更新:{item.get('updated_at_text')}")
+            if item.get("has_pending_p115"):
+                detail_parts.append("含待继续115任务")
+            if item.get("selected_title"):
+                detail_parts.append(f"已选:{item.get('selected_title')}")
+            if item.get("result_count"):
+                detail_parts.append(f"结果:{item.get('result_count')}")
+            if item.get("total_candidates"):
+                detail_parts.append(f"候选:{item.get('total_candidates')}")
+            if item.get("total_resources"):
+                detail_parts.append(f"资源:{item.get('total_resources')}")
+            if detail_parts:
+                lines.append("   " + " | ".join(detail_parts))
+        return "\n".join(lines)
+
     def _format_assistant_session_summary(self, session: str = "default") -> str:
         data = self._assistant_session_public_data(session=session)
         if not data.get("has_session"):
@@ -1868,6 +1988,7 @@ class AgentResourceOfficer(_PluginBase):
                 "actions": ["detail", "next_page"],
             },
             "session_tools": [
+                "assistant/sessions",
                 "assistant/session",
                 "assistant/session/clear",
             ],
@@ -1887,6 +2008,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
                 "agent_resource_officer_smart_pick",
+                "agent_resource_officer_sessions",
                 "agent_resource_officer_session_state",
                 "agent_resource_officer_session_clear",
             ],
@@ -1900,9 +2022,10 @@ class AgentResourceOfficer(_PluginBase):
             f"版本：{data.get('version')}",
             "推荐上层调用顺序：",
             "1. 先看 capabilities",
-            "2. 再调用 smart_entry",
-            "3. 之后用 assistant/session 或 session_state 判断下一步",
-            "4. 最后再调用 smart_pick 或 session_clear",
+            "2. 如需恢复旧流程，可先看 assistant/sessions",
+            "3. 再调用 smart_entry",
+            "4. 之后用 assistant/session 或 session_state 判断下一步",
+            "5. 最后再调用 smart_pick 或 session_clear",
             "默认目录：",
             f"- 影巢：{defaults.get('hdhive_path')}",
             f"- 115：{defaults.get('p115_path')}",
@@ -2657,6 +2780,20 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_session_summary(session=session)
+
+    async def tool_assistant_sessions(
+        self,
+        kind: str = "",
+        has_pending_p115: Optional[bool] = None,
+        limit: int = 20,
+    ) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        return self._format_assistant_sessions_text(
+            kind=kind,
+            has_pending_p115=has_pending_p115,
+            limit=limit,
+        )
 
     async def tool_assistant_session_clear(self, session: str = "default") -> str:
         if not self._enabled:
@@ -3741,6 +3878,33 @@ class AgentResourceOfficer(_PluginBase):
             "success": True,
             "message": f"已清理会话：{session}",
             "data": self._assistant_response_data(session=session, data={"cleared": True}),
+        }
+
+    async def api_assistant_sessions(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+        kind = self._clean_text(request.query_params.get("kind"))
+        has_pending_p115_raw = request.query_params.get("has_pending_p115")
+        has_pending_p115: Optional[bool] = None
+        if has_pending_p115_raw is not None:
+            has_pending_p115 = str(has_pending_p115_raw).strip().lower() in {"1", "true", "yes", "y"}
+        limit = self._safe_int(request.query_params.get("limit"), 20)
+        data = self._assistant_sessions_public_data(
+            kind=kind,
+            has_pending_p115=has_pending_p115,
+            limit=limit,
+        )
+        return {
+            "success": True,
+            "message": self._format_assistant_sessions_text(
+                kind=kind,
+                has_pending_p115=has_pending_p115,
+                limit=limit,
+            ),
+            "data": data,
         }
 
     async def api_session_hdhive_search(self, request: Request):

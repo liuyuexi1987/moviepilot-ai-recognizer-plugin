@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.32`
+- 当前版本：`0.1.33`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -113,6 +113,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/route`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/pick`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities`
+- `GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/session`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/session`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/session/clear`
@@ -128,6 +129,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_help`
 - `agent_resource_officer_capabilities`
 - `agent_resource_officer_route_share`
+- `agent_resource_officer_sessions`
 - `agent_resource_officer_session_state`
 - `agent_resource_officer_session_clear`
 - `agent_resource_officer_p115_qrcode_start`
@@ -324,3 +326,10 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 - `next_actions`
 
 这样外部智能体拿到回执后，就可以直接根据结构化字段判断当前阶段、可选编号、建议动作和待继续的 115 任务，不必再解析长文本提示。
+
+从 `0.1.33` 开始，还新增了：
+
+- `GET /assistant/sessions`
+- `agent_resource_officer_sessions`
+
+这样外部智能体在重启、断线或多会话并行时，可以先列出当前活跃会话，再决定恢复哪个 session 继续执行。

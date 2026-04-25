@@ -60,6 +60,12 @@ class AssistantCapabilitiesToolInput(BaseModel):
     pass
 
 
+class AssistantSessionsToolInput(BaseModel):
+    kind: Optional[str] = Field(default=None, description="按会话类型过滤，例如 assistant_pansou / assistant_hdhive / assistant_p115_login")
+    has_pending_p115: Optional[bool] = Field(default=None, description="是否只看带待继续 115 任务的会话")
+    limit: Optional[int] = Field(default=20, description="最多返回多少条活跃会话摘要")
+
+
 class P115QRCodeStartToolInput(BaseModel):
     client_type: Optional[str] = Field(default="alipaymini", description="115 扫码客户端类型，默认 alipaymini")
 
