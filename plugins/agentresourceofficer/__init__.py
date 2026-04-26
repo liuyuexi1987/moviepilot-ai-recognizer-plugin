@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.100"
+    plugin_version = "0.1.101"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4465,6 +4465,7 @@ class AgentResourceOfficer(_PluginBase):
         auth = {
             "mode": "query_apikey",
             "query_param": "apikey",
+            "url_template": "{base_url}{endpoint}?apikey={MP_API_TOKEN}",
             "description": "调用插件 HTTP 接口时推荐使用 ?apikey=你的MP_API_TOKEN；MP Tool 调用不需要此参数。",
         }
         recommended_sequence = [
@@ -4577,6 +4578,10 @@ class AgentResourceOfficer(_PluginBase):
                 "auth": auth,
                 "method": template_data.get("method"),
                 "endpoint": template_data.get("endpoint"),
+                "url_template": "{base_url}{endpoint}?apikey={MP_API_TOKEN}".replace(
+                    "{endpoint}",
+                    self._clean_text(template_data.get("endpoint")),
+                ),
                 "query": template_data.get("query") or {},
                 "body": template_data.get("body") or {},
                 "tool": template_data.get("tool"),
@@ -4603,6 +4608,10 @@ class AgentResourceOfficer(_PluginBase):
                 "auth": auth,
                 "method": first_template_data.get("method"),
                 "endpoint": first_template_data.get("endpoint"),
+                "url_template": "{base_url}{endpoint}?apikey={MP_API_TOKEN}".replace(
+                    "{endpoint}",
+                    self._clean_text(first_template_data.get("endpoint")),
+                ),
                 "query": first_template_data.get("query") or {},
                 "body": first_template_data.get("body") or {},
                 "tool": first_template_data.get("tool"),
@@ -4845,6 +4854,9 @@ class AgentResourceOfficer(_PluginBase):
             and "maintain_execute" in (recommended_recipe_detail.get("write_templates") or [])
             and ((recommended_recipe_detail.get("first_call") or {}).get("template")) == "maintain_preview"
             and (((recommended_recipe_detail.get("first_call") or {}).get("auth") or {}).get("mode")) == "query_apikey"
+            and self._clean_text((recommended_recipe_detail.get("first_call") or {}).get("url_template")).endswith(
+                "/assistant/maintain?apikey={MP_API_TOKEN}"
+            )
             and ((recommended_recipe_detail.get("first_call") or {}).get("method")) == "GET"
             and ((recommended_recipe_detail.get("first_call") or {}).get("tool")) == "agent_resource_officer_maintain"
             and [
@@ -4853,6 +4865,10 @@ class AgentResourceOfficer(_PluginBase):
             ] == ["maintain_preview", "maintain_execute"]
             and all(
                 (((item or {}).get("auth") or {}).get("query_param")) == "apikey"
+                for item in (recommended_recipe_detail.get("calls") or [])
+            )
+            and all(
+                "{MP_API_TOKEN}" in self._clean_text((item or {}).get("url_template"))
                 for item in (recommended_recipe_detail.get("calls") or [])
             )
         )
