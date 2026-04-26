@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.103"
+    plugin_version = "0.1.104"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4655,6 +4655,13 @@ class AgentResourceOfficer(_PluginBase):
             } if first_template_data else {},
             "calls": recommended_recipe_calls,
         }
+        confirmation_templates = recommended_recipe_detail.get("confirmation_required_templates") or []
+        recommended_recipe_detail["first_confirmation_template"] = confirmation_templates[0] if confirmation_templates else ""
+        recommended_recipe_detail["confirmation_message"] = (
+            f"执行 {recommended_recipe} 的 {recommended_recipe_detail['first_confirmation_template']} 前需要用户确认。"
+            if confirmation_templates
+            else f"{recommended_recipe} 当前推荐流程无需用户确认。"
+        )
         return {
             "protocol_version": "assistant.v1",
             "action": "request_templates",
@@ -4905,6 +4912,8 @@ class AgentResourceOfficer(_PluginBase):
             and recommended_recipe_detail.get("first_template") == "maintain_preview"
             and "maintain_execute" in (recommended_recipe_detail.get("confirmation_required_templates") or [])
             and "maintain_execute" in (recommended_recipe_detail.get("write_templates") or [])
+            and recommended_recipe_detail.get("first_confirmation_template") == "maintain_execute"
+            and "maintain_execute" in self._clean_text(recommended_recipe_detail.get("confirmation_message"))
             and ((recommended_recipe_detail.get("first_call") or {}).get("template")) == "maintain_preview"
             and (((recommended_recipe_detail.get("first_call") or {}).get("auth") or {}).get("mode")) == "query_apikey"
             and self._clean_text((recommended_recipe_detail.get("first_call") or {}).get("url_template")).endswith(
