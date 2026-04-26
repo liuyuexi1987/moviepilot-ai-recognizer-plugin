@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.85`
+- 当前版本：`0.1.86`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -391,6 +391,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.83` 开始，`assistant/startup` 的核心 `tools` / `endpoints` 和 `assistant/capabilities?compact=true` 的推荐启动列表都会显式包含请求模板入口，外部智能体只读启动包也能发现模板能力。
 从 `0.1.84` 开始，`assistant/request_templates` 支持 POST JSON body 传入 `names` / `limit`，方便结构化智能体直接用 body 请求过滤模板。
 从 `0.1.85` 开始，`request_templates` 每个模板都会带对应的 MP 原生 `tool` 名，外部智能体可在 HTTP 调用和 MP Tool 调用之间直接切换。
+从 `0.1.86` 开始，`request_templates` 每个模板都会带 `tool_args`，区分 HTTP 参数和 MP Tool 参数，避免外部智能体误用 body/query。
 
 从 `0.1.36` 开始，还新增了：
 

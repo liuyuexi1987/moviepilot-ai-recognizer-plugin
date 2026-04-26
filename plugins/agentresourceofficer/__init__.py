@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.85"
+    plugin_version = "0.1.86"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4276,30 +4276,42 @@ class AgentResourceOfficer(_PluginBase):
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "tool": "agent_resource_officer_startup",
+                "tool_args": {},
                 "query": {},
             },
             "selfcheck_probe": {
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "tool": "agent_resource_officer_selfcheck",
+                "tool_args": {},
                 "query": {},
             },
             "maintain_preview": {
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "tool": "agent_resource_officer_maintain",
+                "tool_args": {"execute": False, "limit": max_limit},
                 "query": {"execute": True, "limit": max_limit},
             },
             "maintain_execute": {
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "tool": "agent_resource_officer_maintain",
+                "tool_args": {"execute": True, "limit": max_limit},
                 "body": {"execute": True, "limit": max_limit},
             },
             "workflow_dry_run": {
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
                 "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {
+                    "name": "hdhive_candidates",
+                    "keyword": "蜘蛛侠",
+                    "media_type": "movie",
+                    "session": "assistant",
+                    "dry_run": True,
+                    "compact": True,
+                },
                 "body": {
                     "workflow": "hdhive_candidates",
                     "keyword": "蜘蛛侠",
@@ -4313,6 +4325,11 @@ class AgentResourceOfficer(_PluginBase):
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
                 "tool": "agent_resource_officer_execute_plan",
+                "tool_args": {
+                    "session": "assistant",
+                    "prefer_unexecuted": True,
+                    "compact": True,
+                },
                 "body": {
                     "session": "assistant",
                     "prefer_unexecuted": True,
@@ -4323,6 +4340,11 @@ class AgentResourceOfficer(_PluginBase):
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
                 "tool": "agent_resource_officer_execute_action",
+                "tool_args": {
+                    "name": "show_115_status",
+                    "session": "assistant",
+                    "compact": True,
+                },
                 "body": {
                     "name": "show_115_status",
                     "session": "assistant",
@@ -4333,6 +4355,11 @@ class AgentResourceOfficer(_PluginBase):
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                 "tool": "agent_resource_officer_smart_pick",
+                "tool_args": {
+                    "session": "assistant",
+                    "choice": 1,
+                    "compact": True,
+                },
                 "body": {
                     "session": "assistant",
                     "choice": 1,
@@ -4487,6 +4514,7 @@ class AgentResourceOfficer(_PluginBase):
             and self._clean_text((request_templates.get(name) or {}).get("endpoint"))
             and self._clean_text((request_templates.get(name) or {}).get("method"))
             and self._clean_text((request_templates.get(name) or {}).get("tool"))
+            and isinstance((request_templates.get(name) or {}).get("tool_args"), dict)
             for name in [
                 "startup_probe",
                 "selfcheck_probe",
