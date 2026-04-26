@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.102`
+- 当前版本：`0.1.103`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -408,6 +408,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.100` 开始，`assistant/request_templates` 与推荐调用会明确给出 `auth.mode=query_apikey`，避免外部智能体误用 Bearer 鉴权。
 从 `0.1.101` 开始，推荐调用会带 `url_template`，外部智能体可用 `{base_url}` 和 `{MP_API_TOKEN}` 直接拼出 HTTP 调用地址。
 从 `0.1.102` 开始，`assistant/request_templates` 支持 `recipe=` 参数，可直接按 `safe_bootstrap`、`plan_then_confirm`、`continue_existing_session` 或 `maintenance_cycle` 拉取整套推荐流程。
+从 `0.1.103` 开始，`recipe=` 支持 `plan`、`maintain`、`continue`、`bootstrap` 等短别名，回执会带 `requested_recipe`、`selected_recipe` 和 `recipe_aliases`。
 
 从 `0.1.36` 开始，还新增了：
 

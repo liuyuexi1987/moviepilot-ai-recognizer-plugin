@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.102"
+    plugin_version = "0.1.103"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4437,8 +4437,28 @@ class AgentResourceOfficer(_PluginBase):
             "continue_existing_session": ["pick_continue"],
             "maintenance_cycle": ["maintain_preview", "maintain_execute"],
         }
-        selected_recipe = self._clean_text(recipe)
-        invalid_recipe = selected_recipe if selected_recipe and selected_recipe not in recipe_templates_map else ""
+        recipe_aliases = {
+            "bootstrap": "safe_bootstrap",
+            "safe": "safe_bootstrap",
+            "start": "safe_bootstrap",
+            "启动": "safe_bootstrap",
+            "plan": "plan_then_confirm",
+            "dry_run": "plan_then_confirm",
+            "confirm": "plan_then_confirm",
+            "计划": "plan_then_confirm",
+            "continue": "continue_existing_session",
+            "pick": "continue_existing_session",
+            "resume": "continue_existing_session",
+            "继续": "continue_existing_session",
+            "选择": "continue_existing_session",
+            "maintain": "maintenance_cycle",
+            "maintenance": "maintenance_cycle",
+            "cleanup": "maintenance_cycle",
+            "维护": "maintenance_cycle",
+        }
+        requested_recipe = self._clean_text(recipe)
+        selected_recipe = recipe_aliases.get(requested_recipe, requested_recipe)
+        invalid_recipe = requested_recipe if requested_recipe and selected_recipe not in recipe_templates_map else ""
         selected_names = self._assistant_request_template_names(names)
         if not selected_names and selected_recipe in recipe_templates_map:
             selected_names = list(recipe_templates_map[selected_recipe])
@@ -4646,8 +4666,11 @@ class AgentResourceOfficer(_PluginBase):
             "templates_included": bool(include_templates),
             "request_templates": templates if include_templates else {},
             "available_names": list(all_templates.keys()),
+            "available_recipes": list(recipe_templates_map.keys()),
+            "recipe_aliases": recipe_aliases,
             "selected_names": selected_names,
             "invalid_names": invalid_names,
+            "requested_recipe": requested_recipe,
             "selected_recipe": selected_recipe if selected_recipe in recipe_templates_map else "",
             "invalid_recipe": invalid_recipe,
             "execution_policy": {
@@ -4754,7 +4777,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         recipe_filtered_request_templates = self._assistant_request_templates_response_data(
             limit=5,
-            recipe="plan_then_confirm",
+            recipe="plan",
             include_templates=False,
         )
         policy_only_request_templates = self._assistant_request_templates_response_data(
@@ -4868,10 +4891,13 @@ class AgentResourceOfficer(_PluginBase):
             and recipe_request_templates.get("recommended_recipe") == "plan_then_confirm"
         )
         request_templates_recipe_filter_ok = (
-            recipe_filtered_request_templates.get("selected_recipe") == "plan_then_confirm"
+            recipe_filtered_request_templates.get("requested_recipe") == "plan"
+            and recipe_filtered_request_templates.get("selected_recipe") == "plan_then_confirm"
             and recipe_filtered_request_templates.get("selected_names") == ["workflow_dry_run", "saved_plan_execute"]
             and recipe_filtered_request_templates.get("recommended_recipe") == "plan_then_confirm"
             and recipe_filtered_request_templates.get("templates_included") is False
+            and "plan_then_confirm" in (recipe_filtered_request_templates.get("available_recipes") or [])
+            and ((recipe_filtered_request_templates.get("recipe_aliases") or {}).get("plan")) == "plan_then_confirm"
         )
         recommended_recipe_detail = filtered_request_templates.get("recommended_recipe_detail") or {}
         request_templates_recommended_recipe_detail_ok = (
