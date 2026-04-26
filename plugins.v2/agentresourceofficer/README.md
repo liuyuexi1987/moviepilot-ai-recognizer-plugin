@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.99`
+- 当前版本：`0.1.100`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -405,6 +405,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.97` 开始，`assistant/request_templates` 回执会带 `recommended_recipe_detail`，直接给出推荐流程的首个模板、确认模板和写入模板，外部智能体可直接照此编排。
 从 `0.1.98` 开始，`recommended_recipe_detail` 会带 `first_call`，直接给出首个模板的 HTTP 调用和 MP Tool 调用参数，外部智能体可直接执行第一步。
 从 `0.1.99` 开始，`recommended_recipe_detail` 会带完整 `calls` 列表，外部智能体可按推荐流程逐步执行。
+从 `0.1.100` 开始，`assistant/request_templates` 与推荐调用会明确给出 `auth.mode=query_apikey`，避免外部智能体误用 Bearer 鉴权。
 
 从 `0.1.36` 开始，还新增了：
 

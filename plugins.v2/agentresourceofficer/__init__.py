@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.99"
+    plugin_version = "0.1.100"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4462,6 +4462,11 @@ class AgentResourceOfficer(_PluginBase):
             for name, item in templates.items()
             if self._safe_int((item or {}).get("cache_ttl_seconds"), 0) <= 0
         ]
+        auth = {
+            "mode": "query_apikey",
+            "query_param": "apikey",
+            "description": "调用插件 HTTP 接口时推荐使用 ?apikey=你的MP_API_TOKEN；MP Tool 调用不需要此参数。",
+        }
         recommended_sequence = [
             {
                 "step": "bootstrap",
@@ -4569,6 +4574,7 @@ class AgentResourceOfficer(_PluginBase):
                 continue
             recommended_recipe_calls.append({
                 "template": template_name,
+                "auth": auth,
                 "method": template_data.get("method"),
                 "endpoint": template_data.get("endpoint"),
                 "query": template_data.get("query") or {},
@@ -4594,6 +4600,7 @@ class AgentResourceOfficer(_PluginBase):
             ],
             "first_call": {
                 "template": first_template,
+                "auth": auth,
                 "method": first_template_data.get("method"),
                 "endpoint": first_template_data.get("endpoint"),
                 "query": first_template_data.get("query") or {},
@@ -4612,6 +4619,7 @@ class AgentResourceOfficer(_PluginBase):
             "compact": True,
             "version": self.plugin_version,
             "schema_version": self.request_templates_schema_version,
+            "auth": auth,
             "templates_included": bool(include_templates),
             "request_templates": templates if include_templates else {},
             "available_names": list(all_templates.keys()),
@@ -4836,12 +4844,17 @@ class AgentResourceOfficer(_PluginBase):
             and "maintain_execute" in (recommended_recipe_detail.get("confirmation_required_templates") or [])
             and "maintain_execute" in (recommended_recipe_detail.get("write_templates") or [])
             and ((recommended_recipe_detail.get("first_call") or {}).get("template")) == "maintain_preview"
+            and (((recommended_recipe_detail.get("first_call") or {}).get("auth") or {}).get("mode")) == "query_apikey"
             and ((recommended_recipe_detail.get("first_call") or {}).get("method")) == "GET"
             and ((recommended_recipe_detail.get("first_call") or {}).get("tool")) == "agent_resource_officer_maintain"
             and [
                 (item or {}).get("template")
                 for item in (recommended_recipe_detail.get("calls") or [])
             ] == ["maintain_preview", "maintain_execute"]
+            and all(
+                (((item or {}).get("auth") or {}).get("query_param")) == "apikey"
+                for item in (recommended_recipe_detail.get("calls") or [])
+            )
         )
         request_templates_policy_only_ok = (
             policy_only_request_templates.get("templates_included") is False
