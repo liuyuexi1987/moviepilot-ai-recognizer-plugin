@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.81"
+    plugin_version = "0.1.82"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4330,14 +4330,37 @@ class AgentResourceOfficer(_PluginBase):
             },
         }
 
-    def _assistant_request_templates_response_data(self, limit: int = 100) -> Dict[str, Any]:
+    def _assistant_request_template_names(self, value: Any) -> List[str]:
+        if isinstance(value, (list, tuple, set)):
+            rows = value
+        else:
+            rows = re.split(r"[,，\s]+", self._clean_text(value))
+        names: List[str] = []
+        for item in rows:
+            name = self._clean_text(item)
+            if name and name not in names:
+                names.append(name)
+        return names
+
+    def _assistant_request_templates_response_data(self, limit: int = 100, names: Any = None) -> Dict[str, Any]:
+        all_templates = self._assistant_request_templates_public_data(limit=limit)
+        selected_names = self._assistant_request_template_names(names)
+        invalid_names = [name for name in selected_names if name not in all_templates]
+        templates = {
+            name: all_templates[name]
+            for name in selected_names
+            if name in all_templates
+        } if selected_names else all_templates
         return {
             "protocol_version": "assistant.v1",
             "action": "request_templates",
             "ok": True,
             "compact": True,
             "version": self.plugin_version,
-            "request_templates": self._assistant_request_templates_public_data(limit=limit),
+            "request_templates": templates,
+            "available_names": list(all_templates.keys()),
+            "selected_names": selected_names,
+            "invalid_names": invalid_names,
         }
 
     def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
@@ -4417,6 +4440,10 @@ class AgentResourceOfficer(_PluginBase):
         toolbox = self._assistant_toolbox_public_data()
         maintain = self._assistant_maintain_public_data(execute=False)
         request_templates = self._assistant_request_templates_public_data(limit=100)
+        filtered_request_templates = self._assistant_request_templates_response_data(
+            limit=5,
+            names="maintain_execute,missing_template",
+        )
         maintenance_templates = maintain.get("action_templates") or []
         maintenance_template_names = {
             self._clean_text(item.get("name"))
@@ -4457,6 +4484,12 @@ class AgentResourceOfficer(_PluginBase):
                 "pick_continue",
             ]
         )
+        request_templates_filter_ok = (
+            list((filtered_request_templates.get("request_templates") or {}).keys()) == ["maintain_execute"]
+            and filtered_request_templates.get("selected_names") == ["maintain_execute", "missing_template"]
+            and filtered_request_templates.get("invalid_names") == ["missing_template"]
+            and (((filtered_request_templates.get("request_templates") or {}).get("maintain_execute") or {}).get("body") or {}).get("limit") == 5
+        )
         checks = {
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
@@ -4464,6 +4497,7 @@ class AgentResourceOfficer(_PluginBase):
             "maintain_dry_run": maintain_dry_run_ok,
             "maintenance_templates_compact": maintenance_templates_compact_ok,
             "request_templates": request_templates_ok,
+            "request_templates_filter": request_templates_filter_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
@@ -5313,10 +5347,10 @@ class AgentResourceOfficer(_PluginBase):
             return "Agent资源官 插件未启用"
         return self._format_assistant_toolbox_text()
 
-    async def tool_assistant_request_templates(self, limit: int = 100) -> str:
+    async def tool_assistant_request_templates(self, limit: int = 100, names: Any = None) -> str:
         if not self._enabled:
             return "Agent资源官 插件未启用"
-        data = self._assistant_request_templates_response_data(limit=limit)
+        data = self._assistant_request_templates_response_data(limit=limit, names=names)
         return self._format_assistant_request_templates_text(data)
 
     async def tool_assistant_selfcheck(self) -> str:
@@ -7366,7 +7400,12 @@ class AgentResourceOfficer(_PluginBase):
         if not ok:
             return {"success": False, "message": message}
         limit = self._safe_int(request.query_params.get("limit"), 100)
-        data = self._assistant_request_templates_response_data(limit=limit)
+        names = (
+            request.query_params.get("names")
+            or request.query_params.get("name")
+            or request.query_params.get("template")
+        )
+        data = self._assistant_request_templates_response_data(limit=limit, names=names)
         return {
             "success": True,
             "message": self._format_assistant_request_templates_text(data),

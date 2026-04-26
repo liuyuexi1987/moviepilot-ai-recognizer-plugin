@@ -91,6 +91,7 @@ class AssistantToolboxToolInput(BaseModel):
 
 class AssistantRequestTemplatesToolInput(BaseModel):
     limit: Optional[int] = Field(default=100, description="模板中批量类请求默认 limit，范围由插件限制")
+    names: Optional[str] = Field(default=None, description="可选模板名，多个用逗号或空格分隔，例如 maintain_execute,workflow_dry_run")
 
 
 class AssistantSelfcheckToolInput(BaseModel):
