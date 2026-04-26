@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.83"
+    plugin_version = "0.1.84"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -770,7 +770,7 @@ class AgentResourceOfficer(_PluginBase):
             {
                 "path": "/assistant/request_templates",
                 "endpoint": self.api_assistant_request_templates,
-                "methods": ["GET"],
+                "methods": ["GET", "POST"],
                 "summary": "轻量请求模板：返回外部智能体常用 assistant 请求模板",
             },
             {
@@ -7399,12 +7399,21 @@ class AgentResourceOfficer(_PluginBase):
         }
 
     async def api_assistant_request_templates(self, request: Request):
-        ok, message = self._check_api_access(request)
+        body: Dict[str, Any] = {}
+        if request.method.upper() != "GET":
+            try:
+                body = await request.json()
+            except Exception:
+                body = {}
+        ok, message = self._check_api_access(request, body)
         if not ok:
             return {"success": False, "message": message}
-        limit = self._safe_int(request.query_params.get("limit"), 100)
+        limit = self._safe_int(body.get("limit") or request.query_params.get("limit"), 100)
         names = (
-            request.query_params.get("names")
+            body.get("names")
+            or body.get("name")
+            or body.get("template")
+            or request.query_params.get("names")
             or request.query_params.get("name")
             or request.query_params.get("template")
         )

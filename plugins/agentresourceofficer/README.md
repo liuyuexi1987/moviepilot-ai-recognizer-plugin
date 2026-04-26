@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.83`
+- 当前版本：`0.1.84`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -116,7 +116,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/startup`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/maintain`
-- `GET /api/v1/plugin/AgentResourceOfficer/assistant/request_templates`
+- `GET/POST /api/v1/plugin/AgentResourceOfficer/assistant/request_templates`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/selfcheck`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/history`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/action`
@@ -389,6 +389,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.81` 开始，新增独立只读入口 `assistant/request_templates` 和原生 Tool `agent_resource_officer_request_templates`，外部智能体可只拉请求模板而不拉完整启动包。
 从 `0.1.82` 开始，`assistant/request_templates` 支持 `names` / `name` / `template` 过滤，只返回指定模板，并在回执中提供 `selected_names` 与 `invalid_names`；原生 Tool 同步支持 `names` 参数。
 从 `0.1.83` 开始，`assistant/startup` 的核心 `tools` / `endpoints` 和 `assistant/capabilities?compact=true` 的推荐启动列表都会显式包含请求模板入口，外部智能体只读启动包也能发现模板能力。
+从 `0.1.84` 开始，`assistant/request_templates` 支持 POST JSON body 传入 `names` / `limit`，方便结构化智能体直接用 body 请求过滤模板。
 
 从 `0.1.36` 开始，还新增了：
 
