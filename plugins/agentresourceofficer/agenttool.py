@@ -301,11 +301,15 @@ class AssistantRequestTemplatesTool(MoviePilotTool):
     def get_tool_message(self, **kwargs) -> Optional[str]:
         return "正在读取 Agent资源官 请求模板"
 
-    async def run(self, limit: int = 100, names: str = None, **kwargs) -> str:
+    async def run(self, limit: int = 100, names: str = None, include_templates: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent资源官 插件未运行"
-        return await plugin.tool_assistant_request_templates(limit=limit, names=names)
+        return await plugin.tool_assistant_request_templates(
+            limit=limit,
+            names=names,
+            include_templates=include_templates,
+        )
 
 
 class AssistantSelfcheckTool(MoviePilotTool):
