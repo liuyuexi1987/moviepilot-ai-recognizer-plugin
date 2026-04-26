@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.88`
+- 当前版本：`0.1.89`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -394,6 +394,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.86` 开始，`request_templates` 每个模板都会带 `tool_args`，区分 HTTP 参数和 MP Tool 参数，避免外部智能体误用 body/query。
 从 `0.1.87` 开始，`request_templates` 每个模板都会带 `description`，外部智能体可以直接判断模板用途，减少额外解释和 token 消耗。
 从 `0.1.88` 开始，`request_templates` 每个模板都会带 `side_effect` 和 `requires_confirmation`，外部智能体可区分只读、dry-run、计划写入和真实执行动作。
+从 `0.1.89` 开始，`assistant/request_templates` 回执会带 `execution_policy` 汇总，直接列出可免确认执行、需要确认执行和存在写入副作用的模板名。
 
 从 `0.1.36` 开始，还新增了：
 

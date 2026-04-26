@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.88"
+    plugin_version = "0.1.89"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4413,6 +4413,21 @@ class AgentResourceOfficer(_PluginBase):
             for name in selected_names
             if name in all_templates
         } if selected_names else all_templates
+        confirmation_required = [
+            name
+            for name, item in templates.items()
+            if bool((item or {}).get("requires_confirmation"))
+        ]
+        safe_without_confirmation = [
+            name
+            for name, item in templates.items()
+            if not bool((item or {}).get("requires_confirmation"))
+        ]
+        write_side_effects = [
+            name
+            for name, item in templates.items()
+            if self._clean_text((item or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
+        ]
         return {
             "protocol_version": "assistant.v1",
             "action": "request_templates",
@@ -4423,6 +4438,11 @@ class AgentResourceOfficer(_PluginBase):
             "available_names": list(all_templates.keys()),
             "selected_names": selected_names,
             "invalid_names": invalid_names,
+            "execution_policy": {
+                "safe_without_confirmation": safe_without_confirmation,
+                "confirmation_required": confirmation_required,
+                "write_side_effects": write_side_effects,
+            },
         }
 
     def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
@@ -4559,6 +4579,10 @@ class AgentResourceOfficer(_PluginBase):
             and filtered_request_templates.get("invalid_names") == ["missing_template"]
             and (((filtered_request_templates.get("request_templates") or {}).get("maintain_execute") or {}).get("body") or {}).get("limit") == 5
         )
+        request_templates_policy_ok = (
+            "maintain_execute" in ((filtered_request_templates.get("execution_policy") or {}).get("confirmation_required") or [])
+            and "maintain_execute" in ((filtered_request_templates.get("execution_policy") or {}).get("write_side_effects") or [])
+        )
         checks = {
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
@@ -4567,6 +4591,7 @@ class AgentResourceOfficer(_PluginBase):
             "maintenance_templates_compact": maintenance_templates_compact_ok,
             "request_templates": request_templates_ok,
             "request_templates_filter": request_templates_filter_ok,
+            "request_templates_policy": request_templates_policy_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
