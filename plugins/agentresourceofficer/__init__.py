@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.105"
+    plugin_version = "0.1.106"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4150,8 +4150,23 @@ class AgentResourceOfficer(_PluginBase):
             "command_examples": (toolbox.get("command_examples") or [])[:6],
             "request_templates": request_templates,
             "request_templates_schema_version": self.request_templates_schema_version,
+            "recommended_request_templates": self._assistant_recommended_request_templates_data(),
             "next_actions": pulse.get("next_actions") or ["assistant_recover", "assistant_workflow", "smart_entry"],
             "recommended_endpoints": key_endpoints,
+        }
+
+    def _assistant_recommended_request_templates_data(self) -> Dict[str, Any]:
+        return {
+            "recipe": "bootstrap",
+            "include_templates": False,
+            "method": "POST",
+            "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/request_templates",
+            "url_template": "{base_url}/api/v1/plugin/AgentResourceOfficer/assistant/request_templates?apikey={MP_API_TOKEN}",
+            "tool": "agent_resource_officer_request_templates",
+            "tool_args": {
+                "recipe": "bootstrap",
+                "include_templates": False,
+            },
         }
 
     def _format_assistant_startup_text(self) -> str:
@@ -4785,6 +4800,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         pulse = self._assistant_pulse_public_data()
         toolbox = self._assistant_toolbox_public_data()
+        startup_request_templates = self._assistant_recommended_request_templates_data()
         maintain = self._assistant_maintain_public_data(execute=False)
         request_templates = self._assistant_request_templates_public_data(limit=100)
         filtered_request_templates = self._assistant_request_templates_response_data(
@@ -4830,6 +4846,12 @@ class AgentResourceOfficer(_PluginBase):
             and pulse.get("action") == "pulse"
             and toolbox.get("action") == "toolbox"
             and maintain.get("protocol_version") == "assistant.v1"
+        )
+        startup_request_templates_ok = (
+            startup_request_templates.get("recipe") == "bootstrap"
+            and startup_request_templates.get("include_templates") is False
+            and startup_request_templates.get("tool") == "agent_resource_officer_request_templates"
+            and "{MP_API_TOKEN}" in self._clean_text(startup_request_templates.get("url_template"))
         )
         request_templates_ok = all(
             isinstance(request_templates.get(name), dict)
@@ -4973,6 +4995,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_recipe_filter": request_templates_recipe_filter_ok,
             "request_templates_recommended_recipe_detail": request_templates_recommended_recipe_detail_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
+            "startup_request_templates": startup_request_templates_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
