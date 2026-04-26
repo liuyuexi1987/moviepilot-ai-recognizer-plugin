@@ -92,6 +92,7 @@ class AssistantToolboxToolInput(BaseModel):
 class AssistantRequestTemplatesToolInput(BaseModel):
     limit: Optional[int] = Field(default=100, description="模板中批量类请求默认 limit，范围由插件限制")
     names: Optional[str] = Field(default=None, description="可选模板名，多个用逗号或空格分隔，例如 maintain_execute,workflow_dry_run")
+    recipe: Optional[str] = Field(default=None, description="可选推荐流程名，例如 safe_bootstrap / plan_then_confirm / continue_existing_session / maintenance_cycle")
     include_templates: Optional[bool] = Field(default=True, description="是否返回完整模板内容；关闭时只返回名称、无效项和执行策略")
 
 

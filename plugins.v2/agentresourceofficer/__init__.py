@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.101"
+    plugin_version = "0.1.102"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4427,10 +4427,21 @@ class AgentResourceOfficer(_PluginBase):
         self,
         limit: int = 100,
         names: Any = None,
+        recipe: Any = None,
         include_templates: bool = True,
     ) -> Dict[str, Any]:
         all_templates = self._assistant_request_templates_public_data(limit=limit)
+        recipe_templates_map = {
+            "safe_bootstrap": ["startup_probe", "selfcheck_probe", "maintain_preview"],
+            "plan_then_confirm": ["workflow_dry_run", "saved_plan_execute"],
+            "continue_existing_session": ["pick_continue"],
+            "maintenance_cycle": ["maintain_preview", "maintain_execute"],
+        }
+        selected_recipe = self._clean_text(recipe)
+        invalid_recipe = selected_recipe if selected_recipe and selected_recipe not in recipe_templates_map else ""
         selected_names = self._assistant_request_template_names(names)
+        if not selected_names and selected_recipe in recipe_templates_map:
+            selected_names = list(recipe_templates_map[selected_recipe])
         invalid_names = [name for name in selected_names if name not in all_templates]
         templates = {
             name: all_templates[name]
@@ -4504,22 +4515,22 @@ class AgentResourceOfficer(_PluginBase):
             {
                 "name": "safe_bootstrap",
                 "description": "新会话安全启动：先拿启动聚合包，再自检，再看维护建议。",
-                "templates": ["startup_probe", "selfcheck_probe", "maintain_preview"],
+                "templates": recipe_templates_map["safe_bootstrap"],
             },
             {
                 "name": "plan_then_confirm",
                 "description": "先生成计划，等待用户确认后再执行保存计划。",
-                "templates": ["workflow_dry_run", "saved_plan_execute"],
+                "templates": recipe_templates_map["plan_then_confirm"],
             },
             {
                 "name": "continue_existing_session",
                 "description": "已有盘搜、影巢或资源会话时，直接按编号继续。",
-                "templates": ["pick_continue"],
+                "templates": recipe_templates_map["continue_existing_session"],
             },
             {
                 "name": "maintenance_cycle",
                 "description": "先预览维护建议，再在确认后执行低风险维护。",
-                "templates": ["maintain_preview", "maintain_execute"],
+                "templates": recipe_templates_map["maintenance_cycle"],
             },
         ]
         recipe_summaries: List[Dict[str, Any]] = []
@@ -4548,7 +4559,10 @@ class AgentResourceOfficer(_PluginBase):
         recommended_recipe = "safe_bootstrap"
         recommended_recipe_reason = "默认优先安全启动，先读取启动聚合包、自检并查看维护建议。"
         selected_set = set(selected_names or [])
-        if {"workflow_dry_run", "saved_plan_execute"} & selected_set:
+        if selected_recipe in recipe_templates_map:
+            recommended_recipe = selected_recipe
+            recommended_recipe_reason = f"当前请求显式指定 recipe={selected_recipe}。"
+        elif {"workflow_dry_run", "saved_plan_execute"} & selected_set:
             recommended_recipe = "plan_then_confirm"
             recommended_recipe_reason = "当前模板集合包含 dry_run 或执行保存计划，更适合先计划后确认。"
         elif "pick_continue" in selected_set:
@@ -4634,6 +4648,8 @@ class AgentResourceOfficer(_PluginBase):
             "available_names": list(all_templates.keys()),
             "selected_names": selected_names,
             "invalid_names": invalid_names,
+            "selected_recipe": selected_recipe if selected_recipe in recipe_templates_map else "",
+            "invalid_recipe": invalid_recipe,
             "execution_policy": {
                 "safe_without_confirmation": safe_without_confirmation,
                 "confirmation_required": confirmation_required,
@@ -4734,6 +4750,11 @@ class AgentResourceOfficer(_PluginBase):
         recipe_request_templates = self._assistant_request_templates_response_data(
             limit=5,
             names="startup_probe,maintain_preview,workflow_dry_run,saved_plan_execute,pick_continue,maintain_execute",
+            include_templates=False,
+        )
+        recipe_filtered_request_templates = self._assistant_request_templates_response_data(
+            limit=5,
+            recipe="plan_then_confirm",
             include_templates=False,
         )
         policy_only_request_templates = self._assistant_request_templates_response_data(
@@ -4846,6 +4867,12 @@ class AgentResourceOfficer(_PluginBase):
             and bool(self._clean_text(filtered_request_templates.get("recommended_recipe_reason")))
             and recipe_request_templates.get("recommended_recipe") == "plan_then_confirm"
         )
+        request_templates_recipe_filter_ok = (
+            recipe_filtered_request_templates.get("selected_recipe") == "plan_then_confirm"
+            and recipe_filtered_request_templates.get("selected_names") == ["workflow_dry_run", "saved_plan_execute"]
+            and recipe_filtered_request_templates.get("recommended_recipe") == "plan_then_confirm"
+            and recipe_filtered_request_templates.get("templates_included") is False
+        )
         recommended_recipe_detail = filtered_request_templates.get("recommended_recipe_detail") or {}
         request_templates_recommended_recipe_detail_ok = (
             recommended_recipe_detail.get("name") == "maintenance_cycle"
@@ -4894,6 +4921,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_recipes": request_templates_recipes_ok,
             "request_templates_recipe_summary": request_templates_recipe_summary_ok,
             "request_templates_recommended_recipe": request_templates_recommended_recipe_ok,
+            "request_templates_recipe_filter": request_templates_recipe_filter_ok,
             "request_templates_recommended_recipe_detail": request_templates_recommended_recipe_detail_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
@@ -5749,6 +5777,7 @@ class AgentResourceOfficer(_PluginBase):
         self,
         limit: int = 100,
         names: Any = None,
+        recipe: Any = None,
         include_templates: bool = True,
     ) -> str:
         if not self._enabled:
@@ -5756,6 +5785,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_request_templates_response_data(
             limit=limit,
             names=names,
+            recipe=recipe,
             include_templates=include_templates,
         )
         return self._format_assistant_request_templates_text(data)
@@ -7821,6 +7851,12 @@ class AgentResourceOfficer(_PluginBase):
             or request.query_params.get("name")
             or request.query_params.get("template")
         )
+        recipe = (
+            body.get("recipe")
+            or body.get("recommended_recipe")
+            or request.query_params.get("recipe")
+            or request.query_params.get("recommended_recipe")
+        )
         include_templates = self._parse_bool_value(
             body.get("include_templates") if "include_templates" in body else request.query_params.get("include_templates"),
             True,
@@ -7828,6 +7864,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_request_templates_response_data(
             limit=limit,
             names=names,
+            recipe=recipe,
             include_templates=include_templates,
         )
         return {
