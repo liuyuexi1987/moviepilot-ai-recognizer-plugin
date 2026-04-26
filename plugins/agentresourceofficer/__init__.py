@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.86"
+    plugin_version = "0.1.87"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4273,6 +4273,7 @@ class AgentResourceOfficer(_PluginBase):
         max_limit = min(max(1, self._safe_int(limit, 100)), 500)
         return {
             "startup_probe": {
+                "description": "读取启动聚合包，适合外部智能体开场获取状态、端点、工具和恢复建议。",
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "tool": "agent_resource_officer_startup",
@@ -4280,6 +4281,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query": {},
             },
             "selfcheck_probe": {
+                "description": "执行协议自检，确认模板、compact、布尔解析和核心入口是否健康。",
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "tool": "agent_resource_officer_selfcheck",
@@ -4287,6 +4289,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query": {},
             },
             "maintain_preview": {
+                "description": "预览低风险维护建议，不执行清理；适合高频探测。",
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "tool": "agent_resource_officer_maintain",
@@ -4294,6 +4297,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query": {"execute": True, "limit": max_limit},
             },
             "maintain_execute": {
+                "description": "执行低风险维护，清理过期会话和已执行计划；会写入 assistant/history。",
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "tool": "agent_resource_officer_maintain",
@@ -4301,6 +4305,7 @@ class AgentResourceOfficer(_PluginBase):
                 "body": {"execute": True, "limit": max_limit},
             },
             "workflow_dry_run": {
+                "description": "生成并保存工作流计划，不实际执行；适合先让用户确认。",
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
                 "tool": "agent_resource_officer_run_workflow",
@@ -4322,6 +4327,7 @@ class AgentResourceOfficer(_PluginBase):
                 },
             },
             "saved_plan_execute": {
+                "description": "执行已保存的 dry_run 工作流计划，可按 session 自动选择未执行计划。",
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
                 "tool": "agent_resource_officer_execute_plan",
@@ -4337,6 +4343,7 @@ class AgentResourceOfficer(_PluginBase):
                 },
             },
             "action_execute": {
+                "description": "按动作名执行单个 action template，适合无映射继续执行。",
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
                 "tool": "agent_resource_officer_execute_action",
@@ -4352,6 +4359,7 @@ class AgentResourceOfficer(_PluginBase):
                 },
             },
             "pick_continue": {
+                "description": "按编号继续当前会话，适合盘搜、影巢候选或资源列表选择。",
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                 "tool": "agent_resource_officer_smart_pick",
@@ -4514,6 +4522,7 @@ class AgentResourceOfficer(_PluginBase):
             and self._clean_text((request_templates.get(name) or {}).get("endpoint"))
             and self._clean_text((request_templates.get(name) or {}).get("method"))
             and self._clean_text((request_templates.get(name) or {}).get("tool"))
+            and self._clean_text((request_templates.get(name) or {}).get("description"))
             and isinstance((request_templates.get(name) or {}).get("tool_args"), dict)
             for name in [
                 "startup_probe",
