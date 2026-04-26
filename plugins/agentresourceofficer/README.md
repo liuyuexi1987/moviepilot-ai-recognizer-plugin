@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.80`
+- 当前版本：`0.1.81`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -116,6 +116,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/readiness`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/startup`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/maintain`
+- `GET /api/v1/plugin/AgentResourceOfficer/assistant/request_templates`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/selfcheck`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/history`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/action`
@@ -139,6 +140,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_help`
 - `agent_resource_officer_capabilities`
 - `agent_resource_officer_readiness`
+- `agent_resource_officer_request_templates`
 - `agent_resource_officer_history`
 - `agent_resource_officer_execute_action`
 - `agent_resource_officer_execute_actions`
@@ -384,6 +386,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.78` 开始，`assistant/maintain` 在 POST 执行维护后会写入 `assistant/history`，方便外部智能体审计维护动作；GET dry-run 仍不写历史。
 从 `0.1.79` 开始，`assistant/startup.maintenance` 直接返回 `safe_to_execute`、`execute_method=POST`、`dry_run_method=GET`、`execute_endpoint` 和标准 `execute_body`，外部智能体无需猜维护调用方式。
 从 `0.1.80` 开始，`assistant/startup` 和 `assistant/toolbox` 直接返回统一的 `request_templates`，包含 startup/selfcheck/maintain/workflow/plan/action/pick 的请求模板；`assistant/selfcheck` 也会检查这些模板是否齐全。
+从 `0.1.81` 开始，新增独立只读入口 `assistant/request_templates` 和原生 Tool `agent_resource_officer_request_templates`，外部智能体可只拉请求模板而不拉完整启动包。
 
 从 `0.1.36` 开始，还新增了：
 

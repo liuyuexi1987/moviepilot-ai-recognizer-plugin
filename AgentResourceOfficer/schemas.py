@@ -89,6 +89,10 @@ class AssistantToolboxToolInput(BaseModel):
     pass
 
 
+class AssistantRequestTemplatesToolInput(BaseModel):
+    limit: Optional[int] = Field(default=100, description="模板中批量类请求默认 limit，范围由插件限制")
+
+
 class AssistantSelfcheckToolInput(BaseModel):
     pass
 

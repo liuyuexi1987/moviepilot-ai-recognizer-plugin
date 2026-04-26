@@ -19,6 +19,7 @@ from .schemas import (
     AssistantPulseToolInput,
     AssistantReadinessToolInput,
     AssistantRecoverToolInput,
+    AssistantRequestTemplatesToolInput,
     AssistantRouteToolInput,
     AssistantSessionClearToolInput,
     AssistantSessionsClearToolInput,
@@ -290,6 +291,21 @@ class AssistantToolboxTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_toolbox()
+
+
+class AssistantRequestTemplatesTool(MoviePilotTool):
+    name: str = "agent_resource_officer_request_templates"
+    description: str = "Return compact HTTP request templates for external agents to call Agent资源官 assistant endpoints without guessing request bodies."
+    args_schema: Type[BaseModel] = AssistantRequestTemplatesToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在读取 Agent资源官 请求模板"
+
+    async def run(self, limit: int = 100, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_assistant_request_templates(limit=limit)
 
 
 class AssistantSelfcheckTool(MoviePilotTool):

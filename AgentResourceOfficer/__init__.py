@@ -43,6 +43,7 @@ from .agenttool import (
     AssistantPulseTool,
     AssistantReadinessTool,
     AssistantRecoverTool,
+    AssistantRequestTemplatesTool,
     AssistantRouteTool,
     AssistantSessionClearTool,
     AssistantSessionsClearTool,
@@ -90,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.80"
+    plugin_version = "0.1.81"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -252,6 +253,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantStartupTool,
             AssistantMaintainTool,
             AssistantToolboxTool,
+            AssistantRequestTemplatesTool,
             AssistantSelfcheckTool,
             AssistantReadinessTool,
             AssistantHistoryTool,
@@ -764,6 +766,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_toolbox,
                 "methods": ["GET"],
                 "summary": "轻量工具清单：返回推荐工具、端点、工作流、动作名、默认目录和命令示例",
+            },
+            {
+                "path": "/assistant/request_templates",
+                "endpoint": self.api_assistant_request_templates,
+                "methods": ["GET"],
+                "summary": "轻量请求模板：返回外部智能体常用 assistant 请求模板",
             },
             {
                 "path": "/assistant/selfcheck",
@@ -3573,11 +3581,18 @@ class AgentResourceOfficer(_PluginBase):
                 ],
                 "description": "低风险维护入口：execute=false 只返回建议；execute=true 清理过期会话和已执行计划，不清理待执行计划。",
             },
+            "assistant_request_templates": {
+                "fields": [
+                    "limit",
+                ],
+                "description": "轻量请求模板入口：返回外部智能体常用 assistant 请求模板，适合缓存为调用说明。",
+            },
             "session_tools": [
                 "assistant/pulse",
                 "assistant/startup",
                 "assistant/maintain",
                 "assistant/toolbox",
+                "assistant/request_templates",
                 "assistant/selfcheck",
                 "assistant/readiness",
                 "assistant/history",
@@ -3612,6 +3627,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_maintain",
                 "agent_resource_officer_pulse",
                 "agent_resource_officer_toolbox",
+                "agent_resource_officer_request_templates",
                 "agent_resource_officer_selfcheck",
                 "agent_resource_officer_readiness",
                 "agent_resource_officer_history",
@@ -3644,6 +3660,7 @@ class AgentResourceOfficer(_PluginBase):
             "assistant/capabilities",
             "assistant/startup",
             "assistant/maintain",
+            "assistant/request_templates",
             "assistant/readiness",
             "assistant/recover",
             "assistant/session",
@@ -3665,6 +3682,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry_actions": (data.get("smart_entry") or {}).get("actions") or [],
             "smart_pick_actions": (data.get("smart_pick") or {}).get("actions") or [],
             "workflows": workflows,
+            "request_templates": bool(data.get("assistant_request_templates")),
             "recommended_start": [
                 "assistant/pulse",
                 "assistant/startup",
@@ -4186,6 +4204,7 @@ class AgentResourceOfficer(_PluginBase):
                 "startup": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "maintain": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "toolbox": "/api/v1/plugin/AgentResourceOfficer/assistant/toolbox",
+                "request_templates": "/api/v1/plugin/AgentResourceOfficer/assistant/request_templates",
                 "selfcheck": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "recover": "/api/v1/plugin/AgentResourceOfficer/assistant/recover?compact=true",
                 "workflow": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
@@ -4199,6 +4218,7 @@ class AgentResourceOfficer(_PluginBase):
                 "maintain": "agent_resource_officer_maintain",
                 "pulse": "agent_resource_officer_pulse",
                 "toolbox": "agent_resource_officer_toolbox",
+                "request_templates": "agent_resource_officer_request_templates",
                 "selfcheck": "agent_resource_officer_selfcheck",
                 "recover": "agent_resource_officer_recover",
                 "workflow": "agent_resource_officer_run_workflow",
@@ -4310,6 +4330,38 @@ class AgentResourceOfficer(_PluginBase):
             },
         }
 
+    def _assistant_request_templates_response_data(self, limit: int = 100) -> Dict[str, Any]:
+        return {
+            "protocol_version": "assistant.v1",
+            "action": "request_templates",
+            "ok": True,
+            "compact": True,
+            "version": self.plugin_version,
+            "request_templates": self._assistant_request_templates_public_data(limit=limit),
+        }
+
+    def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
+        payload = data or self._assistant_request_templates_response_data()
+        templates = payload.get("request_templates") or {}
+        lines = [
+            "Agent资源官 请求模板",
+            f"版本：{payload.get('version')}",
+        ]
+        for name in [
+            "startup_probe",
+            "selfcheck_probe",
+            "maintain_preview",
+            "maintain_execute",
+            "workflow_dry_run",
+            "saved_plan_execute",
+            "action_execute",
+            "pick_continue",
+        ]:
+            item = templates.get(name) or {}
+            if item:
+                lines.append(f"{name}: {item.get('method')} {item.get('endpoint')}")
+        return "\n".join(lines)
+
     def _format_assistant_toolbox_text(self) -> str:
         data = self._assistant_toolbox_public_data()
         workflows = data.get("workflows") or []
@@ -4414,7 +4466,9 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates": request_templates_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
+            "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
             "toolbox_maintain_tool": bool((toolbox.get("tools") or {}).get("maintain")),
+            "toolbox_request_templates_tool": bool((toolbox.get("tools") or {}).get("request_templates")),
             "toolbox_selfcheck_endpoint": bool((toolbox.get("endpoints") or {}).get("selfcheck")),
         }
         ok = all(bool(value) for value in checks.values())
@@ -5258,6 +5312,12 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return "Agent资源官 插件未启用"
         return self._format_assistant_toolbox_text()
+
+    async def tool_assistant_request_templates(self, limit: int = 100) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        data = self._assistant_request_templates_response_data(limit=limit)
+        return self._format_assistant_request_templates_text(data)
 
     async def tool_assistant_selfcheck(self) -> str:
         if not self._enabled:
@@ -7298,6 +7358,18 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "success": True,
             "message": self._format_assistant_toolbox_text(),
+            "data": data,
+        }
+
+    async def api_assistant_request_templates(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        limit = self._safe_int(request.query_params.get("limit"), 100)
+        data = self._assistant_request_templates_response_data(limit=limit)
+        return {
+            "success": True,
+            "message": self._format_assistant_request_templates_text(data),
             "data": data,
         }
 
