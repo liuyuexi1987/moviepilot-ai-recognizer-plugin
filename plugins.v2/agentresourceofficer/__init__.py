@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.106"
+    plugin_version = "0.1.107"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4123,6 +4123,13 @@ class AgentResourceOfficer(_PluginBase):
             for name in ["startup", "maintain", "pulse", "selfcheck", "request_templates", "recover", "workflow", "action", "actions", "route", "pick"]
             if endpoints.get(name)
         }
+        recovery = pulse.get("recovery") or {}
+        recommended_templates_recipe = "continue" if bool(recovery.get("can_resume")) else "bootstrap"
+        recommended_templates_reason = (
+            "检测到可恢复会话，优先读取继续会话流程。"
+            if recommended_templates_recipe == "continue"
+            else "未检测到必须恢复的会话，优先读取安全启动流程。"
+        )
         return {
             "protocol_version": "assistant.v1",
             "action": "startup",
@@ -4150,21 +4157,26 @@ class AgentResourceOfficer(_PluginBase):
             "command_examples": (toolbox.get("command_examples") or [])[:6],
             "request_templates": request_templates,
             "request_templates_schema_version": self.request_templates_schema_version,
-            "recommended_request_templates": self._assistant_recommended_request_templates_data(),
+            "recommended_request_templates": self._assistant_recommended_request_templates_data(
+                recipe=recommended_templates_recipe,
+                reason=recommended_templates_reason,
+            ),
             "next_actions": pulse.get("next_actions") or ["assistant_recover", "assistant_workflow", "smart_entry"],
             "recommended_endpoints": key_endpoints,
         }
 
-    def _assistant_recommended_request_templates_data(self) -> Dict[str, Any]:
+    def _assistant_recommended_request_templates_data(self, recipe: str = "bootstrap", reason: str = "") -> Dict[str, Any]:
+        recipe_name = self._clean_text(recipe) or "bootstrap"
         return {
-            "recipe": "bootstrap",
+            "recipe": recipe_name,
+            "reason": self._clean_text(reason),
             "include_templates": False,
             "method": "POST",
             "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/request_templates",
             "url_template": "{base_url}/api/v1/plugin/AgentResourceOfficer/assistant/request_templates?apikey={MP_API_TOKEN}",
             "tool": "agent_resource_officer_request_templates",
             "tool_args": {
-                "recipe": "bootstrap",
+                "recipe": recipe_name,
                 "include_templates": False,
             },
         }
@@ -4801,6 +4813,10 @@ class AgentResourceOfficer(_PluginBase):
         pulse = self._assistant_pulse_public_data()
         toolbox = self._assistant_toolbox_public_data()
         startup_request_templates = self._assistant_recommended_request_templates_data()
+        startup_continue_request_templates = self._assistant_recommended_request_templates_data(
+            recipe="continue",
+            reason="selfcheck",
+        )
         maintain = self._assistant_maintain_public_data(execute=False)
         request_templates = self._assistant_request_templates_public_data(limit=100)
         filtered_request_templates = self._assistant_request_templates_response_data(
@@ -4852,6 +4868,9 @@ class AgentResourceOfficer(_PluginBase):
             and startup_request_templates.get("include_templates") is False
             and startup_request_templates.get("tool") == "agent_resource_officer_request_templates"
             and "{MP_API_TOKEN}" in self._clean_text(startup_request_templates.get("url_template"))
+            and startup_continue_request_templates.get("recipe") == "continue"
+            and ((startup_continue_request_templates.get("tool_args") or {}).get("recipe")) == "continue"
+            and bool(self._clean_text(startup_continue_request_templates.get("reason")))
         )
         request_templates_ok = all(
             isinstance(request_templates.get(name), dict)
