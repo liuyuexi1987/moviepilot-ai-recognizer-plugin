@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.97"
+    plugin_version = "0.1.98"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4560,10 +4560,12 @@ class AgentResourceOfficer(_PluginBase):
             for name in (recommended_recipe_detail.get("templates") or [])
             if name in all_templates
         ]
+        first_template = recommended_recipe_templates[0] if recommended_recipe_templates else ""
+        first_template_data = all_templates.get(first_template) or {}
         recommended_recipe_detail = {
             **recommended_recipe_detail,
             "templates": recommended_recipe_templates,
-            "first_template": recommended_recipe_templates[0] if recommended_recipe_templates else "",
+            "first_template": first_template,
             "confirmation_required_templates": [
                 name
                 for name in recommended_recipe_templates
@@ -4574,6 +4576,17 @@ class AgentResourceOfficer(_PluginBase):
                 for name in recommended_recipe_templates
                 if self._clean_text((all_templates.get(name) or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
             ],
+            "first_call": {
+                "template": first_template,
+                "method": first_template_data.get("method"),
+                "endpoint": first_template_data.get("endpoint"),
+                "query": first_template_data.get("query") or {},
+                "body": first_template_data.get("body") or {},
+                "tool": first_template_data.get("tool"),
+                "tool_args": first_template_data.get("tool_args") or {},
+                "requires_confirmation": bool(first_template_data.get("requires_confirmation")),
+                "side_effect": first_template_data.get("side_effect"),
+            } if first_template_data else {},
         }
         return {
             "protocol_version": "assistant.v1",
@@ -4805,6 +4818,9 @@ class AgentResourceOfficer(_PluginBase):
             and recommended_recipe_detail.get("first_template") == "maintain_preview"
             and "maintain_execute" in (recommended_recipe_detail.get("confirmation_required_templates") or [])
             and "maintain_execute" in (recommended_recipe_detail.get("write_templates") or [])
+            and ((recommended_recipe_detail.get("first_call") or {}).get("template")) == "maintain_preview"
+            and ((recommended_recipe_detail.get("first_call") or {}).get("method")) == "GET"
+            and ((recommended_recipe_detail.get("first_call") or {}).get("tool")) == "agent_resource_officer_maintain"
         )
         request_templates_policy_only_ok = (
             policy_only_request_templates.get("templates_included") is False

@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.97`
+- 当前版本：`0.1.98`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -403,6 +403,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.95` 开始，`recipes` 会直接带 `requires_confirmation`、`has_write_effect` 和最小 `cache_ttl_seconds`，自检也会验证这些汇总特征。
 从 `0.1.96` 开始，`assistant/request_templates` 回执会直接给出 `recommended_recipe` 与 `recommended_recipe_reason`，外部智能体不必再自己挑选最适合的 recipe。
 从 `0.1.97` 开始，`assistant/request_templates` 回执会带 `recommended_recipe_detail`，直接给出推荐流程的首个模板、确认模板和写入模板，外部智能体可直接照此编排。
+从 `0.1.98` 开始，`recommended_recipe_detail` 会带 `first_call`，直接给出首个模板的 HTTP 调用和 MP Tool 调用参数，外部智能体可直接执行第一步。
 
 从 `0.1.36` 开始，还新增了：
 
