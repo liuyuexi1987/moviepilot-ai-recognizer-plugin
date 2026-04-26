@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.82"
+    plugin_version = "0.1.83"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -3689,6 +3689,7 @@ class AgentResourceOfficer(_PluginBase):
                 "assistant/maintain",
                 "assistant/selfcheck",
                 "assistant/toolbox",
+                "assistant/request_templates",
                 "assistant/readiness?compact=true",
             ],
             "compact_endpoints": compact_endpoints,
@@ -4107,6 +4108,7 @@ class AgentResourceOfficer(_PluginBase):
             "maintain",
             "pulse",
             "selfcheck",
+            "request_templates",
             "recover",
             "workflow",
             "route",
@@ -4117,7 +4119,7 @@ class AgentResourceOfficer(_PluginBase):
         key_tools = {name: tools.get(name) for name in key_names if tools.get(name)}
         key_endpoints = {
             name: endpoints.get(name)
-            for name in ["startup", "maintain", "pulse", "selfcheck", "recover", "workflow", "action", "actions", "route", "pick"]
+            for name in ["startup", "maintain", "pulse", "selfcheck", "request_templates", "recover", "workflow", "action", "actions", "route", "pick"]
             if endpoints.get(name)
         }
         return {
@@ -4194,6 +4196,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_maintain",
                 "agent_resource_officer_pulse",
                 "agent_resource_officer_selfcheck",
+                "agent_resource_officer_request_templates",
                 "agent_resource_officer_recover",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_smart_entry",

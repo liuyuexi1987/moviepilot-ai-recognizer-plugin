@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.82`
+- 当前版本：`0.1.83`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -388,6 +388,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.80` 开始，`assistant/startup` 和 `assistant/toolbox` 直接返回统一的 `request_templates`，包含 startup/selfcheck/maintain/workflow/plan/action/pick 的请求模板；`assistant/selfcheck` 也会检查这些模板是否齐全。
 从 `0.1.81` 开始，新增独立只读入口 `assistant/request_templates` 和原生 Tool `agent_resource_officer_request_templates`，外部智能体可只拉请求模板而不拉完整启动包。
 从 `0.1.82` 开始，`assistant/request_templates` 支持 `names` / `name` / `template` 过滤，只返回指定模板，并在回执中提供 `selected_names` 与 `invalid_names`；原生 Tool 同步支持 `names` 参数。
+从 `0.1.83` 开始，`assistant/startup` 的核心 `tools` / `endpoints` 和 `assistant/capabilities?compact=true` 的推荐启动列表都会显式包含请求模板入口，外部智能体只读启动包也能发现模板能力。
 
 从 `0.1.36` 开始，还新增了：
 
