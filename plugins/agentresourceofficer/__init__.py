@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.94"
+    plugin_version = "0.1.95"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4516,6 +4516,29 @@ class AgentResourceOfficer(_PluginBase):
                 "templates": ["maintain_preview", "maintain_execute"],
             },
         ]
+        recipe_summaries: List[Dict[str, Any]] = []
+        for recipe in recipes:
+            template_names = [
+                self._clean_text(item)
+                for item in (recipe.get("templates") or [])
+                if self._clean_text(item)
+            ]
+            current_templates = [
+                templates[name]
+                for name in template_names
+                if isinstance(templates.get(name), dict)
+            ]
+            recipe_summaries.append({
+                **recipe,
+                "requires_confirmation": any(bool(item.get("requires_confirmation")) for item in current_templates),
+                "has_write_effect": any(
+                    self._clean_text(item.get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
+                    for item in current_templates
+                ),
+                "cache_ttl_seconds": min(
+                    [self._safe_int(item.get("cache_ttl_seconds"), 0) for item in current_templates] or [0]
+                ),
+            })
         return {
             "protocol_version": "assistant.v1",
             "action": "request_templates",
@@ -4536,7 +4559,7 @@ class AgentResourceOfficer(_PluginBase):
                 "non_cacheable_templates": non_cacheable_templates,
             },
             "recommended_sequence": recommended_sequence,
-            "recipes": recipes,
+            "recipes": recipe_summaries,
         }
 
     def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
@@ -4622,6 +4645,11 @@ class AgentResourceOfficer(_PluginBase):
             limit=5,
             names="maintain_execute,missing_template",
         )
+        recipe_request_templates = self._assistant_request_templates_response_data(
+            limit=5,
+            names="startup_probe,maintain_preview,workflow_dry_run,saved_plan_execute,pick_continue,maintain_execute",
+            include_templates=False,
+        )
         policy_only_request_templates = self._assistant_request_templates_response_data(
             limit=5,
             names="maintain_execute",
@@ -4701,14 +4729,30 @@ class AgentResourceOfficer(_PluginBase):
             )
         )
         request_templates_recipes_ok = (
-            isinstance(filtered_request_templates.get("recipes"), list)
+            isinstance(recipe_request_templates.get("recipes"), list)
             and any(
                 isinstance(item, dict) and self._clean_text(item.get("name")) == "safe_bootstrap"
-                for item in (filtered_request_templates.get("recipes") or [])
+                for item in (recipe_request_templates.get("recipes") or [])
             )
             and any(
                 isinstance(item, dict) and self._clean_text(item.get("name")) == "plan_then_confirm"
-                for item in (filtered_request_templates.get("recipes") or [])
+                for item in (recipe_request_templates.get("recipes") or [])
+            )
+        )
+        request_templates_recipe_summary_ok = (
+            any(
+                isinstance(item, dict)
+                and self._clean_text(item.get("name")) == "safe_bootstrap"
+                and item.get("requires_confirmation") is False
+                and item.get("has_write_effect") is False
+                for item in (recipe_request_templates.get("recipes") or [])
+            )
+            and any(
+                isinstance(item, dict)
+                and self._clean_text(item.get("name")) == "plan_then_confirm"
+                and item.get("requires_confirmation") is True
+                and item.get("has_write_effect") is True
+                for item in (recipe_request_templates.get("recipes") or [])
             )
         )
         request_templates_policy_only_ok = (
@@ -4731,6 +4775,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_cache": request_templates_cache_ok,
             "request_templates_sequence": request_templates_sequence_ok,
             "request_templates_recipes": request_templates_recipes_ok,
+            "request_templates_recipe_summary": request_templates_recipe_summary_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),

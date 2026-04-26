@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.94`
+- 当前版本：`0.1.95`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -400,6 +400,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.92` 开始，`request_templates` 每个模板都会带 `cache_scope` 和 `cache_ttl_seconds`，`execution_policy` 也会汇总 `cacheable_templates` 与 `non_cacheable_templates`，方便外部智能体决定缓存策略。
 从 `0.1.93` 开始，`assistant/request_templates` 回执会带 `recommended_sequence`，直接给出推荐调用顺序，外部智能体可以少做一层启动编排。
 从 `0.1.94` 开始，`assistant/request_templates` 回执会带场景化 `recipes`，外部智能体可直接选择“安全启动”“先计划后执行”“继续既有会话”等预设流程。
+从 `0.1.95` 开始，`recipes` 会直接带 `requires_confirmation`、`has_write_effect` 和最小 `cache_ttl_seconds`，自检也会验证这些汇总特征。
 
 从 `0.1.36` 开始，还新增了：
 
