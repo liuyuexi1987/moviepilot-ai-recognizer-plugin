@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.93"
+    plugin_version = "0.1.94"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4494,6 +4494,28 @@ class AgentResourceOfficer(_PluginBase):
                 "when": "盘搜、影巢候选或资源列表需要按编号继续时使用。",
             },
         ]
+        recipes = [
+            {
+                "name": "safe_bootstrap",
+                "description": "新会话安全启动：先拿启动聚合包，再自检，再看维护建议。",
+                "templates": ["startup_probe", "selfcheck_probe", "maintain_preview"],
+            },
+            {
+                "name": "plan_then_confirm",
+                "description": "先生成计划，等待用户确认后再执行保存计划。",
+                "templates": ["workflow_dry_run", "saved_plan_execute"],
+            },
+            {
+                "name": "continue_existing_session",
+                "description": "已有盘搜、影巢或资源会话时，直接按编号继续。",
+                "templates": ["pick_continue"],
+            },
+            {
+                "name": "maintenance_cycle",
+                "description": "先预览维护建议，再在确认后执行低风险维护。",
+                "templates": ["maintain_preview", "maintain_execute"],
+            },
+        ]
         return {
             "protocol_version": "assistant.v1",
             "action": "request_templates",
@@ -4514,6 +4536,7 @@ class AgentResourceOfficer(_PluginBase):
                 "non_cacheable_templates": non_cacheable_templates,
             },
             "recommended_sequence": recommended_sequence,
+            "recipes": recipes,
         }
 
     def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
@@ -4677,6 +4700,17 @@ class AgentResourceOfficer(_PluginBase):
                 for item in (filtered_request_templates.get("recommended_sequence") or [])
             )
         )
+        request_templates_recipes_ok = (
+            isinstance(filtered_request_templates.get("recipes"), list)
+            and any(
+                isinstance(item, dict) and self._clean_text(item.get("name")) == "safe_bootstrap"
+                for item in (filtered_request_templates.get("recipes") or [])
+            )
+            and any(
+                isinstance(item, dict) and self._clean_text(item.get("name")) == "plan_then_confirm"
+                for item in (filtered_request_templates.get("recipes") or [])
+            )
+        )
         request_templates_policy_only_ok = (
             policy_only_request_templates.get("templates_included") is False
             and (policy_only_request_templates.get("request_templates") or {}) == {}
@@ -4696,6 +4730,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_schema": request_templates_schema_ok,
             "request_templates_cache": request_templates_cache_ok,
             "request_templates_sequence": request_templates_sequence_ok,
+            "request_templates_recipes": request_templates_recipes_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
