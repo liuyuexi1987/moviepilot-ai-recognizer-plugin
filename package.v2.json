@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.96",
+    "version": "0.1.97",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.97": "assistant/request_templates 回执会带 recommended_recipe_detail，直接给出推荐流程的首个模板、确认模板和写入模板，外部智能体可直接照此编排。",
       "0.1.96": "assistant/request_templates 回执会直接给出 recommended_recipe 与 recommended_recipe_reason，外部智能体不必再自己挑选最适合的 recipe。",
       "0.1.95": "recipes 会直接带 requires_confirmation、has_write_effect 和最小 cache_ttl_seconds，自检也会验证这些汇总特征。",
       "0.1.94": "assistant/request_templates 回执会带场景化 recipes，外部智能体可直接选择安全启动、先计划后执行、继续既有会话等预设流程。",

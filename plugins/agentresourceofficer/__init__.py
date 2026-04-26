@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.96"
+    plugin_version = "0.1.97"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4551,6 +4551,30 @@ class AgentResourceOfficer(_PluginBase):
         elif {"maintain_preview", "maintain_execute"} & selected_set:
             recommended_recipe = "maintenance_cycle"
             recommended_recipe_reason = "当前模板集合包含维护模板，优先推荐维护流程。"
+        recommended_recipe_detail = next(
+            (item for item in recipe_summaries if item.get("name") == recommended_recipe),
+            {},
+        )
+        recommended_recipe_templates = [
+            name
+            for name in (recommended_recipe_detail.get("templates") or [])
+            if name in all_templates
+        ]
+        recommended_recipe_detail = {
+            **recommended_recipe_detail,
+            "templates": recommended_recipe_templates,
+            "first_template": recommended_recipe_templates[0] if recommended_recipe_templates else "",
+            "confirmation_required_templates": [
+                name
+                for name in recommended_recipe_templates
+                if bool((all_templates.get(name) or {}).get("requires_confirmation"))
+            ],
+            "write_templates": [
+                name
+                for name in recommended_recipe_templates
+                if self._clean_text((all_templates.get(name) or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
+            ],
+        }
         return {
             "protocol_version": "assistant.v1",
             "action": "request_templates",
@@ -4574,6 +4598,7 @@ class AgentResourceOfficer(_PluginBase):
             "recipes": recipe_summaries,
             "recommended_recipe": recommended_recipe,
             "recommended_recipe_reason": recommended_recipe_reason,
+            "recommended_recipe_detail": recommended_recipe_detail,
         }
 
     def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
@@ -4774,6 +4799,13 @@ class AgentResourceOfficer(_PluginBase):
             and bool(self._clean_text(filtered_request_templates.get("recommended_recipe_reason")))
             and recipe_request_templates.get("recommended_recipe") == "plan_then_confirm"
         )
+        recommended_recipe_detail = filtered_request_templates.get("recommended_recipe_detail") or {}
+        request_templates_recommended_recipe_detail_ok = (
+            recommended_recipe_detail.get("name") == "maintenance_cycle"
+            and recommended_recipe_detail.get("first_template") == "maintain_preview"
+            and "maintain_execute" in (recommended_recipe_detail.get("confirmation_required_templates") or [])
+            and "maintain_execute" in (recommended_recipe_detail.get("write_templates") or [])
+        )
         request_templates_policy_only_ok = (
             policy_only_request_templates.get("templates_included") is False
             and (policy_only_request_templates.get("request_templates") or {}) == {}
@@ -4796,6 +4828,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_recipes": request_templates_recipes_ok,
             "request_templates_recipe_summary": request_templates_recipe_summary_ok,
             "request_templates_recommended_recipe": request_templates_recommended_recipe_ok,
+            "request_templates_recommended_recipe_detail": request_templates_recommended_recipe_detail_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
