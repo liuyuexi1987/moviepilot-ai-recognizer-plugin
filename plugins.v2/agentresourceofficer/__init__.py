@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.91"
+    plugin_version = "0.1.92"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4279,6 +4279,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "读取启动聚合包，适合外部智能体开场获取状态、端点、工具和恢复建议。",
                 "side_effect": "read_only",
                 "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 30,
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
                 "tool": "agent_resource_officer_startup",
@@ -4289,6 +4291,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "执行协议自检，确认模板、compact、布尔解析和核心入口是否健康。",
                 "side_effect": "read_only",
                 "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 30,
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck",
                 "tool": "agent_resource_officer_selfcheck",
@@ -4299,6 +4303,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "预览低风险维护建议，不执行清理；适合高频探测。",
                 "side_effect": "dry_run",
                 "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 30,
                 "method": "GET",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "tool": "agent_resource_officer_maintain",
@@ -4309,6 +4315,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "执行低风险维护，清理过期会话和已执行计划；会写入 assistant/history。",
                 "side_effect": "write",
                 "requires_confirmation": True,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/maintain",
                 "tool": "agent_resource_officer_maintain",
@@ -4319,6 +4327,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "生成并保存工作流计划，不实际执行；适合先让用户确认。",
                 "side_effect": "plan_write",
                 "requires_confirmation": False,
+                "cache_scope": "static_template",
+                "cache_ttl_seconds": 3600,
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
                 "tool": "agent_resource_officer_run_workflow",
@@ -4343,6 +4353,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "执行已保存的 dry_run 工作流计划，可按 session 自动选择未执行计划。",
                 "side_effect": "write",
                 "requires_confirmation": True,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
                 "tool": "agent_resource_officer_execute_plan",
@@ -4361,6 +4373,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "按动作名执行单个 action template，适合无映射继续执行。",
                 "side_effect": "depends_on_action",
                 "requires_confirmation": True,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
                 "tool": "agent_resource_officer_execute_action",
@@ -4379,6 +4393,8 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "按编号继续当前会话，适合盘搜、影巢候选或资源列表选择。",
                 "side_effect": "depends_on_session",
                 "requires_confirmation": True,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
                 "method": "POST",
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                 "tool": "agent_resource_officer_smart_pick",
@@ -4436,6 +4452,16 @@ class AgentResourceOfficer(_PluginBase):
             for name, item in templates.items()
             if self._clean_text((item or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
         ]
+        cacheable_templates = [
+            name
+            for name, item in templates.items()
+            if self._safe_int((item or {}).get("cache_ttl_seconds"), 0) > 0
+        ]
+        non_cacheable_templates = [
+            name
+            for name, item in templates.items()
+            if self._safe_int((item or {}).get("cache_ttl_seconds"), 0) <= 0
+        ]
         return {
             "protocol_version": "assistant.v1",
             "action": "request_templates",
@@ -4452,6 +4478,8 @@ class AgentResourceOfficer(_PluginBase):
                 "safe_without_confirmation": safe_without_confirmation,
                 "confirmation_required": confirmation_required,
                 "write_side_effects": write_side_effects,
+                "cacheable_templates": cacheable_templates,
+                "non_cacheable_templates": non_cacheable_templates,
             },
         }
 
@@ -4576,6 +4604,8 @@ class AgentResourceOfficer(_PluginBase):
             and self._clean_text((request_templates.get(name) or {}).get("description"))
             and self._clean_text((request_templates.get(name) or {}).get("side_effect"))
             and isinstance((request_templates.get(name) or {}).get("requires_confirmation"), bool)
+            and self._clean_text((request_templates.get(name) or {}).get("cache_scope"))
+            and isinstance((request_templates.get(name) or {}).get("cache_ttl_seconds"), int)
             and isinstance((request_templates.get(name) or {}).get("tool_args"), dict)
             for name in [
                 "startup_probe",
@@ -4599,11 +4629,16 @@ class AgentResourceOfficer(_PluginBase):
             and "maintain_execute" in ((filtered_request_templates.get("execution_policy") or {}).get("write_side_effects") or [])
         )
         request_templates_schema_ok = filtered_request_templates.get("schema_version") == self.request_templates_schema_version
+        request_templates_cache_ok = (
+            ((filtered_request_templates.get("request_templates") or {}).get("maintain_execute") or {}).get("cache_scope") == "no_cache"
+            and (((filtered_request_templates.get("request_templates") or {}).get("maintain_execute") or {}).get("cache_ttl_seconds")) == 0
+        )
         request_templates_policy_only_ok = (
             policy_only_request_templates.get("templates_included") is False
             and (policy_only_request_templates.get("request_templates") or {}) == {}
             and policy_only_request_templates.get("selected_names") == ["maintain_execute"]
             and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("confirmation_required") or [])
+            and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("non_cacheable_templates") or [])
         )
         checks = {
             "compact_templates": compact_templates_ok,
@@ -4615,6 +4650,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_filter": request_templates_filter_ok,
             "request_templates_policy": request_templates_policy_ok,
             "request_templates_schema": request_templates_schema_ok,
+            "request_templates_cache": request_templates_cache_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),

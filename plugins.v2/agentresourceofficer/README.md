@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.91`
+- 当前版本：`0.1.92`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -397,6 +397,7 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 从 `0.1.89` 开始，`assistant/request_templates` 回执会带 `execution_policy` 汇总，直接列出可免确认执行、需要确认执行和存在写入副作用的模板名。
 从 `0.1.90` 开始，请求模板协议增加 `schema_version=request_templates.v1`，`startup` / `toolbox` 也会携带 `request_templates_schema_version`，方便外部智能体做兼容判断。
 从 `0.1.91` 开始，`assistant/request_templates` 支持 `include_templates=false`，可只返回模板名、无效项和执行策略，进一步减少 token。
+从 `0.1.92` 开始，`request_templates` 每个模板都会带 `cache_scope` 和 `cache_ttl_seconds`，`execution_policy` 也会汇总 `cacheable_templates` 与 `non_cacheable_templates`，方便外部智能体决定缓存策略。
 
 从 `0.1.36` 开始，还新增了：
 
