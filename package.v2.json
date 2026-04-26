@@ -37,11 +37,12 @@
     "name": "Agent资源官",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存的资源工作流主插件，适合作为智能体和后续飞书入口的新主干。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.1.87",
+    "version": "0.1.88",
     "icon": "feishucommandbridgelong.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.1.88": "request_templates 每个模板都会带 side_effect 和 requires_confirmation，外部智能体可区分只读、dry-run、计划写入和真实执行动作。",
       "0.1.87": "request_templates 每个模板都会带 description，外部智能体可以直接判断模板用途，减少额外解释和 token 消耗。",
       "0.1.86": "request_templates 每个模板都会带 tool_args，区分 HTTP 参数和 MP Tool 参数，避免外部智能体误用 body/query。",
       "0.1.85": "request_templates 每个模板都会带对应的 MP 原生 tool 名，外部智能体可在 HTTP 调用和 MP Tool 调用之间直接切换。",
