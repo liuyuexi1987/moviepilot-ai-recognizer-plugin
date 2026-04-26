@@ -91,7 +91,8 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.89"
+    plugin_version = "0.1.90"
+    request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
@@ -4148,6 +4149,7 @@ class AgentResourceOfficer(_PluginBase):
             "actions": toolbox.get("actions") or [],
             "command_examples": (toolbox.get("command_examples") or [])[:6],
             "request_templates": request_templates,
+            "request_templates_schema_version": self.request_templates_schema_version,
             "next_actions": pulse.get("next_actions") or ["assistant_recover", "assistant_workflow", "smart_entry"],
             "recommended_endpoints": key_endpoints,
         }
@@ -4267,6 +4269,7 @@ class AgentResourceOfficer(_PluginBase):
                 "115登录",
             ],
             "request_templates": self._assistant_request_templates_public_data(limit=100),
+            "request_templates_schema_version": self.request_templates_schema_version,
         }
 
     def _assistant_request_templates_public_data(self, limit: int = 100) -> Dict[str, Any]:
@@ -4434,6 +4437,7 @@ class AgentResourceOfficer(_PluginBase):
             "ok": True,
             "compact": True,
             "version": self.plugin_version,
+            "schema_version": self.request_templates_schema_version,
             "request_templates": templates,
             "available_names": list(all_templates.keys()),
             "selected_names": selected_names,
@@ -4583,6 +4587,7 @@ class AgentResourceOfficer(_PluginBase):
             "maintain_execute" in ((filtered_request_templates.get("execution_policy") or {}).get("confirmation_required") or [])
             and "maintain_execute" in ((filtered_request_templates.get("execution_policy") or {}).get("write_side_effects") or [])
         )
+        request_templates_schema_ok = filtered_request_templates.get("schema_version") == self.request_templates_schema_version
         checks = {
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
@@ -4592,6 +4597,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates": request_templates_ok,
             "request_templates_filter": request_templates_filter_ok,
             "request_templates_policy": request_templates_policy_ok,
+            "request_templates_schema": request_templates_schema_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
