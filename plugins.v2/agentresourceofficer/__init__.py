@@ -91,7 +91,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
-    plugin_version = "0.1.104"
+    plugin_version = "0.1.105"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4701,6 +4701,20 @@ class AgentResourceOfficer(_PluginBase):
             "Agent资源官 请求模板",
             f"版本：{payload.get('version')}",
         ]
+        detail = payload.get("recommended_recipe_detail") or {}
+        first_call = detail.get("first_call") or {}
+        if payload.get("recommended_recipe"):
+            lines.append(f"推荐流程：{payload.get('recommended_recipe')}")
+        if detail.get("first_template"):
+            lines.append(
+                "首步：{template} -> {method} {endpoint}".format(
+                    template=detail.get("first_template"),
+                    method=first_call.get("method") or "",
+                    endpoint=first_call.get("endpoint") or "",
+                ).strip()
+            )
+        if detail.get("confirmation_message"):
+            lines.append(f"确认提示：{detail.get('confirmation_message')}")
         for name in [
             "startup_probe",
             "selfcheck_probe",
