@@ -32,6 +32,8 @@ bash scripts/package-plugin.sh FeishuCommandBridgeLong
 
 脚本会自动先同步一次官方仓库布局，再生成 ZIP。
 
+如果插件代码目录来自 `plugins/` 或 `plugins.v2/`，但说明文档保留在仓库顶层同名目录下，打包脚本会自动把顶层 `README.md` 补进 ZIP。
+
 发布前完整检查会一次打包当前仓库清单里的可本地安装插件：
 
 ```bash
@@ -48,6 +50,12 @@ bash scripts/pre-release-check.sh
 - `HDHiveDailySign`
 - `QuarkShareSaver`
 - `ZspaceMediaFreshMix`
+
+完整检查还会校验：
+
+- 发布脚本中的插件清单必须和 `package.json` 一致
+- 每个 ZIP 必须包含 `<PluginName>/README.md`
+- ZIP 中不能包含 `__pycache__`、`.pyc`、`.pyo`、`.DS_Store`
 
 ## 输出位置
 
@@ -81,3 +89,4 @@ AgentResourceOfficer-0.1.107.zip
 - `plugin_version` 取自目标插件目录下的 `__init__.py`
 - 如果改了版本号，重新运行脚本即可生成对应文件名
 - `dist/` 目录默认不纳入 Git 版本管理
+- 提交前建议以 `bash scripts/pre-release-check.sh` 作为最终验收
