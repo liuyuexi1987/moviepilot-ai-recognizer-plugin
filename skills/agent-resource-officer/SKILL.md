@@ -42,6 +42,7 @@ Prefer the bundled helper:
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py doctor --limit 5
+python3 scripts/aro_request.py doctor --limit 5 --summary-only
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
 python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
@@ -76,6 +77,12 @@ It also returns local helper suggestions:
 
 - `helper_commands.inspect_helper_command`
 - `helper_commands.execute_helper_command`
+
+If token budget is tight, prefer:
+
+```bash
+python3 scripts/aro_request.py doctor --summary-only
+```
 
 Manual path:
 

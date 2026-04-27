@@ -54,6 +54,12 @@
 使用 agent-resource-officer skill，先调用 doctor，给我一个只读的启动/健康/会话/恢复总览，再决定是否继续旧会话。
 ```
 
+## Low Token Doctor
+
+```text
+使用 agent-resource-officer skill，先调用 doctor --summary-only，只返回最省 token 的决策摘要和下一步命令建议。
+```
+
 ## Recovery
 
 ```text

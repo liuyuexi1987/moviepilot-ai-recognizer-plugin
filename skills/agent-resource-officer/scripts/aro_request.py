@@ -218,6 +218,7 @@ def main():
     parser.add_argument("--api-path")
     parser.add_argument("--json", dest="json_body")
     parser.add_argument("--full", action="store_true")
+    parser.add_argument("--summary-only", action="store_true")
     args = parser.parse_args()
 
     config = read_config()
@@ -296,14 +297,20 @@ def main():
         }
         helper_commands = recovery_helper_commands(((output.get("recover") or {}).get("recovery") or {}))
         output["helper_commands"] = helper_commands
+        summary = {
+            "startup_ok": bool((output.get("startup") or {}).get("success")),
+            "selfcheck_ok": bool((output.get("selfcheck") or {}).get("ok")),
+            "recovery_can_resume": bool(((output.get("recover") or {}).get("recovery") or {}).get("can_resume")),
+            "recommended_action": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_action") or "",
+            "recommended_tool": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_tool") or "",
+            **helper_commands,
+        }
+        output["summary"] = summary
+        if args.summary_only and not args.full:
+            print_json(summary)
+            return 0
         if not args.full:
-            output["summary"] = {
-                "startup_ok": bool((output.get("startup") or {}).get("success")),
-                "selfcheck_ok": bool((output.get("selfcheck") or {}).get("ok")),
-                "recovery_can_resume": bool(((output.get("recover") or {}).get("recovery") or {}).get("can_resume")),
-                "recommended_action": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_action") or "",
-                **helper_commands,
-            }
+            output["summary"] = summary
         print_json(output if not args.full else {
             "startup": startup,
             "selfcheck": selfcheck,
