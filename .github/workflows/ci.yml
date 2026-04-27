@@ -8,9 +8,6 @@ on:
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 jobs:
   pre-release-check:
     runs-on: ubuntu-latest
@@ -24,7 +21,7 @@ jobs:
       - name: Run release checks
         run: bash scripts/pre-release-check.sh
       - name: Upload plugin ZIP artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: moviepilot-plugin-zips-${{ github.sha }}
           path: dist/*.zip
