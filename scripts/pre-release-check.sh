@@ -95,6 +95,18 @@ if normalized_pkg_v2 != pkg_v2:
 
 failed = []
 for plugin_id, meta in pkg.items():
+    missing_fields = [
+        key
+        for key in ("name", "description", "version", "author", "icon")
+        if not str(meta.get(key) or "").strip()
+    ]
+    if missing_fields:
+        failed.append((plugin_id, "package.json", {"missing_fields": ",".join(missing_fields)}))
+        continue
+    icon_file = Path("icons") / str(meta.get("icon"))
+    if not icon_file.exists():
+        failed.append((plugin_id, "package.json", {"missing_icon": str(icon_file)}))
+        continue
     candidates = [
         Path(plugin_id) / "__init__.py",
         Path("plugins") / plugin_id.lower() / "__init__.py",
