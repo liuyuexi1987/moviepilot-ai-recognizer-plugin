@@ -1,0 +1,15 @@
+# agent-resource-officer changelog
+
+## 0.1.0
+
+- Added `version` command and `helper_version` in command catalog/readiness output.
+- Added `commands` catalog with stable `commands.v1` schema.
+- Added `readiness` for config, local selftest, and live plugin selfcheck.
+- Added `config-check` without printing secrets or expanded local paths.
+- Added `selftest` for helper command-generation logic.
+- Added low-token decision helpers:
+  - `decide --summary-only`
+  - `doctor --summary-only`
+  - `auto --summary-only`
+  - `recover --summary-only`
+- Added `--command-only` and `--confirmed` for safer machine execution.

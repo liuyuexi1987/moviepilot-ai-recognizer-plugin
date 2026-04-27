@@ -120,3 +120,4 @@ python3 scripts/aro_request.py plans --executed --include-actions --limit 5
 - HTTP 调用使用 `?apikey=MP_API_TOKEN`。
 - 不包含个人路径、API Key、Cookie 或 Token。
 - 推荐搭配支持 Skill 和工具调度的外部智能体使用，例如腾讯 WorkBuddy，或兼容 Codex Skill 工作流的客户端。
+- 版本记录见 [CHANGELOG.md](./CHANGELOG.md)。
