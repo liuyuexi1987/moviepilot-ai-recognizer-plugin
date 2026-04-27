@@ -141,7 +141,7 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 - `docs/PLUGIN_INSTALL.md` 必须列出当前版本对应的 ZIP 文件名
 - `dist/SHA256SUMS.txt` 必须随 ZIP 一起生成
 - `dist/MANIFEST.json` 必须随 ZIP 一起生成
-- `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、基础目录结构和不应发布的生成文件
+- `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、插件元数据、基础目录结构和不应发布的生成文件
 - `scripts/verify-ci-artifact.sh` 必须能下载并校验 GitHub Actions artifact
 - `scripts/print-release-summary.sh` 必须能基于 `MANIFEST.json` 输出 Release Markdown 表格
 - `.github/workflows/ci.yml` 和 `draft-release.yml` 必须使用 artifact 上传步骤，并包含 ZIP、`SHA256SUMS.txt`、`MANIFEST.json`

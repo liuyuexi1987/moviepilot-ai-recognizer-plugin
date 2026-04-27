@@ -58,6 +58,10 @@ manifest_plugins = manifest_data.get("plugins")
 if not isinstance(manifest_plugins, list):
     print("MANIFEST.json 缺少 plugins 列表")
     raise SystemExit(1)
+package = {}
+package_file = Path("package.json")
+if package_file.exists():
+    package = json.loads(package_file.read_text(encoding="utf-8"))
 manifest_by_zip = {}
 for item in manifest_plugins:
     if not isinstance(item, dict) or not item.get("zip"):
@@ -88,6 +92,17 @@ for zip_file in zip_files:
         print(f"{zip_file} MANIFEST.json size 不匹配")
         raise SystemExit(1)
     plugin_name = zip_file.name.rsplit("-", 1)[0]
+    package_meta = package.get(plugin_name)
+    if package_meta:
+        if manifest_item.get("id") != plugin_name:
+            print(f"{zip_file} MANIFEST.json id 不匹配")
+            raise SystemExit(1)
+        if manifest_item.get("name") != package_meta.get("name"):
+            print(f"{zip_file} MANIFEST.json name 不匹配")
+            raise SystemExit(1)
+        if manifest_item.get("version") != package_meta.get("version"):
+            print(f"{zip_file} MANIFEST.json version 不匹配")
+            raise SystemExit(1)
     required_readme = f"{plugin_name}/README.md"
     required_init = f"{plugin_name}/__init__.py"
     with zipfile.ZipFile(zip_file) as zip_obj:
