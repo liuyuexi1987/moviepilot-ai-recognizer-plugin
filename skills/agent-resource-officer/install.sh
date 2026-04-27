@@ -6,13 +6,22 @@ CODEX_HOME_DIR="${CODEX_HOME:-"${HOME}/.codex"}"
 TARGET_DIR="${CODEX_HOME_DIR}/skills/agent-resource-officer"
 DRY_RUN=0
 
-for arg in "$@"; do
-  case "$arg" in
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
     --dry-run)
       DRY_RUN=1
+      shift
+      ;;
+    --target)
+      if [[ "$#" -lt 2 ]]; then
+        echo "--target requires a directory" >&2
+        exit 2
+      fi
+      TARGET_DIR="$2"
+      shift 2
       ;;
     *)
-      echo "Unknown argument: $arg" >&2
+      echo "Unknown argument: $1" >&2
       exit 2
       ;;
   esac

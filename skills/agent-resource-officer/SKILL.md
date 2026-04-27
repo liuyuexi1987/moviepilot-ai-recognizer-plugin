@@ -39,6 +39,7 @@ Optional install helper:
 ```bash
 bash install.sh --dry-run
 bash install.sh
+bash install.sh --target /path/to/skills/agent-resource-officer
 ```
 
 ## Request Helper

@@ -15,6 +15,7 @@
 ```bash
 bash install.sh --dry-run
 bash install.sh
+bash install.sh --target /path/to/skills/agent-resource-officer
 ```
 
 2. 配置本机连接信息：
