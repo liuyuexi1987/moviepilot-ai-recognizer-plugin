@@ -107,16 +107,20 @@ def print_json(data):
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def summary_command(summary, confirmed=False):
+    summary = summary or {}
+    requires_confirmation = bool(summary.get("requires_confirmation"))
+    command = str(summary.get("execute_helper_command") or "").strip()
+    if requires_confirmation and not confirmed:
+        command = str(summary.get("inspect_helper_command") or command).strip()
+    if not command:
+        command = str(summary.get("inspect_helper_command") or "").strip()
+    return command
+
+
 def print_summary(summary, command_only=False, confirmed=False):
     if command_only:
-        summary = summary or {}
-        requires_confirmation = bool(summary.get("requires_confirmation"))
-        command = str(summary.get("execute_helper_command") or "").strip()
-        if requires_confirmation and not confirmed:
-            command = str(summary.get("inspect_helper_command") or command).strip()
-        if not command:
-            command = str(summary.get("inspect_helper_command") or "").strip()
-        print(command)
+        print(summary_command(summary, confirmed=confirmed))
         return
     print_json(summary)
 
@@ -278,6 +282,20 @@ def run_selftest():
 
     workflow_commands = recipe_helper_commands({"first_template": "workflow_dry_run"}, "plan")
     check("workflow_dry_run_command", workflow_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>")
+
+    confirm_summary = {
+        "requires_confirmation": True,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "execute",
+    }
+    check("command_only_requires_confirmation", summary_command(confirm_summary) == "inspect")
+    check("command_only_confirmed_executes", summary_command(confirm_summary, confirmed=True) == "execute")
+    no_confirm_summary = {
+        "requires_confirmation": False,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "execute",
+    }
+    check("command_only_without_confirmation_executes", summary_command(no_confirm_summary) == "execute")
 
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
