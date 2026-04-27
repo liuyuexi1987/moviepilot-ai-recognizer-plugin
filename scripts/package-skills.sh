@@ -37,14 +37,33 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
 python3 - <<'PY' | while IFS=$'\t' read -r skill_name helper_file; do
+import ast
 from pathlib import Path
 
-skills = [
-    ("agent-resource-officer", "skills/agent-resource-officer/scripts/aro_request.py"),
-    ("hdhive-search-unlock-to-115", "skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py"),
-]
-for skill_name, helper_file in skills:
-    print(f"{skill_name}\t{helper_file}")
+
+def has_helper_version(path: Path) -> bool:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "HELPER_VERSION":
+                return True
+    return False
+
+
+for skill_dir in sorted(path for path in Path("skills").iterdir() if path.is_dir()):
+    scripts_dir = skill_dir / "scripts"
+    helper_files = []
+    if scripts_dir.exists():
+        helper_files = sorted(path for path in scripts_dir.glob("*.py") if has_helper_version(path))
+    if len(helper_files) != 1:
+        print(f"{skill_dir} 必须且只能有一个包含 HELPER_VERSION 的 helper 脚本", flush=True)
+        raise SystemExit(1)
+    print(f"{skill_dir.name}\t{helper_files[0]}")
 PY
   version="$(HELPER_FILE="$helper_file" python3 - <<'PY'
 import ast
@@ -103,11 +122,6 @@ import json
 from pathlib import Path
 
 dist_dir = Path("dist/skills")
-skill_sources = [
-    ("agent-resource-officer", Path("skills/agent-resource-officer/scripts/aro_request.py")),
-    ("hdhive-search-unlock-to-115", Path("skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py")),
-]
-
 
 def read_helper_version(helper_file: Path) -> str:
     tree = ast.parse(helper_file.read_text(encoding="utf-8"))
@@ -121,7 +135,20 @@ def read_helper_version(helper_file: Path) -> str:
 
 
 expected = []
-for skill_id, helper_file in skill_sources:
+for skill_dir in sorted(path for path in Path("skills").iterdir() if path.is_dir()):
+    scripts_dir = skill_dir / "scripts"
+    helper_files = []
+    if scripts_dir.exists():
+        helper_files = sorted(
+            path
+            for path in scripts_dir.glob("*.py")
+            if read_helper_version(path)
+        )
+    if len(helper_files) != 1:
+        print(f"{skill_dir} 必须且只能有一个包含 HELPER_VERSION 的 helper 脚本")
+        raise SystemExit(1)
+    skill_id = skill_dir.name
+    helper_file = helper_files[0]
     version = read_helper_version(helper_file)
     if not version:
         print(f"{helper_file} 缺少 HELPER_VERSION")
