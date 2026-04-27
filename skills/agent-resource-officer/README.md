@@ -65,6 +65,8 @@ python3 scripts/aro_request.py pick --choice 1
 
 `commands` 会输出 helper 命令目录、是否联网、是否可能写入。`writes` 固定为布尔值，具体触发条件在 `write_condition`。
 
+注意：`workflow` 是 dry-run，不会解锁或转存资源，但会保存一个待确认执行的 plan，因此在命令目录里属于写入型命令。
+
 `config-check` 只检查连接配置来源和是否存在，不输出真实 API Key。
 
 `readiness` 会一次运行配置检查、本地 selftest 和 MoviePilot 插件 selfcheck。

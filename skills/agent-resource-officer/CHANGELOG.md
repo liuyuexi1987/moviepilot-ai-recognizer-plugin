@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Bumped helper script to `0.1.1`.
+- Completed the `commands` catalog so every helper subcommand is represented.
+- Marked `workflow` as a dry-run plan write in the command catalog.
 - Added `version` command and `helper_version` in command catalog/readiness output.
 - Added `install.sh` with dry-run and custom target support for installing the skill into Codex skill paths.
 - Added installer target guards to prevent accidental overwrites of unsafe or non-skill directories.

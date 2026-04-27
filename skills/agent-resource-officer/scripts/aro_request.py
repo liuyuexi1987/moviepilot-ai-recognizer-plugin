@@ -9,7 +9,31 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.0"
+HELPER_VERSION = "0.1.1"
+HELPER_COMMANDS = [
+    "auto",
+    "commands",
+    "config-check",
+    "decide",
+    "doctor",
+    "readiness",
+    "selftest",
+    "startup",
+    "selfcheck",
+    "templates",
+    "route",
+    "pick",
+    "workflow",
+    "plan-execute",
+    "maintain",
+    "recover",
+    "session",
+    "sessions",
+    "history",
+    "plans",
+    "raw",
+    "version",
+]
 
 
 def read_config():
@@ -317,8 +341,11 @@ def selftest_result():
     check("helper_version_present", catalog.get("helper_version") == HELPER_VERSION)
     check("commands_schema_version", catalog.get("schema_version") == "commands.v1")
     check("commands_catalog_includes_version", "version" in catalog_names)
+    check("commands_catalog_complete", catalog_names == set(HELPER_COMMANDS))
     check("commands_writes_are_boolean", all(isinstance(item.get("writes"), bool) for item in catalog_commands))
     check("commands_have_write_condition", all("write_condition" in item for item in catalog_commands))
+    workflow_entry = next((item for item in catalog_commands if item.get("name") == "workflow"), {})
+    check("workflow_catalog_marks_plan_write", workflow_entry.get("writes") is True and "plan" in workflow_entry.get("write_condition", ""))
     check("commands_recommended_start", catalog.get("recommended_start") == "python3 scripts/aro_request.py decide --summary-only")
 
     passed = sum(1 for item in checks if item.get("ok"))
@@ -346,18 +373,27 @@ def commands_catalog():
         "recommended_start": "python3 scripts/aro_request.py decide --summary-only",
         "commands": [
             {"name": "version", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper version"},
+            {"name": "commands", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper command catalog"},
             {"name": "config-check", "network": False, "writes": False, "write_condition": "", "purpose": "check local connection settings without printing secrets"},
             {"name": "selftest", "network": False, "writes": False, "write_condition": "", "purpose": "test local helper decision and command generation logic"},
             {"name": "readiness", "network": True, "writes": False, "write_condition": "", "purpose": "run config-check, selftest, and live plugin selfcheck"},
+            {"name": "startup", "network": True, "writes": False, "write_condition": "", "purpose": "inspect assistant startup state and recommended recipe"},
+            {"name": "selfcheck", "network": True, "writes": False, "write_condition": "", "purpose": "run live AgentResourceOfficer protocol health check"},
+            {"name": "templates", "network": True, "writes": False, "write_condition": "", "purpose": "fetch low-token assistant request templates by recipe or name"},
             {"name": "decide", "network": True, "writes": False, "write_condition": "", "purpose": "choose continue_session or start_recipe and return next helper command"},
             {"name": "doctor", "network": True, "writes": False, "write_condition": "", "purpose": "return startup, selfcheck, sessions, and recovery snapshot"},
             {"name": "auto", "network": True, "writes": False, "write_condition": "", "purpose": "follow startup recommended recipe and return request template summary"},
             {"name": "recover", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "inspect or execute the recommended recovery action"},
             {"name": "route", "network": True, "writes": True, "write_condition": "depends on text and routed action", "purpose": "route natural-language resource requests"},
             {"name": "pick", "network": True, "writes": True, "write_condition": "depends on current session and selected action", "purpose": "continue numbered choices or actions"},
-            {"name": "workflow", "network": True, "writes": False, "write_condition": "", "purpose": "create dry-run workflow plans"},
+            {"name": "workflow", "network": True, "writes": True, "write_condition": "saves a dry-run plan; does not unlock or transfer", "purpose": "create dry-run workflow plans"},
             {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan", "purpose": "execute the latest or selected saved plan"},
             {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
+            {"name": "session", "network": True, "writes": False, "write_condition": "", "purpose": "inspect one assistant session"},
+            {"name": "sessions", "network": True, "writes": False, "write_condition": "", "purpose": "list recent assistant sessions"},
+            {"name": "history", "network": True, "writes": False, "write_condition": "", "purpose": "list recent assistant execution history"},
+            {"name": "plans", "network": True, "writes": False, "write_condition": "", "purpose": "list saved workflow plans"},
+            {"name": "raw", "network": True, "writes": True, "write_condition": "depends on method, path, and JSON body", "purpose": "call a raw assistant endpoint for debugging"},
         ],
     }
 
@@ -366,30 +402,7 @@ def main():
     parser = argparse.ArgumentParser(description="AgentResourceOfficer request helper")
     parser.add_argument(
         "command",
-        choices=[
-            "auto",
-            "commands",
-            "config-check",
-            "decide",
-            "doctor",
-            "readiness",
-            "selftest",
-            "startup",
-            "selfcheck",
-            "templates",
-            "route",
-            "pick",
-            "workflow",
-            "plan-execute",
-            "maintain",
-            "recover",
-            "session",
-            "sessions",
-            "history",
-            "plans",
-            "raw",
-            "version",
-        ],
+        choices=HELPER_COMMANDS,
     )
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
