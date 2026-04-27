@@ -343,6 +343,25 @@ def selftest_result():
 
     workflow_commands = recipe_helper_commands({"first_template": "workflow_dry_run"}, "plan")
     check("workflow_dry_run_command", workflow_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>")
+    maintain_commands = recipe_helper_commands({"first_template": "maintain_preview"}, "maintain")
+    check("maintain_preview_command", maintain_commands.get("execute_helper_command") == "python3 scripts/aro_request.py maintain")
+    maintain_execute_commands = recipe_helper_commands({"first_template": "maintain_execute"}, "maintain")
+    check("maintain_execute_command", maintain_execute_commands.get("execute_helper_command") == "python3 scripts/aro_request.py maintain --execute")
+
+    template_summary = request_templates_summary({
+        "data": {
+            "recommended_recipe": "bootstrap",
+            "recommended_recipe_detail": {
+                "first_template": "startup_probe",
+                "first_call": {"endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/startup", "method": "GET"},
+                "confirmation_required_templates": ["saved_plan_execute"],
+                "confirmation_message": "需要确认",
+            },
+        },
+    })
+    check("templates_summary_recipe", template_summary.get("recommended_recipe") == "bootstrap")
+    check("templates_summary_first_call", template_summary.get("first_template") == "startup_probe" and template_summary.get("first_method") == "GET")
+    check("templates_summary_confirmation", template_summary.get("requires_confirmation") is True and template_summary.get("confirmation_message") == "需要确认")
 
     confirm_summary = {
         "requires_confirmation": True,
