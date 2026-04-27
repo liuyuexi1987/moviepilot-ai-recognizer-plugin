@@ -29,6 +29,12 @@ bash scripts/package-plugin.sh
 bash scripts/package-plugin.sh --list
 ```
 
+只打包全部插件、不运行完整发布检查：
+
+```bash
+bash scripts/package-plugin.sh --all
+```
+
 如需打包其他插件，例如 `AgentResourceOfficer` 或飞书桥接插件：
 
 ```bash

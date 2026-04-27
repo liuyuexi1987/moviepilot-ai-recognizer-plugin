@@ -18,6 +18,22 @@ PY
   exit 0
 fi
 
+if [[ "${1:-}" == "--all" ]]; then
+  ROOT_DIR="$ROOT_DIR" python3 - <<'PY' | while IFS= read -r plugin_name; do
+import json
+import os
+from pathlib import Path
+
+package_file = Path(os.environ["ROOT_DIR"]) / "package.json"
+package = json.loads(package_file.read_text(encoding="utf-8"))
+for plugin_id in package:
+    print(plugin_id)
+PY
+    "$0" "$plugin_name"
+  done
+  exit 0
+fi
+
 REQUESTED_PLUGIN_NAME="${1:-AIRecoginzerForwarder}"
 PLUGIN_NAME="$(REQUESTED_PLUGIN_NAME="$REQUESTED_PLUGIN_NAME" ROOT_DIR="$ROOT_DIR" python3 - <<'PY'
 import json
