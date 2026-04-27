@@ -6,6 +6,7 @@ DIST_DIR="$ROOT_DIR/dist"
 PLUGIN_NAME="${1:-AIRecoginzerForwarder}"
 PLUGIN_DIR="$ROOT_DIR/$PLUGIN_NAME"
 PLUGIN_KEY="$(printf '%s' "$PLUGIN_NAME" | tr '[:upper:]' '[:lower:]')"
+PLUGIN_DOC_DIR="$ROOT_DIR/$PLUGIN_NAME"
 
 if [ -x "$ROOT_DIR/scripts/sync-repo-layout.sh" ]; then
   "$ROOT_DIR/scripts/sync-repo-layout.sh" >/dev/null
@@ -66,6 +67,10 @@ else
   cp -R "$PLUGIN_DIR/." "$STAGE_PLUGIN_DIR/"
   find "$STAGE_PLUGIN_DIR" -name '__pycache__' -type d -prune -exec rm -rf {} +
   find "$STAGE_PLUGIN_DIR" \( -name '*.pyc' -o -name '*.pyo' -o -name '.DS_Store' \) -delete
+fi
+
+if [ ! -f "$STAGE_PLUGIN_DIR/README.md" ] && [ -f "$PLUGIN_DOC_DIR/README.md" ]; then
+  cp "$PLUGIN_DOC_DIR/README.md" "$STAGE_PLUGIN_DIR/README.md"
 fi
 
 cd "$STAGE_DIR"
