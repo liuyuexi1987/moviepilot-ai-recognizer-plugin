@@ -139,6 +139,15 @@ if failed:
 PY
 
 echo "[5/6] 打包本地安装 ZIP..."
+listed_plugins="$(bash scripts/package-plugin.sh --list | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//')"
+expected_plugins="${PACKAGE_PLUGINS[*]}"
+if [ "$listed_plugins" != "$expected_plugins" ]; then
+  echo "package-plugin.sh --list 输出与发布插件清单不一致" >&2
+  echo "expected: $expected_plugins" >&2
+  echo "actual:   $listed_plugins" >&2
+  exit 1
+fi
+echo "package_plugin_list_ok"
 for plugin_name in "${PACKAGE_PLUGINS[@]}"; do
   bash scripts/package-plugin.sh "$plugin_name" >/dev/null
 done
