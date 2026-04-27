@@ -153,6 +153,39 @@ if missing_zip_names:
     raise SystemExit(1)
 PY
 
+echo "检查 Markdown 本地链接..."
+python3 - <<'PY'
+import re
+import urllib.parse
+from pathlib import Path
+
+root = Path(".").resolve()
+failed = []
+for md_file in sorted(Path(".").rglob("*.md")):
+    if ".git" in md_file.parts or md_file.name.startswith("SESSION_HANDOFF_"):
+        continue
+    text = md_file.read_text(encoding="utf-8", errors="ignore")
+    for raw_link in re.findall(r"!?\[[^\]]*\]\(([^)]+)\)", text):
+        link = raw_link.strip()
+        if not link or link.startswith(("#", "http://", "https://", "mailto:")):
+            continue
+        target = link.split("#", 1)[0].strip()
+        if not target:
+            continue
+        target = urllib.parse.unquote(target)
+        target_path = (md_file.parent / target).resolve()
+        try:
+            target_path.relative_to(root)
+        except ValueError:
+            continue
+        if not target_path.exists():
+            failed.append(f"{md_file}: missing link target {link}")
+if failed:
+    print("\n".join(failed))
+    raise SystemExit(1)
+print("markdown_links_ok")
+PY
+
 echo "[5/6] 打包本地安装 ZIP..."
 mkdir -p dist
 rm -f dist/*.zip
