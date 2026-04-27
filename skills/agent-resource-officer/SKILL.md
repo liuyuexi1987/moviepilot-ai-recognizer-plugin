@@ -73,6 +73,8 @@ Use `commands` when an external agent needs the local helper command catalog:
 python3 scripts/aro_request.py commands
 ```
 
+The command catalog uses `schema_version=commands.v1`; `writes` is always boolean and details live in `write_condition`.
+
 Use `config-check` to verify connection settings without printing secrets:
 
 ```bash

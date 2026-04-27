@@ -330,20 +330,21 @@ def run_selftest():
 def commands_catalog():
     return {
         "success": True,
+        "schema_version": "commands.v1",
         "recommended_start": "python3 scripts/aro_request.py decide --summary-only",
         "commands": [
-            {"name": "config-check", "network": False, "writes": False, "purpose": "check local connection settings without printing secrets"},
-            {"name": "selftest", "network": False, "writes": False, "purpose": "test local helper decision and command generation logic"},
-            {"name": "readiness", "network": True, "writes": False, "purpose": "run config-check, selftest, and live plugin selfcheck"},
-            {"name": "decide", "network": True, "writes": False, "purpose": "choose continue_session or start_recipe and return next helper command"},
-            {"name": "doctor", "network": True, "writes": False, "purpose": "return startup, selfcheck, sessions, and recovery snapshot"},
-            {"name": "auto", "network": True, "writes": False, "purpose": "follow startup recommended recipe and return request template summary"},
-            {"name": "recover", "network": True, "writes": "with --execute", "purpose": "inspect or execute the recommended recovery action"},
-            {"name": "route", "network": True, "writes": "depends on text", "purpose": "route natural-language resource requests"},
-            {"name": "pick", "network": True, "writes": "depends on current session", "purpose": "continue numbered choices or actions"},
-            {"name": "workflow", "network": True, "writes": False, "purpose": "create dry-run workflow plans"},
-            {"name": "plan-execute", "network": True, "writes": True, "purpose": "execute the latest or selected saved plan"},
-            {"name": "maintain", "network": True, "writes": "with --execute", "purpose": "preview or execute low-risk maintenance"},
+            {"name": "config-check", "network": False, "writes": False, "write_condition": "", "purpose": "check local connection settings without printing secrets"},
+            {"name": "selftest", "network": False, "writes": False, "write_condition": "", "purpose": "test local helper decision and command generation logic"},
+            {"name": "readiness", "network": True, "writes": False, "write_condition": "", "purpose": "run config-check, selftest, and live plugin selfcheck"},
+            {"name": "decide", "network": True, "writes": False, "write_condition": "", "purpose": "choose continue_session or start_recipe and return next helper command"},
+            {"name": "doctor", "network": True, "writes": False, "write_condition": "", "purpose": "return startup, selfcheck, sessions, and recovery snapshot"},
+            {"name": "auto", "network": True, "writes": False, "write_condition": "", "purpose": "follow startup recommended recipe and return request template summary"},
+            {"name": "recover", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "inspect or execute the recommended recovery action"},
+            {"name": "route", "network": True, "writes": True, "write_condition": "depends on text and routed action", "purpose": "route natural-language resource requests"},
+            {"name": "pick", "network": True, "writes": True, "write_condition": "depends on current session and selected action", "purpose": "continue numbered choices or actions"},
+            {"name": "workflow", "network": True, "writes": False, "write_condition": "", "purpose": "create dry-run workflow plans"},
+            {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan", "purpose": "execute the latest or selected saved plan"},
+            {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
         ],
     }
 

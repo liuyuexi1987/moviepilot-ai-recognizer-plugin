@@ -52,7 +52,7 @@ python3 scripts/aro_request.py pick --choice 1
 
 `selftest` 不连接 MoviePilot，只验证本地 helper 的决策和命令生成逻辑。
 
-`commands` 会输出 helper 命令目录、是否联网、是否可能写入。
+`commands` 会输出 helper 命令目录、是否联网、是否可能写入。`writes` 固定为布尔值，具体触发条件在 `write_condition`。
 
 `config-check` 只检查连接配置来源和是否存在，不输出真实 API Key。
 
