@@ -189,6 +189,7 @@ def main():
         "command",
         choices=[
             "auto",
+            "decide",
             "doctor",
             "startup",
             "selfcheck",
@@ -340,6 +341,88 @@ def main():
             "selfcheck": selfcheck,
             "sessions": sessions,
             "recover": recover,
+        })
+        return 0
+
+    if args.command == "decide":
+        startup = request(base_url, api_key, "GET", assistant_path("startup"))
+        recover = request(
+            base_url,
+            api_key,
+            "GET",
+            assistant_path("recover"),
+            query={
+                "compact": "true",
+                "limit": str(args.limit),
+                **({"session": args.session} if args.session else {}),
+                **({"session_id": args.session_id} if args.session_id else {}),
+            },
+        )
+        startup_compact = compact(startup)
+        recover_compact = compact(recover)
+        recover_data = ((recover_compact or {}).get("recovery") or {}) if isinstance(recover_compact, dict) else {}
+        if recover_data.get("can_resume"):
+            helper_commands = recovery_helper_commands(recover_data)
+            summary = {
+                "decision": "continue_session",
+                "startup_ok": bool((startup_compact or {}).get("success")),
+                "can_resume": True,
+                "mode": recover_data.get("mode") or "",
+                "reason": recover_data.get("reason") or "",
+                "recommended_action": recover_data.get("recommended_action") or "",
+                "recommended_tool": recover_data.get("recommended_tool") or "",
+                **helper_commands,
+            }
+            if args.summary_only and not args.full:
+                print_json(summary)
+                return 0
+            print_json({
+                "summary": summary,
+                "startup": startup_compact,
+                "recover": recover_compact,
+            } if not args.full else {
+                "summary": summary,
+                "startup": startup,
+                "recover": recover,
+            })
+            return 0
+
+        startup_data = data_payload(startup)
+        recommended = startup_data.get("recommended_request_templates") if isinstance(startup_data, dict) else {}
+        tool_args = recommended.get("tool_args") if isinstance(recommended, dict) else {}
+        recipe = (tool_args or {}).get("recipe") or args.recipe or "bootstrap"
+        templates = request(
+            base_url,
+            api_key,
+            "POST",
+            assistant_path("request_templates"),
+            body={
+                "recipe": recipe,
+                "include_templates": bool(args.include_templates and not args.policy_only),
+            },
+        )
+        template_summary = request_templates_summary(templates)
+        summary = {
+            "decision": "start_recipe",
+            "startup_ok": bool((startup_compact or {}).get("success")),
+            "can_resume": False,
+            "recommended_recipe_request": (recommended or {}).get("recipe") or recipe,
+            "recommended_recipe_reason": (recommended or {}).get("reason") or "",
+            **template_summary,
+        }
+        if args.summary_only and not args.full:
+            print_json(summary)
+            return 0
+        print_json({
+            "summary": summary,
+            "startup": startup_compact,
+            "recover": recover_compact,
+            "request_templates": compact(templates),
+        } if not args.full else {
+            "summary": summary,
+            "startup": startup,
+            "recover": recover,
+            "request_templates": templates,
         })
         return 0
 

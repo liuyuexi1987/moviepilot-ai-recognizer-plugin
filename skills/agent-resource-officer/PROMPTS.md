@@ -12,6 +12,12 @@
 使用 agent-resource-officer skill，先调用 auto --summary-only，只返回自动启动流的最小决策摘要。
 ```
 
+## Decide
+
+```text
+使用 agent-resource-officer skill，先调用 decide --summary-only，告诉我现在应该继续旧会话还是按推荐 recipe 开始新流程。
+```
+
 ## Manual Startup
 
 ```text

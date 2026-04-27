@@ -42,6 +42,7 @@ Prefer the bundled helper:
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py auto --summary-only
+python3 scripts/aro_request.py decide --summary-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --limit 5 --summary-only
 python3 scripts/aro_request.py recover --summary-only
@@ -60,12 +61,18 @@ The helper uses `?apikey=...`, which is the recommended HTTP auth mode for plugi
 Fast path:
 
 ```bash
+python3 scripts/aro_request.py decide --summary-only
 python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py auto --summary-only
 python3 scripts/aro_request.py doctor --limit 5
 ```
 
 `auto` calls `startup`, reads `recommended_request_templates`, then fetches the recommended low-token recipe.
+
+`decide` is the single low-token decision entry:
+
+- if there is a resumable session, it returns `decision=continue_session`
+- otherwise it returns `decision=start_recipe`
 
 If you want the automatic flow but only need the decision summary, prefer:
 
