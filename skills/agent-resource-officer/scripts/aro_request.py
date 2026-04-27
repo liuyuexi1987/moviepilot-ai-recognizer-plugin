@@ -103,12 +103,17 @@ def assistant_path(name):
     return f"/api/v1/plugin/AgentResourceOfficer/assistant/{name}"
 
 
+def print_json(data):
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
 def main():
     parser = argparse.ArgumentParser(description="AgentResourceOfficer request helper")
     parser.add_argument(
         "command",
         choices=[
             "auto",
+            "doctor",
             "startup",
             "selfcheck",
             "templates",
@@ -189,7 +194,58 @@ def main():
             "startup": compact(startup),
             "request_templates": compact(templates),
         }
-        print(json.dumps(output if not args.full else {"startup": startup, "request_templates": templates}, ensure_ascii=False, indent=2))
+        print_json(output if not args.full else {"startup": startup, "request_templates": templates})
+        return 0
+
+    if args.command == "doctor":
+        startup = request(base_url, api_key, "GET", assistant_path("startup"))
+        selfcheck = request(base_url, api_key, "GET", assistant_path("selfcheck"))
+        sessions = request(
+            base_url,
+            api_key,
+            "GET",
+            assistant_path("sessions"),
+            query={
+                "compact": "true",
+                "limit": str(args.limit),
+                **({"kind": args.kind} if args.kind else {}),
+                **({"has_pending_p115": "true"} if args.has_pending_p115 else {}),
+            },
+        )
+        recover_query = {
+            "compact": "true",
+            "limit": str(args.limit),
+        }
+        if args.session:
+            recover_query["session"] = args.session
+        if args.session_id:
+            recover_query["session_id"] = args.session_id
+        recover = request(
+            base_url,
+            api_key,
+            "GET",
+            assistant_path("recover"),
+            query=recover_query,
+        )
+        output = {
+            "startup": compact(startup),
+            "selfcheck": compact(selfcheck),
+            "sessions": compact(sessions),
+            "recover": compact(recover),
+        }
+        if not args.full:
+            output["summary"] = {
+                "startup_ok": bool((output.get("startup") or {}).get("success")),
+                "selfcheck_ok": bool((output.get("selfcheck") or {}).get("ok")),
+                "recovery_can_resume": bool(((output.get("recover") or {}).get("recovery") or {}).get("can_resume")),
+                "recommended_action": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_action") or "",
+            }
+        print_json(output if not args.full else {
+            "startup": startup,
+            "selfcheck": selfcheck,
+            "sessions": sessions,
+            "recover": recover,
+        })
         return 0
 
     if args.command == "startup":
@@ -349,7 +405,7 @@ def main():
 
     result = request(base_url, api_key, method, path, body=body, query=query)
     output = result if args.full else compact(result)
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    print_json(output)
     return 0
 
 

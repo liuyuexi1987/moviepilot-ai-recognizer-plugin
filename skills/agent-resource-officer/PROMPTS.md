@@ -48,6 +48,12 @@
 使用 agent-resource-officer skill，执行 selfcheck，确认 AgentResourceOfficer 协议和请求模板都正常。
 ```
 
+## Doctor
+
+```text
+使用 agent-resource-officer skill，先调用 doctor，给我一个只读的启动/健康/会话/恢复总览，再决定是否继续旧会话。
+```
+
 ## Recovery
 
 ```text

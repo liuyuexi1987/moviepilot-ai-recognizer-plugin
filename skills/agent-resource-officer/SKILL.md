@@ -41,6 +41,7 @@ Prefer the bundled helper:
 ```bash
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py auto
+python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
 python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
@@ -57,9 +58,19 @@ Fast path:
 
 ```bash
 python3 scripts/aro_request.py auto
+python3 scripts/aro_request.py doctor --limit 5
 ```
 
 `auto` calls `startup`, reads `recommended_request_templates`, then fetches the recommended low-token recipe.
+
+`doctor` is the read-only diagnostic entry. It combines:
+
+- `assistant/startup`
+- `assistant/selfcheck`
+- `assistant/sessions`
+- `assistant/recover`
+
+Use it when an external agent needs one compact bootstrap/health/recovery snapshot before deciding whether to start a new task or continue an old one.
 
 Manual path:
 
