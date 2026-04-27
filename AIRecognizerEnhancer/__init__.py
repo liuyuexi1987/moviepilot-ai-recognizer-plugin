@@ -46,7 +46,7 @@ class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
     plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecoginzerforwarder.png"
-    plugin_version = "0.1.10"
+    plugin_version = "0.1.11"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
