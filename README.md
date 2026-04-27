@@ -448,7 +448,10 @@ docs/
 如果你只记一句话，可以记这个：
 
 - `AIRecoginzerForwarder` 解决“识别失败后的兜底”
+- `AIRecognizerEnhancer` 解决“新识别增强线的结构化识别”
+- `AgentResourceOfficer` 解决“智能体统一资源入口和执行编排”
 - `FeishuCommandBridgeLong` 解决“飞书远程控制 MoviePilot”
 - `HdhiveOpenApi` 解决“影巢资源搜索、解锁和 115 落地”
 - `HDHiveDailySign` 解决“影巢每日签到”
+- `QuarkShareSaver` 解决“夸克分享链接稳定转存”
 - `ZspaceMediaFreshMix` 解决“极影视混合分类刷新不稳定”
