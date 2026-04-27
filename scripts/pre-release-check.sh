@@ -60,13 +60,24 @@ print(f"syntax_ok files={count}")
 PY
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
-python3 - <<'PY'
+PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'
 import ast
 import json
+import os
 from pathlib import Path
 
 pkg = json.loads(Path("package.json").read_text(encoding="utf-8"))
 pkg_v2 = json.loads(Path("package.v2.json").read_text(encoding="utf-8"))
+package_plugins = set(pkg)
+release_plugins = set(os.environ["PACKAGE_PLUGIN_LIST"].split())
+if package_plugins != release_plugins:
+    missing = sorted(package_plugins - release_plugins)
+    extra = sorted(release_plugins - package_plugins)
+    if missing:
+        print("pre-release-check 未覆盖 package.json 插件:", ", ".join(missing))
+    if extra:
+        print("pre-release-check 包含 package.json 之外的插件:", ", ".join(extra))
+    raise SystemExit(1)
 normalized_pkg_v2 = {
     plugin_id: {key: value for key, value in meta.items() if key != "v2"}
     for plugin_id, meta in pkg.items()
