@@ -54,6 +54,8 @@ for plugin_id in package:
 PY
     "$0" "$plugin_name"
   done
+  bash "$ROOT_DIR/scripts/write-dist-sha256.sh"
+  bash "$ROOT_DIR/scripts/verify-dist.sh"
   exit 0
 fi
 
