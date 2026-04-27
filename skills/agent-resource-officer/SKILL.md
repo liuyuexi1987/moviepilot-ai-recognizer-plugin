@@ -40,6 +40,7 @@ Prefer the bundled helper:
 
 ```bash
 python3 scripts/aro_request.py startup
+python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py pick --choice 1
@@ -48,6 +49,16 @@ python3 scripts/aro_request.py pick --choice 1
 The helper uses `?apikey=...`, which is the recommended HTTP auth mode for plugin assistant endpoints.
 
 ## Core Startup Flow
+
+Fast path:
+
+```bash
+python3 scripts/aro_request.py auto
+```
+
+`auto` calls `startup`, reads `recommended_request_templates`, then fetches the recommended low-token recipe.
+
+Manual path:
 
 1. Call startup:
 
@@ -120,6 +131,26 @@ Common confirmation points:
 - `saved_plan_execute`
 - `maintain_execute`
 - `pick_continue`
+
+## Maintenance And Health
+
+Use selfcheck for protocol health:
+
+```bash
+python3 scripts/aro_request.py selfcheck
+```
+
+Preview maintenance without writing:
+
+```bash
+python3 scripts/aro_request.py maintain
+```
+
+Execute maintenance only after confirmation:
+
+```bash
+python3 scripts/aro_request.py maintain --execute
+```
 
 ## Guardrails
 

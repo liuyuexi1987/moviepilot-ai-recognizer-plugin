@@ -74,6 +74,12 @@ def compact(data):
     return data
 
 
+def data_payload(result):
+    if isinstance(result, dict) and isinstance(result.get("data"), dict):
+        return result.get("data")
+    return result
+
+
 def request(base_url, api_key, method, path, body=None, query=None):
     query_items = list((query or {}).items())
     query_items.append(("apikey", api_key))
@@ -101,13 +107,25 @@ def main():
     parser = argparse.ArgumentParser(description="AgentResourceOfficer request helper")
     parser.add_argument(
         "command",
-        choices=["startup", "templates", "route", "pick", "workflow", "plan-execute", "raw"],
+        choices=[
+            "auto",
+            "startup",
+            "selfcheck",
+            "templates",
+            "route",
+            "pick",
+            "workflow",
+            "plan-execute",
+            "maintain",
+            "raw",
+        ],
     )
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
     parser.add_argument("--recipe")
     parser.add_argument("--names")
     parser.add_argument("--include-templates", action="store_true")
+    parser.add_argument("--policy-only", action="store_true")
     parser.add_argument("--text")
     parser.add_argument("--session", default="default")
     parser.add_argument("--choice", type=int)
@@ -116,6 +134,8 @@ def main():
     parser.add_argument("--workflow", default="hdhive_candidates")
     parser.add_argument("--keyword")
     parser.add_argument("--media-type", default="movie")
+    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--method", default="GET")
     parser.add_argument("--api-path")
     parser.add_argument("--json", dest="json_body")
@@ -137,13 +157,38 @@ def main():
     body = None
     query = {}
 
+    if args.command == "auto":
+        startup = request(base_url, api_key, "GET", assistant_path("startup"))
+        startup_data = data_payload(startup)
+        recommended = startup_data.get("recommended_request_templates") if isinstance(startup_data, dict) else {}
+        tool_args = recommended.get("tool_args") if isinstance(recommended, dict) else {}
+        recipe = (tool_args or {}).get("recipe") or args.recipe or "bootstrap"
+        templates = request(
+            base_url,
+            api_key,
+            "POST",
+            assistant_path("request_templates"),
+            body={
+                "recipe": recipe,
+                "include_templates": bool(args.include_templates and not args.policy_only),
+            },
+        )
+        output = {
+            "startup": compact(startup),
+            "request_templates": compact(templates),
+        }
+        print(json.dumps(output if not args.full else {"startup": startup, "request_templates": templates}, ensure_ascii=False, indent=2))
+        return 0
+
     if args.command == "startup":
         path = assistant_path("startup")
+    elif args.command == "selfcheck":
+        path = assistant_path("selfcheck")
     elif args.command == "templates":
         method = "POST"
         path = assistant_path("request_templates")
         body = {
-            "include_templates": bool(args.include_templates),
+            "include_templates": bool(args.include_templates and not args.policy_only),
         }
         if args.recipe:
             body["recipe"] = args.recipe
@@ -192,6 +237,19 @@ def main():
             "prefer_unexecuted": True,
             "compact": True,
         }
+    elif args.command == "maintain":
+        method = "POST" if args.execute else "GET"
+        path = assistant_path("maintain")
+        if args.execute:
+            body = {
+                "execute": True,
+                "limit": args.limit,
+            }
+        else:
+            query = {
+                "execute": "true",
+                "limit": str(args.limit),
+            }
     elif args.command == "raw":
         method = args.method
         path = args.api_path or assistant_path("startup")

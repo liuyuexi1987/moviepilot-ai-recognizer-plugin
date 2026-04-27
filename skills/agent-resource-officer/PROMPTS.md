@@ -3,6 +3,12 @@
 ## Startup
 
 ```text
+使用 agent-resource-officer skill，先调用 auto，自动读取 startup 和推荐 request_templates。
+```
+
+## Manual Startup
+
+```text
 使用 agent-resource-officer skill，先调用 startup，读取 recommended_request_templates，然后按推荐 recipe 获取低 token 请求模板。
 ```
 
@@ -34,4 +40,10 @@
 
 ```text
 使用 agent-resource-officer skill，继续当前会话，选择 1。如果返回 confirmation_message，先给我确认提示。
+```
+
+## Health Check
+
+```text
+使用 agent-resource-officer skill，执行 selfcheck，确认 AgentResourceOfficer 协议和请求模板都正常。
 ```

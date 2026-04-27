@@ -28,11 +28,15 @@ ARO_API_KEY=your_moviepilot_api_token
 ## 推荐入口
 
 ```bash
+python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
+python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py pick --choice 1
 ```
+
+`auto` 会先读取 `startup.recommended_request_templates`，再自动拉取推荐的低 token recipe。
 
 ## 说明
 
