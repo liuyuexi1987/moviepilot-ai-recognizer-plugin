@@ -28,10 +28,11 @@ bash scripts/pre-release-check.sh
 
 ## 4. 上传 ZIP
 
-Release 附件上传 `dist/` 下的全部 ZIP：
+Release 附件上传 `dist/` 下的全部 ZIP 和 `SHA256SUMS.txt`：
 
 ```bash
 ls -1 dist/*.zip
+cat dist/SHA256SUMS.txt
 ```
 
 不要上传历史旧包。`pre-release-check.sh` 会在打包前清理旧 ZIP。
@@ -44,6 +45,6 @@ ls -1 dist/*.zip
 gh run list --limit 3
 ```
 
-CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-plugin-zips-<commit>`，里面包含本次 `dist/*.zip`。
+CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-plugin-zips-<commit>`，里面包含本次 `dist/*.zip` 和 `SHA256SUMS.txt`。
 
 也可以在 GitHub 页面手动运行：Actions -> CI -> Run workflow。

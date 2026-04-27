@@ -252,10 +252,26 @@ echo "package_plugin_list_ok"
 for plugin_name in "${PACKAGE_PLUGINS[@]}"; do
   bash scripts/package-plugin.sh "$plugin_name" >/dev/null
 done
+python3 - <<'PY'
+from hashlib import sha256
+from pathlib import Path
+
+dist_dir = Path("dist")
+zip_files = sorted(dist_dir.glob("*.zip"))
+if not zip_files:
+    print("dist 目录没有生成 ZIP 文件")
+    raise SystemExit(1)
+lines = []
+for zip_file in zip_files:
+    lines.append(f"{sha256(zip_file.read_bytes()).hexdigest()}  {zip_file.name}")
+(dist_dir / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+print(f"sha256_manifest_ok files={len(zip_files)}")
+PY
 
 echo "[6/6] 检查关键文件..."
 test -f package.v2.json
 test -f package.json
+test -f dist/SHA256SUMS.txt
 test -f plugins/airecoginzerforwarder/__init__.py
 test -f plugins/airecoginzerforwarder/requirements.txt
 test -f plugins.v2/airecoginzerforwarder/__init__.py
