@@ -388,6 +388,13 @@ python3 scripts/aro_request.py decide --command-only --confirmed
 
 也就是说，既可以走自定义插件仓库，也可以按目录本地安装。
 
+发布和本地打包相关文档：
+
+- [插件安装说明](./docs/PLUGIN_INSTALL.md)
+- [GitHub 发布说明](./docs/GITHUB_PUBLISH.md)
+- [Release Checklist](./docs/RELEASE_CHECKLIST.md)
+- [ZIP 打包说明](./docs/PACKAGING.md)
+
 当前已经包含：
 
 - `plugins/hdhiveopenapi`
