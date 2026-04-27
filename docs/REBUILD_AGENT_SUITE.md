@@ -117,10 +117,10 @@
 - `FeishuCommandBridgeLong` 保持线上可运行，默认继续走 `legacy` 快路径
 - `FeishuCommandBridgeLong` 已支持切换到 `auto`，把智能入口委托给 `Agent资源官`
 - 运行环境已完成双链路验证：`legacy` 日常可用，`auto` 可接手统一资源工作流
-- `AIRecognizerEnhancer` 已进入 `0.1.10` 阶段，可直接复用 MoviePilot 当前 LLM 配置，在 `NameRecognize` 阶段做本地结构化兜底，并支持失败样本维护、样本洞察、精简摘要、直接转建议、批量建议、写入动作、样本出队、样本复查和批量复查；当识别词建议模型退化时会自动切到精确规则兜底
+- `AIRecognizerEnhancer` 已进入 `0.1.11` 阶段，可直接复用 MoviePilot 当前 LLM 配置，在 `NameRecognize` 阶段做本地结构化兜底，并支持失败样本维护、样本洞察、精简摘要、直接转建议、批量建议、写入动作、样本出队、样本复查和批量复查；当识别词建议模型退化时会自动切到精确规则兜底
 
 下一步重点：
 
 1. 继续把影巢签到、用户态、配额态能力评估是否并入 `Agent资源官`
 2. 继续打磨 `AIRecognizerEnhancer` 的提示词、失败样本洞察和识别词建议质量
-3. 在仓库文档和发布说明里逐步弱化旧链路，明确新主线入口
+3. 继续完善 `AgentResourceOfficer` Skill 与外部智能体的低 token、可恢复、可审计调用链路
