@@ -136,6 +136,17 @@ if failed:
     for item in failed:
         print(item)
     raise SystemExit(1)
+
+install_doc = Path("docs/PLUGIN_INSTALL.md").read_text(encoding="utf-8")
+missing_zip_names = [
+    f"{plugin_id}-{meta.get('version')}.zip"
+    for plugin_id, meta in pkg.items()
+    if f"{plugin_id}-{meta.get('version')}.zip" not in install_doc
+]
+if missing_zip_names:
+    print("docs/PLUGIN_INSTALL.md 缺少当前 ZIP 文件名:")
+    print("\n".join(missing_zip_names))
+    raise SystemExit(1)
 PY
 
 echo "[5/6] 打包本地安装 ZIP..."
