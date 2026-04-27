@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
+export PYTHONDONTWRITEBYTECODE=1
 
 EXPECTED_SKILLS=(
   agent-resource-officer

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist/skills"
 cd "$ROOT_DIR"
+export PYTHONDONTWRITEBYTECODE=1
 
 show_help() {
   cat <<'EOF'
