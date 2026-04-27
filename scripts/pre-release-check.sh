@@ -61,6 +61,8 @@ print(f"syntax_ok files={count}")
 PY
 python3 skills/agent-resource-officer/scripts/aro_request.py selftest >/dev/null
 echo "agent_resource_officer_skill_selftest_ok"
+bash skills/agent-resource-officer/install.sh --dry-run --target "$ROOT_DIR/.tmp-skill-install-check/agent-resource-officer" >/dev/null
+echo "agent_resource_officer_skill_install_dry_run_ok"
 python3 skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest >/dev/null
 echo "hdhive_skill_selftest_ok"
 
