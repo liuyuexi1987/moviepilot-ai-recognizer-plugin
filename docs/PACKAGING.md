@@ -59,6 +59,12 @@ bash scripts/package-plugin.sh FeishuCommandBridgeLong
 bash scripts/pre-release-check.sh
 ```
 
+如果改了 `package.json`，可以先同步派生清单：
+
+```bash
+bash scripts/sync-package-v2.sh
+```
+
 当前完整检查覆盖：
 
 - `AIRecoginzerForwarder`
