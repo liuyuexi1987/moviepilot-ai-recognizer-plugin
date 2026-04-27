@@ -30,12 +30,30 @@ done
 echo "Source: ${SCRIPT_DIR}"
 echo "Target: ${TARGET_DIR}"
 
+TARGET_DIR="${TARGET_DIR%/}"
+if [[ -z "${TARGET_DIR}" || "${TARGET_DIR}" == "/" || "${TARGET_DIR}" == "." || "${TARGET_DIR}" == "${HOME}" || "${TARGET_DIR}" == "${CODEX_HOME_DIR}" ]]; then
+  echo "Refusing unsafe target: ${TARGET_DIR}" >&2
+  exit 2
+fi
+
+if [[ -e "${TARGET_DIR}" && ! -d "${TARGET_DIR}" ]]; then
+  echo "Refusing non-directory target: ${TARGET_DIR}" >&2
+  exit 2
+fi
+
 if [[ "$DRY_RUN" == "1" ]]; then
   echo "Dry run: no files changed."
   exit 0
 fi
 
 mkdir -p "$(dirname "${TARGET_DIR}")"
+if [[ -d "${TARGET_DIR}" && ! -f "${TARGET_DIR}/SKILL.md" ]]; then
+  if [[ -n "$(find "${TARGET_DIR}" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+    echo "Refusing to overwrite non-skill directory: ${TARGET_DIR}" >&2
+    exit 2
+  fi
+fi
+
 rm -rf "${TARGET_DIR}"
 mkdir -p "${TARGET_DIR}"
 
