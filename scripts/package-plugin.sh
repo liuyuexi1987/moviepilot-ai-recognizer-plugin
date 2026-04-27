@@ -4,6 +4,27 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 
+show_help() {
+  cat <<'EOF'
+Usage:
+  bash scripts/package-plugin.sh [PluginName]
+  bash scripts/package-plugin.sh --list
+  bash scripts/package-plugin.sh --all
+  bash scripts/package-plugin.sh --help
+
+Options:
+  PluginName  Package one plugin. Matching is case-insensitive via package.json.
+  --list      List packageable plugin IDs and versions.
+  --all       Package all plugins listed in package.json.
+  --help      Show this help.
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  show_help
+  exit 0
+fi
+
 if [[ "${1:-}" == "--list" ]]; then
   ROOT_DIR="$ROOT_DIR" python3 - <<'PY'
 import json

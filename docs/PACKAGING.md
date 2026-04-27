@@ -19,6 +19,7 @@
 
 ```bash
 bash scripts/package-plugin.sh
+bash scripts/package-plugin.sh --help
 ```
 
 默认打包 `AIRecoginzerForwarder`。
