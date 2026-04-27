@@ -49,6 +49,25 @@ dist/
 
 然后在 MoviePilot 插件页面选择本地上传安装。
 
+## Skill 模板安装
+
+仓库同时提供两个公开 Skill 模板，给外部智能体调用 MoviePilot 资源工作流使用：
+
+```bash
+bash skills/agent-resource-officer/install.sh --dry-run
+bash skills/agent-resource-officer/install.sh
+
+bash skills/hdhive-search-unlock-to-115/install.sh --dry-run
+bash skills/hdhive-search-unlock-to-115/install.sh
+```
+
+安装后可先跑本地自测：
+
+```bash
+python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py selftest
+python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest
+```
+
 ## 推荐安装组合
 
 智能体 / 资源工作流主线：

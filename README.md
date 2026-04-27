@@ -165,10 +165,12 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 外部智能体优先从这几个 helper 命令开始：
 
 ```bash
-python3 scripts/aro_request.py readiness
-python3 scripts/aro_request.py decide --summary-only
-python3 scripts/aro_request.py decide --command-only
-python3 scripts/aro_request.py decide --command-only --confirmed
+bash skills/agent-resource-officer/install.sh --dry-run
+bash skills/agent-resource-officer/install.sh
+python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py readiness
+python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py decide --summary-only
+python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py decide --command-only
+python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py decide --command-only --confirmed
 ```
 
 其中 `readiness` 用来确认配置、本地 helper 和插件接口都正常；`decide --summary-only` 用来判断继续旧会话还是开始新流程；`--command-only` 只输出下一步 helper 命令，遇到需要确认的动作时，只有加 `--confirmed` 才会输出执行命令。
@@ -183,6 +185,15 @@ python3 scripts/aro_request.py decide --command-only --confirmed
   [skills/hdhive-search-unlock-to-115/PROMPTS.md](./skills/hdhive-search-unlock-to-115/PROMPTS.md)
 - 推荐搭配支持技能和工作流调度的智能体工作台使用，例如腾讯 WorkBuddy 或兼容 Codex Skill 工作流的客户端。
 - 如果你已经接入 MP 原生 Agent / MCP，更推荐直接调用 `AgentResourceOfficer` 的统一 API / Agent Tool，而不是让智能体自己拼影巢或夸克接口。
+
+快速安装和本地验证：
+
+```bash
+bash skills/hdhive-search-unlock-to-115/install.sh --dry-run
+bash skills/hdhive-search-unlock-to-115/install.sh
+python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py version
+python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest
+```
 
 ---
 
