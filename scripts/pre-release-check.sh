@@ -191,6 +191,37 @@ if failed:
 print("markdown_links_ok")
 PY
 
+echo "检查隐私尾巴..."
+python3 - <<'PY'
+from pathlib import Path
+
+forbidden = [
+    "/Users/" + "jans",
+    "Qq-" + "342236586",
+    "5c0200" + "b446ee9eb94d2912d4c8b7309c",
+    "Authorization: Bearer " + "eyJ",
+]
+failed = []
+for path in sorted(Path(".").rglob("*")):
+    if not path.is_file():
+        continue
+    if ".git" in path.parts or "dist" in path.parts or "__pycache__" in path.parts:
+        continue
+    if path.name.startswith("SESSION_HANDOFF_") or path.suffix in {".pyc", ".pyo"}:
+        continue
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        continue
+    for needle in forbidden:
+        if needle in text:
+            failed.append(f"{path}: contains forbidden literal {needle!r}")
+if failed:
+    print("\n".join(failed))
+    raise SystemExit(1)
+print("privacy_scan_ok")
+PY
+
 echo "[5/6] 打包本地安装 ZIP..."
 mkdir -p dist
 rm -f dist/*.zip
