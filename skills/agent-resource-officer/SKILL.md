@@ -41,6 +41,9 @@ Prefer the bundled helper:
 ```bash
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py auto
+python3 scripts/aro_request.py selfcheck
+python3 scripts/aro_request.py sessions
+python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py pick --choice 1
@@ -119,6 +122,24 @@ python3 scripts/aro_request.py pick --choice 11 --path /飞书
 python3 scripts/aro_request.py pick --action 详情
 python3 scripts/aro_request.py pick --action 下一页
 ```
+
+For session inspection and recovery:
+
+```bash
+python3 scripts/aro_request.py sessions
+python3 scripts/aro_request.py session --session default
+python3 scripts/aro_request.py recover
+python3 scripts/aro_request.py recover --execute
+python3 scripts/aro_request.py history --limit 10
+python3 scripts/aro_request.py plans --limit 10
+python3 scripts/aro_request.py plans --executed --include-actions --limit 5
+```
+
+Notes:
+
+- `sessions`, `history`, `plans`, and `recover` no longer force `session=default` when you do not pass `--session`.
+- Use `--session` or `--session-id` only when you want to narrow to one conversation.
+- Use `sessions --kind ...` or `sessions --has-pending-p115` when you want recovery-oriented filtering.
 
 ## Confirmation Rules
 

@@ -32,11 +32,29 @@ python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py selfcheck
+python3 scripts/aro_request.py sessions
+python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py pick --choice 1
 ```
 
 `auto` 会先读取 `startup.recommended_request_templates`，再自动拉取推荐的低 token recipe。
+
+## 恢复与排查
+
+```bash
+python3 scripts/aro_request.py sessions --limit 10
+python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
+python3 scripts/aro_request.py session --session default
+python3 scripts/aro_request.py recover
+python3 scripts/aro_request.py recover --execute
+python3 scripts/aro_request.py history --limit 10
+python3 scripts/aro_request.py plans --limit 10
+python3 scripts/aro_request.py plans --executed --include-actions --limit 5
+```
+
+- `sessions` / `history` / `plans` / `recover` 默认不再强制绑到 `default` 会话。
+- 只有显式传 `--session` 或 `--session-id` 时，才会收窄到单个会话。
 
 ## 说明
 

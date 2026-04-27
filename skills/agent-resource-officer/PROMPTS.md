@@ -47,3 +47,15 @@
 ```text
 使用 agent-resource-officer skill，执行 selfcheck，确认 AgentResourceOfficer 协议和请求模板都正常。
 ```
+
+## Recovery
+
+```text
+使用 agent-resource-officer skill，先调用 sessions 和 recover，告诉我当前最值得继续的会话；如果需要继续执行，先展示 confirmation_message。
+```
+
+## Plan Audit
+
+```text
+使用 agent-resource-officer skill，先看最近 plans 和 history，不要默认只看 default 会话；如果发现未执行计划，再告诉我是否值得继续。
+```

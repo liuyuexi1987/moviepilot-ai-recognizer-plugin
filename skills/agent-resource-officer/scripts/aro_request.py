@@ -117,6 +117,11 @@ def main():
             "workflow",
             "plan-execute",
             "maintain",
+            "recover",
+            "session",
+            "sessions",
+            "history",
+            "plans",
             "raw",
         ],
     )
@@ -127,7 +132,10 @@ def main():
     parser.add_argument("--include-templates", action="store_true")
     parser.add_argument("--policy-only", action="store_true")
     parser.add_argument("--text")
-    parser.add_argument("--session", default="default")
+    parser.add_argument("--session")
+    parser.add_argument("--session-id")
+    parser.add_argument("--kind")
+    parser.add_argument("--has-pending-p115", action="store_true")
     parser.add_argument("--choice", type=int)
     parser.add_argument("--action")
     parser.add_argument("--path", dest="target_path")
@@ -136,6 +144,10 @@ def main():
     parser.add_argument("--media-type", default="movie")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--limit", type=int, default=100)
+    parser.add_argument("--executed", action="store_true")
+    parser.add_argument("--include-actions", action="store_true")
+    parser.add_argument("--prefer-unexecuted", action="store_true")
+    parser.add_argument("--include-raw-results", action="store_true")
     parser.add_argument("--method", default="GET")
     parser.add_argument("--api-path")
     parser.add_argument("--json", dest="json_body")
@@ -199,18 +211,24 @@ def main():
         path = assistant_path("route")
         body = {
             "text": args.text or "",
-            "session": args.session,
             "compact": True,
         }
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
         if args.target_path:
             body["path"] = args.target_path
     elif args.command == "pick":
         method = "POST"
         path = assistant_path("pick")
         body = {
-            "session": args.session,
             "compact": True,
         }
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
         if args.choice is not None:
             body["choice"] = args.choice
         if args.action:
@@ -225,18 +243,24 @@ def main():
             "name": args.workflow,
             "keyword": args.keyword or "",
             "media_type": args.media_type,
-            "session": args.session,
             "dry_run": True,
             "compact": True,
         }
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
     elif args.command == "plan-execute":
         method = "POST"
         path = assistant_path("plan/execute")
         body = {
-            "session": args.session,
             "prefer_unexecuted": True,
             "compact": True,
         }
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
     elif args.command == "maintain":
         method = "POST" if args.execute else "GET"
         path = assistant_path("maintain")
@@ -250,6 +274,74 @@ def main():
                 "execute": "true",
                 "limit": str(args.limit),
             }
+    elif args.command == "recover":
+        method = "POST" if args.execute else "GET"
+        path = assistant_path("recover")
+        if args.execute:
+            body = {
+                "compact": True,
+            }
+            if args.session:
+                body["session"] = args.session
+            if args.session_id:
+                body["session_id"] = args.session_id
+            if args.prefer_unexecuted:
+                body["prefer_unexecuted"] = True
+            if args.include_raw_results:
+                body["include_raw_results"] = True
+        else:
+            query = {
+                "compact": "true",
+            }
+            if args.session:
+                query["session"] = args.session
+            if args.session_id:
+                query["session_id"] = args.session_id
+            if args.limit:
+                query["limit"] = str(args.limit)
+    elif args.command == "session":
+        path = assistant_path("session")
+        query = {
+            "compact": "true",
+        }
+        if args.session:
+            query["session"] = args.session
+        if args.session_id:
+            query["session_id"] = args.session_id
+    elif args.command == "sessions":
+        path = assistant_path("sessions")
+        query = {
+            "compact": "true",
+            "limit": str(args.limit),
+        }
+        if args.kind:
+            query["kind"] = args.kind
+        if args.has_pending_p115:
+            query["has_pending_p115"] = "true"
+    elif args.command == "history":
+        path = assistant_path("history")
+        query = {
+            "compact": "true",
+            "limit": str(args.limit),
+        }
+        if args.session:
+            query["session"] = args.session
+        if args.session_id:
+            query["session_id"] = args.session_id
+    elif args.command == "plans":
+        path = assistant_path("plans")
+        query = {
+            "compact": "true",
+            "limit": str(args.limit),
+        }
+        if args.session:
+            query["session"] = args.session
+        if args.session_id:
+            query["session_id"] = args.session_id
+        if args.executed:
+            query["executed"] = "true"
+        if args.include_actions:
+            query["include_actions"] = "true"
     elif args.command == "raw":
         method = args.method
         path = args.api_path or assistant_path("startup")
