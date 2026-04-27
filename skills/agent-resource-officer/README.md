@@ -10,6 +10,13 @@
 ~/.codex/skills/agent-resource-officer
 ```
 
+也可以直接运行安装脚本：
+
+```bash
+bash install.sh --dry-run
+bash install.sh
+```
+
 2. 配置本机连接信息：
 
 ```text

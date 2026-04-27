@@ -34,6 +34,13 @@ Environment overrides:
 
 Never print API keys, cookies, or tokens back to the user.
 
+Optional install helper:
+
+```bash
+bash install.sh --dry-run
+bash install.sh
+```
+
 ## Request Helper
 
 Prefer the bundled helper:
