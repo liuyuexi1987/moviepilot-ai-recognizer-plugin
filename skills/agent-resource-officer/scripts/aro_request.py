@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.3"
+HELPER_VERSION = "0.1.4"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -832,7 +832,6 @@ def main():
             }
         else:
             query = {
-                "execute": "true",
                 "limit": str(args.limit),
             }
     elif args.command == "recover":

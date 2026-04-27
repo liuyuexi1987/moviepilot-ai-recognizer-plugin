@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Bumped helper script to `0.1.4`.
+- `maintain` preview now sends a clean GET dry-run request without `execute=true`.
 - Bumped helper script to `0.1.3`.
 - Added `plans-clear` for exact saved-plan cleanup and bulk cleanup filters.
 - Bumped helper script to `0.1.2`.
