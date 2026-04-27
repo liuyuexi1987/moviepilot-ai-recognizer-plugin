@@ -106,6 +106,13 @@ DIST_DIR=/path/to/downloaded-artifact/skills bash scripts/verify-skill-dist.sh
 bash scripts/print-release-summary.sh
 ```
 
+如果本地运行测试后产生了 `__pycache__`、`.pyc` 或 `.DS_Store`，可以清理生成物：
+
+```bash
+bash scripts/clean-generated.sh
+bash scripts/clean-generated.sh --dist
+```
+
 如果要下载并校验最近一次成功 CI artifact：
 
 ```bash
