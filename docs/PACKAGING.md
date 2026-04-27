@@ -1,8 +1,8 @@
-# 插件 ZIP 打包说明
+# 插件和 Skill ZIP 打包说明
 
 ## 目标
 
-用于生成可在 MoviePilot 本地上传安装的插件 ZIP 包。
+用于生成可在 MoviePilot 本地上传安装的插件 ZIP 包，以及可复制到外部智能体环境的公开 Skill ZIP 包。
 
 打包内容会保留以下标准结构：
 
@@ -36,7 +36,7 @@ bash scripts/package-plugin.sh --list
 bash scripts/package-plugin.sh --all
 ```
 
-`--all` 和 `pre-release-check.sh` 会在打包前清理 `dist/*.zip`、`SHA256SUMS.txt` 和 `MANIFEST.json`，避免旧版本产物混在发布附件里。
+`--all` 和 `pre-release-check.sh` 会在打包前清理 `dist/*.zip`、`SHA256SUMS.txt` 和 `MANIFEST.json`；完整发布检查还会清理并重建 `dist/skills/`，避免旧版本产物混在发布附件里。
 
 `--all` 会在打包后自动生成 `SHA256SUMS.txt`、`MANIFEST.json` 并执行 `scripts/verify-dist.sh`。
 
@@ -70,6 +70,13 @@ bash scripts/sync-package-v2.sh
 `pre-release-check.sh` 也会自动运行这个同步脚本；如果 `package.v2.json` 因此发生变化，工作区检查会失败并提示先提交。
 
 完整检查会在 `dist/` 下额外生成 `SHA256SUMS.txt` 和 `MANIFEST.json`，用于核对每个 ZIP 的 SHA256，并给自动化脚本读取插件 ID、展示名、版本、文件名和大小。
+
+完整检查还会在 `dist/skills/` 下生成公开 Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`：
+
+```bash
+bash scripts/package-skills.sh
+bash scripts/verify-skill-dist.sh
+```
 
 如需只刷新当前 `dist/*.zip` 的校验清单和机器可读 manifest：
 
@@ -143,10 +150,12 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 - `docs/PLUGIN_INSTALL.md` 必须列出当前版本对应的 ZIP 文件名
 - `dist/SHA256SUMS.txt` 必须随 ZIP 一起生成
 - `dist/MANIFEST.json` 必须随 ZIP 一起生成
+- `dist/skills/` 必须生成公开 Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`
 - `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、插件元数据、基础目录结构和不应发布的生成文件
+- `scripts/verify-skill-dist.sh` 必须能验证 Skill ZIP SHA256、MANIFEST、基础目录结构和不应发布的生成文件
 - `scripts/verify-ci-artifact.sh` 必须能下载并校验 GitHub Actions artifact
 - `scripts/print-release-summary.sh` 必须能基于 `MANIFEST.json` 输出 Release Markdown 表格
-- `.github/workflows/ci.yml` 和 `draft-release.yml` 必须使用 artifact 上传步骤，并包含 ZIP、`SHA256SUMS.txt`、`MANIFEST.json`
+- `.github/workflows/ci.yml` 和 `draft-release.yml` 必须使用 artifact 上传步骤，并包含插件 ZIP、Skill ZIP、`SHA256SUMS.txt`、`MANIFEST.json`
 - `draft-release.yml` 必须保留手动触发、`dry_run` 输入和创建 Draft Release 所需的 `contents: write` 权限
 - Markdown 文档中的本地相对链接必须存在
 - 仓库文本中不能包含已知本机路径、历史密码、历史 API Key 或 Bearer JWT 片段
@@ -160,6 +169,7 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 
 ```text
 dist/
+dist/skills/
 ```
 
 文件名格式：

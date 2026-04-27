@@ -58,4 +58,15 @@ if [ -z "$artifact_dir" ]; then
 fi
 
 DIST_DIR="$artifact_dir" bash scripts/verify-dist.sh
+skill_artifact_dir=""
+if [ -d "$artifact_dir/skills" ]; then
+  skill_artifact_dir="$artifact_dir/skills"
+elif [ -d "$artifact_dir/dist/skills" ]; then
+  skill_artifact_dir="$artifact_dir/dist/skills"
+fi
+if [ -z "$skill_artifact_dir" ]; then
+  echo "CI run $RUN_ID artifact 下载后没有可校验的 Skill 发布产物目录。" >&2
+  exit 1
+fi
+DIST_DIR="$skill_artifact_dir" bash scripts/verify-skill-dist.sh
 echo "ci_artifact_verify_ok run=$RUN_ID"

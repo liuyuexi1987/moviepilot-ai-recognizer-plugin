@@ -54,6 +54,7 @@ if [ "$SKIP_CHECK" -eq 0 ]; then
   bash scripts/pre-release-check.sh
 else
   bash scripts/verify-dist.sh
+  bash scripts/verify-skill-dist.sh
 fi
 
 notes_file="$(mktemp)"
@@ -65,12 +66,25 @@ trap cleanup EXIT
 {
   echo "# $TAG"
   echo
-  echo "本次 Release 附件包含 MoviePilot 本地安装 ZIP、SHA256SUMS.txt 和 MANIFEST.json。"
+  echo "本次 Release 附件包含 MoviePilot 本地安装 ZIP、公开 Skill ZIP、SHA256SUMS.txt 和 MANIFEST.json。"
+  echo
+  echo "## MoviePilot 插件"
   echo
   bash scripts/print-release-summary.sh
+  echo
+  echo "## 公开 Skill 模板"
+  echo
+  bash scripts/print-skill-release-summary.sh
 } >"$notes_file"
 
-files=(dist/*.zip dist/SHA256SUMS.txt dist/MANIFEST.json)
+files=(
+  dist/*.zip
+  dist/SHA256SUMS.txt
+  dist/MANIFEST.json
+  dist/skills/*.zip
+  dist/skills/SHA256SUMS.txt
+  dist/skills/MANIFEST.json
+)
 for file_path in "${files[@]}"; do
   if [ ! -f "$file_path" ]; then
     echo "缺少发布附件: $file_path" >&2

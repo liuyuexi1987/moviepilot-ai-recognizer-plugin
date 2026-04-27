@@ -193,6 +193,9 @@ required_ci_fragments = [
     "dist/*.zip",
     "dist/SHA256SUMS.txt",
     "dist/MANIFEST.json",
+    "dist/skills/*.zip",
+    "dist/skills/SHA256SUMS.txt",
+    "dist/skills/MANIFEST.json",
     "if-no-files-found: error",
 ]
 draft_release_workflow = Path(".github/workflows/draft-release.yml").read_text(encoding="utf-8")
@@ -286,6 +289,7 @@ PY
 echo "[5/6] 打包本地安装 ZIP..."
 mkdir -p dist
 rm -f dist/*.zip dist/SHA256SUMS.txt dist/MANIFEST.json
+rm -rf dist/skills
 listed_plugins="$(bash scripts/package-plugin.sh --list | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//')"
 expected_plugins="${PACKAGE_PLUGINS[*]}"
 if [ "$listed_plugins" != "$expected_plugins" ]; then
@@ -296,7 +300,9 @@ if [ "$listed_plugins" != "$expected_plugins" ]; then
 fi
 echo "package_plugin_list_ok"
 bash scripts/package-plugin.sh --all
+bash scripts/package-skills.sh
 bash scripts/print-release-summary.sh >/dev/null
+bash scripts/print-skill-release-summary.sh >/dev/null
 bash scripts/create-draft-release.sh v0.0.0-dry-run --dry-run --skip-check >/dev/null
 
 echo "[6/6] 检查关键文件..."
@@ -304,6 +310,8 @@ test -f package.v2.json
 test -f package.json
 test -f dist/SHA256SUMS.txt
 test -f dist/MANIFEST.json
+test -f dist/skills/SHA256SUMS.txt
+test -f dist/skills/MANIFEST.json
 test -f plugins/airecoginzerforwarder/__init__.py
 test -f plugins/airecoginzerforwarder/requirements.txt
 test -f plugins.v2/airecoginzerforwarder/__init__.py

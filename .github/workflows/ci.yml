@@ -28,5 +28,8 @@ jobs:
             dist/*.zip
             dist/SHA256SUMS.txt
             dist/MANIFEST.json
+            dist/skills/*.zip
+            dist/skills/SHA256SUMS.txt
+            dist/skills/MANIFEST.json
           if-no-files-found: error
           retention-days: 14
