@@ -80,6 +80,7 @@ bash scripts/sync-package-v2.sh
 
 完整检查还会校验：
 
+- 仓库内发布脚本和 Skill shell helper 必须能通过 shell 语法检查
 - 插件代码和仓库内 Skill helper 脚本必须能通过 Python 语法检查
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill helper 的本地 `selftest` 必须通过
 - `AgentResourceOfficer` Skill 安装脚本的 `--dry-run` 必须通过

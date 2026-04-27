@@ -31,6 +31,10 @@ if [ -n "$(release_git_status)" ]; then
 fi
 
 echo "[3/6] 检查插件语法..."
+while IFS= read -r shell_file; do
+  bash -n "$shell_file"
+done < <(find scripts skills -name '*.sh' -type f | sort)
+echo "shell_syntax_ok"
 python3 - <<'PY'
 from pathlib import Path
 
