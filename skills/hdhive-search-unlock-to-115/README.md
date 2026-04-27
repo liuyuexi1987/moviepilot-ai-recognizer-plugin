@@ -2,11 +2,20 @@
 
 这是放在仓库里的公开版 Skill 模板，目标是让别人可以快速复制到自己的 Codex 环境使用。
 
-当前 helper 版本：`0.1.0`
+当前 helper 版本：`0.1.1`
 
 ## 使用方式
 
 1. 把整个目录复制到自己的 `~/.codex/skills/hdhive-search-unlock-to-115`
+
+也可以直接运行安装脚本：
+
+```bash
+bash install.sh --dry-run
+bash install.sh
+bash install.sh --target /path/to/skills/hdhive-search-unlock-to-115
+```
+
 2. 根据自己的环境设置：
    - `MP_APP_ENV`
    - `MP_BASE_URL`

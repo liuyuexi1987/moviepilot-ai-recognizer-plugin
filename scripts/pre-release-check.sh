@@ -70,6 +70,8 @@ bash skills/agent-resource-officer/install.sh --dry-run --target "$ROOT_DIR/.tmp
 echo "agent_resource_officer_skill_install_dry_run_ok"
 python3 skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest >/dev/null
 echo "hdhive_skill_selftest_ok"
+bash skills/hdhive-search-unlock-to-115/install.sh --dry-run --target "$ROOT_DIR/.tmp-skill-install-check/hdhive-search-unlock-to-115" >/dev/null
+echo "hdhive_skill_install_dry_run_ok"
 python3 - <<'PY'
 import ast
 from pathlib import Path

@@ -13,7 +13,7 @@ import search_hdhive
 import unlock_hdhive
 
 
-HELPER_VERSION = "0.1.0"
+HELPER_VERSION = "0.1.1"
 
 
 def format_search_for_agent(payload: Dict[str, Any]) -> str:
