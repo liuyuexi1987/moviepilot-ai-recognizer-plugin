@@ -12,19 +12,37 @@ sync_plugin() {
 
   mkdir -p "$target_dir_v2" "$target_dir_v1"
 
-  cp "$src_dir/__init__.py" "$target_dir_v2/__init__.py"
-  cp "$src_dir/__init__.py" "$target_dir_v1/__init__.py"
-  if [[ -f "$src_dir/requirements.txt" ]]; then
-    cp "$src_dir/requirements.txt" "$target_dir_v1/requirements.txt"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete --delete-excluded --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
+      --exclude '__pycache__' \
+      --exclude '*.pyc' \
+      --exclude '*.pyo' \
+      --exclude '.DS_Store' \
+      "$src_dir/" "$target_dir_v2/"
+    rsync -a --delete --delete-excluded --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
+      --exclude '__pycache__' \
+      --exclude '*.pyc' \
+      --exclude '*.pyo' \
+      --exclude '.DS_Store' \
+      "$src_dir/" "$target_dir_v1/"
+  else
+    find "$target_dir_v2" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    find "$target_dir_v1" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    cp -R "$src_dir/." "$target_dir_v2/"
+    cp -R "$src_dir/." "$target_dir_v1/"
+    find "$target_dir_v2" "$target_dir_v1" -name '__pycache__' -type d -prune -exec rm -rf {} +
+    find "$target_dir_v2" "$target_dir_v1" \( -name '*.pyc' -o -name '*.pyo' -o -name '.DS_Store' \) -delete
   fi
+  find "$target_dir_v2" "$target_dir_v1" -type d -exec chmod 755 {} +
+  find "$target_dir_v2" "$target_dir_v1" -type f -exec chmod 644 {} +
 
-  echo "$target_dir_v2/__init__.py"
-  echo "$target_dir_v1/__init__.py"
-  if [[ -f "$src_dir/requirements.txt" ]]; then
-    echo "$target_dir_v1/requirements.txt"
-  fi
+  echo "$target_dir_v2"
+  echo "$target_dir_v1"
 }
 
 echo "已同步官方插件仓库目录："
 sync_plugin "$ROOT_DIR/AIRecoginzerForwarder" "airecoginzerforwarder"
+sync_plugin "$ROOT_DIR/AIRecognizerEnhancer" "airecognizerenhancer"
+sync_plugin "$ROOT_DIR/AgentResourceOfficer" "agentresourceofficer"
 sync_plugin "$ROOT_DIR/FeishuCommandBridgeLong" "feishucommandbridgelong"
+sync_plugin "$ROOT_DIR/QuarkShareSaver" "quarksharesaver"
