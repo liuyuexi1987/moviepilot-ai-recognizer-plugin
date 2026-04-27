@@ -44,4 +44,6 @@ ls -1 dist/*.zip
 gh run list --limit 3
 ```
 
+CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-plugin-zips-<commit>`，里面包含本次 `dist/*.zip`。
+
 也可以在 GitHub 页面手动运行：Actions -> CI -> Run workflow。
