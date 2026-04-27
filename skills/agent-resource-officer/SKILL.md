@@ -72,6 +72,11 @@ python3 scripts/aro_request.py doctor --limit 5
 
 Use it when an external agent needs one compact bootstrap/health/recovery snapshot before deciding whether to start a new task or continue an old one.
 
+It also returns local helper suggestions:
+
+- `helper_commands.inspect_helper_command`
+- `helper_commands.execute_helper_command`
+
 Manual path:
 
 1. Call startup:

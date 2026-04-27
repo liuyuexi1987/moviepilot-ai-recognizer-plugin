@@ -107,6 +107,67 @@ def print_json(data):
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def shell_quote(value):
+    text = str(value or "")
+    return "'" + text.replace("'", "'\"'\"'") + "'"
+
+
+def recovery_helper_commands(recovery):
+    recovery = recovery if isinstance(recovery, dict) else {}
+    template = recovery.get("action_template") if isinstance(recovery.get("action_template"), dict) else {}
+    body = template.get("body") if isinstance(template.get("body"), dict) else {}
+    action_body = template.get("action_body") if isinstance(template.get("action_body"), dict) else {}
+    name = str(template.get("name") or action_body.get("name") or "").strip()
+    session = str(body.get("session") or action_body.get("session") or "").strip()
+    session_id = str(body.get("session_id") or action_body.get("session_id") or "").strip()
+    target_path = str(body.get("path") or action_body.get("path") or "").strip()
+
+    session_part = f" --session {shell_quote(session)}" if session else ""
+    session_id_part = f" --session-id {shell_quote(session_id)}" if session_id else ""
+    path_part = f" --path {shell_quote(target_path)}" if target_path else ""
+
+    inspect = None
+    if session or session_id:
+        inspect = (
+            "python3 scripts/aro_request.py session"
+            f"{session_part}{session_id_part}"
+        )
+
+    execute = None
+    if name == "pick_hdhive_candidate":
+        execute = (
+            "python3 scripts/aro_request.py pick"
+            f"{session_part}{session_id_part}{path_part} --choice <编号>"
+        )
+    elif name == "pick_hdhive_resource":
+        execute = (
+            "python3 scripts/aro_request.py pick"
+            f"{session_part}{session_id_part}{path_part} --choice <资源编号>"
+        )
+    elif name == "pick_pansou_result":
+        execute = (
+            "python3 scripts/aro_request.py pick"
+            f"{session_part}{session_id_part}{path_part} --choice <编号>"
+        )
+    elif name == "resume_pending_115":
+        execute = (
+            "python3 scripts/aro_request.py recover"
+            f"{session_part}{session_id_part} --execute"
+        )
+    elif name in {"execute_plan", "execute_latest_plan", "execute_session_latest_plan"}:
+        execute = (
+            "python3 scripts/aro_request.py plan-execute"
+            f"{session_part}{session_id_part}"
+        )
+    elif name == "inspect_session_state":
+        execute = inspect
+
+    return {
+        "inspect_helper_command": inspect or "",
+        "execute_helper_command": execute or "",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="AgentResourceOfficer request helper")
     parser.add_argument(
@@ -233,12 +294,15 @@ def main():
             "sessions": compact(sessions),
             "recover": compact(recover),
         }
+        helper_commands = recovery_helper_commands(((output.get("recover") or {}).get("recovery") or {}))
+        output["helper_commands"] = helper_commands
         if not args.full:
             output["summary"] = {
                 "startup_ok": bool((output.get("startup") or {}).get("success")),
                 "selfcheck_ok": bool((output.get("selfcheck") or {}).get("ok")),
                 "recovery_can_resume": bool(((output.get("recover") or {}).get("recovery") or {}).get("can_resume")),
                 "recommended_action": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_action") or "",
+                **helper_commands,
             }
         print_json(output if not args.full else {
             "startup": startup,

@@ -43,6 +43,11 @@ python3 scripts/aro_request.py pick --choice 1
 
 `doctor` 是只读诊断入口，会一次返回 `startup + selfcheck + sessions + recover` 的压缩结果，适合外部智能体在真正执行前做开场检查。
 
+它还会直接给出：
+
+- `helper_commands.inspect_helper_command`
+- `helper_commands.execute_helper_command`
+
 ## 恢复与排查
 
 ```bash
