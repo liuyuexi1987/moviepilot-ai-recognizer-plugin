@@ -139,6 +139,8 @@ if failed:
 PY
 
 echo "[5/6] 打包本地安装 ZIP..."
+mkdir -p dist
+rm -f dist/*.zip
 listed_plugins="$(bash scripts/package-plugin.sh --list | awk '{print $1}' | tr '\n' ' ' | sed 's/ $//')"
 expected_plugins="${PACKAGE_PLUGINS[*]}"
 if [ "$listed_plugins" != "$expected_plugins" ]; then

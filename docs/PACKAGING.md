@@ -36,6 +36,8 @@ bash scripts/package-plugin.sh --list
 bash scripts/package-plugin.sh --all
 ```
 
+`--all` 和 `pre-release-check.sh` 会在打包前清理 `dist/*.zip`，避免旧版本 ZIP 混在发布附件里。
+
 如需打包其他插件，例如 `AgentResourceOfficer` 或飞书桥接插件：
 
 ```bash
