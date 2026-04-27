@@ -78,6 +78,12 @@
 使用 agent-resource-officer skill，先运行 selftest，验证本地 helper 的命令生成逻辑。
 ```
 
+## Config Check
+
+```text
+使用 agent-resource-officer skill，运行 config-check，确认连接配置存在，但不要输出 API Key。
+```
+
 ## Doctor
 
 ```text

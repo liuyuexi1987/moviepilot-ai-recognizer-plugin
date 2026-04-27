@@ -7,7 +7,8 @@ import urllib.parse
 import urllib.request
 
 
-CONFIG_PATH = os.path.expanduser("~/.config/agent-resource-officer/config")
+CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
+CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 
 
 def read_config():
@@ -32,6 +33,15 @@ def config_value(config, *names):
         value = os.environ.get(name) or config.get(name)
         if value:
             return value.strip()
+    return ""
+
+
+def config_source(config, *names):
+    for name in names:
+        if os.environ.get(name):
+            return f"env:{name}"
+        if config.get(name):
+            return f"config:{name}"
     return ""
 
 
@@ -318,6 +328,7 @@ def main():
         "command",
         choices=[
             "auto",
+            "config-check",
             "decide",
             "doctor",
             "selftest",
@@ -375,6 +386,18 @@ def main():
     config = read_config()
     base_url = args.base_url or config_value(config, "ARO_BASE_URL", "MP_BASE_URL", "MOVIEPILOT_URL")
     api_key = args.api_key or config_value(config, "ARO_API_KEY", "MP_API_TOKEN")
+    if args.command == "config-check":
+        result = {
+            "success": bool(base_url and api_key),
+            "config_path": CONFIG_PATH_DISPLAY,
+            "config_file_exists": os.path.exists(CONFIG_PATH),
+            "base_url_set": bool(base_url),
+            "base_url_source": "arg:--base-url" if args.base_url else config_source(config, "ARO_BASE_URL", "MP_BASE_URL", "MOVIEPILOT_URL"),
+            "api_key_set": bool(api_key),
+            "api_key_source": "arg:--api-key" if args.api_key else config_source(config, "ARO_API_KEY", "MP_API_TOKEN"),
+        }
+        print_json(result)
+        return 0 if result["success"] else 2
     if not base_url:
         print("ARO_BASE_URL / MP_BASE_URL / MOVIEPILOT_URL is not set", file=sys.stderr)
         return 2
