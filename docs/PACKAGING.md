@@ -32,6 +32,8 @@ bash scripts/package-plugin.sh FeishuCommandBridgeLong
 
 脚本会自动先同步一次官方仓库布局，再生成 ZIP。
 
+插件名会优先按 `package.json` 做大小写不敏感匹配。例如 `hdhiveopenapi` 会被规范为 `HdhiveOpenApi`，生成的 ZIP 根目录也会保持标准插件 ID。
+
 如果插件代码目录来自 `plugins/` 或 `plugins.v2/`，但说明文档保留在仓库顶层同名目录下，打包脚本会自动把顶层 `README.md` 补进 ZIP。
 
 发布前完整检查会一次打包当前仓库清单里的可本地安装插件：
