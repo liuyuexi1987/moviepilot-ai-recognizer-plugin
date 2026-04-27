@@ -44,6 +44,7 @@ python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py auto --summary-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --limit 5 --summary-only
+python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
 python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
@@ -90,6 +91,7 @@ If token budget is tight, prefer:
 
 ```bash
 python3 scripts/aro_request.py doctor --summary-only
+python3 scripts/aro_request.py recover --summary-only
 ```
 
 Manual path:

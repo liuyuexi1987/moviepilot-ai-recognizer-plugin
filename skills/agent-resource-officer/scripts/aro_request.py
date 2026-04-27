@@ -499,6 +499,21 @@ def main():
         body = load_json_arg(args.json_body) if args.json_body else None
 
     result = request(base_url, api_key, method, path, body=body, query=query)
+    if args.command == "recover" and args.summary_only and not args.full:
+        output = compact(result)
+        recovery = ((output or {}).get("recovery") or {}) if isinstance(output, dict) else {}
+        helper_commands = recovery_helper_commands(recovery)
+        summary = {
+            "success": bool((output or {}).get("success")),
+            "can_resume": bool(recovery.get("can_resume")),
+            "mode": recovery.get("mode") or "",
+            "reason": recovery.get("reason") or "",
+            "recommended_action": recovery.get("recommended_action") or "",
+            "recommended_tool": recovery.get("recommended_tool") or "",
+            **helper_commands,
+        }
+        print_json(summary)
+        return 0
     output = result if args.full else compact(result)
     print_json(output)
     return 0

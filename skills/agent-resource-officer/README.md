@@ -32,6 +32,7 @@ python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py auto --summary-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --summary-only
+python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py selfcheck
@@ -55,6 +56,7 @@ python3 scripts/aro_request.py auto --summary-only
 
 ```bash
 python3 scripts/aro_request.py doctor --summary-only
+python3 scripts/aro_request.py recover --summary-only
 ```
 
 它还会直接给出：

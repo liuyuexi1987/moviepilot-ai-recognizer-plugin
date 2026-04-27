@@ -72,6 +72,12 @@
 使用 agent-resource-officer skill，先调用 sessions 和 recover，告诉我当前最值得继续的会话；如果需要继续执行，先展示 confirmation_message。
 ```
 
+## Low Token Recovery
+
+```text
+使用 agent-resource-officer skill，先调用 recover --summary-only，只返回恢复决策摘要和下一步命令建议。
+```
+
 ## Plan Audit
 
 ```text
