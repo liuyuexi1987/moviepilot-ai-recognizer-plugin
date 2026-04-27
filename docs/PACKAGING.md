@@ -69,6 +69,12 @@ bash scripts/sync-package-v2.sh
 
 完整检查会在 `dist/` 下额外生成 `SHA256SUMS.txt`，用于核对每个 ZIP 的 SHA256。
 
+如果只想校验已经生成或从 CI artifact 下载下来的 `dist/` 目录：
+
+```bash
+bash scripts/verify-dist.sh
+```
+
 当前完整检查覆盖：
 
 - `AIRecoginzerForwarder`
@@ -95,6 +101,7 @@ bash scripts/sync-package-v2.sh
 - 仓库首页 `README.md` 必须列出 `package.json` 中每个插件的 ID、展示名和当前版本
 - `docs/PLUGIN_INSTALL.md` 必须列出当前版本对应的 ZIP 文件名
 - `dist/SHA256SUMS.txt` 必须随 ZIP 一起生成
+- `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、基础目录结构和不应发布的生成文件
 - Markdown 文档中的本地相对链接必须存在
 - 仓库文本中不能包含已知本机路径、历史密码、历史 API Key 或 Bearer JWT 片段
 - 每个 ZIP 必须包含 `<PluginName>/__init__.py`

@@ -33,6 +33,7 @@ Release 附件上传 `dist/` 下的全部 ZIP 和 `SHA256SUMS.txt`：
 ```bash
 ls -1 dist/*.zip
 cat dist/SHA256SUMS.txt
+bash scripts/verify-dist.sh
 ```
 
 不要上传历史旧包。`pre-release-check.sh` 会在打包前清理旧 ZIP。

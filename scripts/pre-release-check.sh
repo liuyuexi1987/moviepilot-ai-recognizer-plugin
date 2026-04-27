@@ -267,6 +267,7 @@ for zip_file in zip_files:
 (dist_dir / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"sha256_manifest_ok files={len(zip_files)}")
 PY
+bash scripts/verify-dist.sh
 
 echo "[6/6] 检查关键文件..."
 test -f package.v2.json
