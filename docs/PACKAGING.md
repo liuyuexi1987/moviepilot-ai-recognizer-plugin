@@ -79,6 +79,7 @@ bash scripts/pre-release-check.sh
 - `package-plugin.sh --list` 输出必须和发布插件清单一致
 - `package.json` 插件市场展示字段和图标文件必须存在
 - `package.json` 中每个插件必须标记 `v2: true`
+- `package.json` 当前版本必须出现在对应插件的 `history` 中
 - `package.json` 中每个插件都必须能在根目录、`plugins/` 或 `plugins.v2/` 找到 `__init__.py`
 - `docs/PLUGIN_INSTALL.md` 必须列出当前版本对应的 ZIP 文件名
 - Markdown 文档中的本地相对链接必须存在

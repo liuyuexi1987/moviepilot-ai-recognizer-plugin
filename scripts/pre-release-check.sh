@@ -106,6 +106,10 @@ for plugin_id, meta in pkg.items():
     if meta.get("v2") is not True:
         failed.append((plugin_id, "package.json", {"invalid_v2": meta.get("v2")}))
         continue
+    history = meta.get("history") if isinstance(meta.get("history"), dict) else {}
+    if str(meta.get("version")) not in history:
+        failed.append((plugin_id, "package.json", {"missing_history_for_version": meta.get("version")}))
+        continue
     icon_file = Path("icons") / str(meta.get("icon"))
     if not icon_file.exists():
         failed.append((plugin_id, "package.json", {"missing_icon": str(icon_file)}))
