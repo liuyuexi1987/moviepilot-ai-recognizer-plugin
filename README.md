@@ -144,6 +144,15 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 
 ## 智能体 Skill 模板
 
+如果你是为了让外部智能体直接控制 `AgentResourceOfficer` 这条新主线，优先看这里：
+
+- AgentResourceOfficer Skill 模板：
+  [skills/agent-resource-officer/README.md](./skills/agent-resource-officer/README.md)
+- Skill 主说明：
+  [skills/agent-resource-officer/SKILL.md](./skills/agent-resource-officer/SKILL.md)
+- 推荐提示词：
+  [skills/agent-resource-officer/PROMPTS.md](./skills/agent-resource-officer/PROMPTS.md)
+
 如果你是为了“把影巢搜索 -> 选择 -> 解锁 -> 115 落地”这条链路交给 AI 智能体，直接看这里：
 
 - 公开版 Skill 模板：
