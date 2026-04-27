@@ -57,15 +57,17 @@ else
 fi
 
 notes_file="$(mktemp)"
+asset_stage_dir="$(mktemp -d)"
 cleanup() {
   rm -f "$notes_file"
+  rm -rf "$asset_stage_dir"
 }
 trap cleanup EXIT
 
 {
   echo "# $TAG"
   echo
-  echo "本次 Release 附件包含 MoviePilot 本地安装 ZIP、公开 Skill ZIP、SHA256SUMS.txt 和 MANIFEST.json。"
+  echo "本次 Release 附件包含 MoviePilot 本地安装 ZIP、公开 Skill ZIP、PLUGIN/SKILL SHA256SUMS 和 MANIFEST。"
   echo
   echo "## MoviePilot 插件"
   echo
@@ -76,14 +78,14 @@ trap cleanup EXIT
   bash scripts/print-skill-release-summary.sh
 } >"$notes_file"
 
-files=(
-  dist/*.zip
-  dist/SHA256SUMS.txt
-  dist/MANIFEST.json
-  dist/skills/*.zip
-  dist/skills/SHA256SUMS.txt
-  dist/skills/MANIFEST.json
-)
+cp dist/*.zip "$asset_stage_dir/"
+cp dist/SHA256SUMS.txt "$asset_stage_dir/PLUGIN_SHA256SUMS.txt"
+cp dist/MANIFEST.json "$asset_stage_dir/PLUGIN_MANIFEST.json"
+cp dist/skills/*.zip "$asset_stage_dir/"
+cp dist/skills/SHA256SUMS.txt "$asset_stage_dir/SKILL_SHA256SUMS.txt"
+cp dist/skills/MANIFEST.json "$asset_stage_dir/SKILL_MANIFEST.json"
+
+files=("$asset_stage_dir"/*)
 for file_path in "${files[@]}"; do
   if [ ! -f "$file_path" ]; then
     echo "缺少发布附件: $file_path" >&2

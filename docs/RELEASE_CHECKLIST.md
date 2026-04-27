@@ -36,7 +36,14 @@ bash scripts/pre-release-check.sh
 
 ## 4. 上传 ZIP
 
-Release 附件上传 `dist/` 下的插件 ZIP、`dist/skills/` 下的 Skill ZIP，以及对应的 `SHA256SUMS.txt` 和 `MANIFEST.json`：
+Release 附件上传 `dist/` 下的插件 ZIP、`dist/skills/` 下的 Skill ZIP。创建 Draft Release 时，脚本会把校验文件改名为唯一附件名，避免 GitHub Release 附件重名：
+
+- `PLUGIN_SHA256SUMS.txt`
+- `PLUGIN_MANIFEST.json`
+- `SKILL_SHA256SUMS.txt`
+- `SKILL_MANIFEST.json`
+
+本地核对命令：
 
 ```bash
 ls -1 dist/*.zip
@@ -62,7 +69,7 @@ bash scripts/print-skill-release-summary.sh
 gh run list --limit 3
 ```
 
-CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-release-assets-<commit>`，里面包含本次插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`。
+CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-release-assets-<commit>`，里面包含本次插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`。Draft Release 附件中的校验文件会使用 `PLUGIN_` / `SKILL_` 前缀避免重名。
 
 如需在本地下载并校验最近一次成功 CI artifact：
 
