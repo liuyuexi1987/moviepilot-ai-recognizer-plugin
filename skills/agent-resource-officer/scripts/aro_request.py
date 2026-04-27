@@ -168,6 +168,15 @@ def recovery_helper_commands(recovery):
     }
 
 
+def recovery_can_resume(recovery, helper_commands=None):
+    recovery = recovery if isinstance(recovery, dict) else {}
+    helper_commands = helper_commands if isinstance(helper_commands, dict) else recovery_helper_commands(recovery)
+    mode = str(recovery.get("mode") or "").strip()
+    if mode == "start_new":
+        return False
+    return bool(recovery.get("can_resume")) and bool(helper_commands.get("execute_helper_command"))
+
+
 def request_templates_summary(data):
     payload = data_payload(data)
     detail = payload.get("recommended_recipe_detail") if isinstance(payload, dict) else {}
@@ -325,7 +334,7 @@ def main():
         summary = {
             "startup_ok": bool((output.get("startup") or {}).get("success")),
             "selfcheck_ok": bool((output.get("selfcheck") or {}).get("ok")),
-            "recovery_can_resume": bool(((output.get("recover") or {}).get("recovery") or {}).get("can_resume")),
+            "recovery_can_resume": recovery_can_resume(((output.get("recover") or {}).get("recovery") or {}), helper_commands),
             "recommended_action": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_action") or "",
             "recommended_tool": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_tool") or "",
             **helper_commands,
@@ -361,8 +370,8 @@ def main():
         startup_compact = compact(startup)
         recover_compact = compact(recover)
         recover_data = ((recover_compact or {}).get("recovery") or {}) if isinstance(recover_compact, dict) else {}
-        if recover_data.get("can_resume"):
-            helper_commands = recovery_helper_commands(recover_data)
+        helper_commands = recovery_helper_commands(recover_data)
+        if recovery_can_resume(recover_data, helper_commands):
             summary = {
                 "decision": "continue_session",
                 "startup_ok": bool((startup_compact or {}).get("success")),
@@ -390,7 +399,8 @@ def main():
         startup_data = data_payload(startup)
         recommended = startup_data.get("recommended_request_templates") if isinstance(startup_data, dict) else {}
         tool_args = recommended.get("tool_args") if isinstance(recommended, dict) else {}
-        recipe = (tool_args or {}).get("recipe") or args.recipe or "bootstrap"
+        scoped_session = bool(args.session or args.session_id)
+        recipe = args.recipe or ("bootstrap" if scoped_session else ((tool_args or {}).get("recipe") or "bootstrap"))
         templates = request(
             base_url,
             api_key,
@@ -406,8 +416,14 @@ def main():
             "decision": "start_recipe",
             "startup_ok": bool((startup_compact or {}).get("success")),
             "can_resume": False,
-            "recommended_recipe_request": (recommended or {}).get("recipe") or recipe,
-            "recommended_recipe_reason": (recommended or {}).get("reason") or "",
+            "recommended_recipe_request": recipe,
+            "recommended_recipe_reason": (
+                f"使用指定 recipe：{args.recipe}。"
+                if args.recipe
+                else "指定会话没有可恢复状态，使用 bootstrap。"
+                if scoped_session
+                else ((recommended or {}).get("reason") or "")
+            ),
             **template_summary,
         }
         if args.summary_only and not args.full:
@@ -588,7 +604,7 @@ def main():
         helper_commands = recovery_helper_commands(recovery)
         summary = {
             "success": bool((output or {}).get("success")),
-            "can_resume": bool(recovery.get("can_resume")),
+            "can_resume": recovery_can_resume(recovery, helper_commands),
             "mode": recovery.get("mode") or "",
             "reason": recovery.get("reason") or "",
             "recommended_action": recovery.get("recommended_action") or "",
