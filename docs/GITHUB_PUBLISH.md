@@ -9,16 +9,32 @@ MoviePilot-Plugins
 ## 推荐描述
 
 ```text
-MoviePilot AI recognition fallback plugin for the split v2 gateway architecture
+Personal MoviePilot plugin suite for agent-driven resource workflows, AI recognition fallback, Feishu control, HDHive, Quark and media refresh helpers
 ```
 
-## 首发建议
+## 发布建议
 
-- 首个 tag 使用：
-  - `v2.0.0-alpha.1`
 - README 首页保持中文
 - GitHub 仓库描述使用简短英文
-- 与网关仓库版本号保持同节奏推进
 - 发布前执行一次：
-  - `bash scripts/sync-repo-layout.sh`
-  - `bash scripts/package-plugin.sh`
+  - `bash scripts/pre-release-check.sh`
+- Release 附件可上传 `dist/` 下生成的全部 ZIP
+
+## 当前 ZIP 覆盖
+
+`pre-release-check.sh` 会生成当前清单里的 8 个本地安装包：
+
+- `AIRecoginzerForwarder`
+- `AIRecognizerEnhancer`
+- `AgentResourceOfficer`
+- `FeishuCommandBridgeLong`
+- `HDHiveDailySign`
+- `HdhiveOpenApi`
+- `QuarkShareSaver`
+- `ZspaceMediaFreshMix`
+
+## 历史说明
+
+早期 `v2.0.0-alpha.1` 是旧 AI Gateway 拆分阶段的首发说明，已移到历史文档：
+
+- [RELEASE_v2.0.0-alpha.1.md](./RELEASE_v2.0.0-alpha.1.md)

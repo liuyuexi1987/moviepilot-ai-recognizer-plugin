@@ -1,120 +1,77 @@
 # 插件安装说明
 
-这个仓库只包含 MoviePilot 插件本体，不包含 Gateway 镜像。
+这个仓库是 MoviePilot 自定义插件仓库，当前同时提供资源工作流、飞书桥接、AI 识别增强、影巢、夸克和极影视刷新等插件。
 
-使用顺序建议：
+推荐优先使用 MoviePilot 自定义插件仓库安装；只有需要离线安装或调试单插件时，再使用本地 ZIP。
 
-1. 先启动 Gateway
-2. 再安装插件
-3. 最后在插件里填写 Webhook 地址
+## 方式 1：插件仓库安装
 
----
-
-## 第一步：先启动 Gateway
-
-推荐配套镜像：
+在 MoviePilot 中添加本仓库作为自定义插件仓库：
 
 ```text
-liuyuexi/moviepilot-ai-recognizer-gateway:2.0.0-alpha.1
+https://github.com/liuyuexi1987/MoviePilot-Plugins
 ```
 
-### 方案 1：direct_llm
+添加后在插件市场安装需要的插件。
 
-适合：
+## 方式 2：本地 ZIP 安装
 
-- 直接接千问 / OpenAI 兼容接口
-- 不想单独部署 OpenClaw
-
-直接使用：
-
-- [docker-compose.direct-llm.yml](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.direct-llm.yml)
-
-启动命令：
+发布前可在仓库根目录生成所有可本地安装的 ZIP：
 
 ```bash
-docker compose -f docker-compose.direct-llm.yml up -d
+bash scripts/pre-release-check.sh
 ```
 
-### 方案 2：OpenClaw / external_recognizer
+生成目录：
 
-适合：
-
-- 你已经有 OpenClaw
-- 或你有自己的外部识别端
-
-直接使用：
-
-- [docker-compose.openclaw.yml](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway/blob/main/docker-compose.openclaw.yml)
-
-启动命令：
-
-```bash
-docker compose -f docker-compose.openclaw.yml up -d
+```text
+dist/
 ```
 
----
+当前会生成：
 
-## 第二步：安装插件
+- `AIRecoginzerForwarder-2.0.1.zip`
+- `AIRecognizerEnhancer-0.1.11.zip`
+- `AgentResourceOfficer-0.1.107.zip`
+- `FeishuCommandBridgeLong-0.5.25.zip`
+- `HDHiveDailySign-1.0.0.zip`
+- `HdhiveOpenApi-0.3.0.zip`
+- `QuarkShareSaver-0.1.0.zip`
+- `ZspaceMediaFreshMix-1.0.0.zip`
 
-支持两种方式：
+然后在 MoviePilot 插件页面选择本地上传安装。
 
-- MoviePilot 自定义插件仓库安装
-- 本地 ZIP 安装
+## 推荐安装组合
 
-### 方式 1：插件仓库安装
+智能体 / 资源工作流主线：
 
-将本仓库添加到 MoviePilot 自定义插件仓库后安装。
+- `AgentResourceOfficer`
+- `FeishuCommandBridgeLong`
+- `QuarkShareSaver`
+- 需要旧影巢 OpenAPI 页面时再装 `HdhiveOpenApi`
 
-### 方式 2：本地 ZIP 安装
+AI 识别线：
 
-到仓库 Releases 页面下载 ZIP：
+- 新方案优先用 `AIRecognizerEnhancer`
+- 旧 Gateway 回调方案继续保留 `AIRecoginzerForwarder`
 
-- [Releases 页面](https://github.com/liuyuexi1987/MoviePilot-Plugins/releases)
+影巢签到：
 
-然后在 MoviePilot 里本地上传安装。
+- 只需要轻量签到时用 `HDHiveDailySign`
+- OpenAPI 签到如果要求付费接口，普通用户优先保留轻量签到插件
 
----
+极影视刷新：
 
-## 第三步：填写插件 Webhook 地址
+- 使用 `ZspaceMediaFreshMix`
 
-Gateway 启动后，在插件中一般填写：
+## AI Gateway 说明
 
-### 方案 A（推荐）
+`AIRecognizerEnhancer` 不需要额外 Gateway，直接复用 MoviePilot 当前 LLM 配置。
 
-同一 Docker 网络内，填写容器名：
+只有继续使用旧 `AIRecoginzerForwarder` 时，才需要单独部署 `moviepilot-ai-recognizer-gateway`，并在插件里填写 Webhook 地址，例如：
 
 ```text
 http://moviepilot-ai-recognizer-gateway:9000/webhook
 ```
 
-### 方案 B
-
-没有自定义 Docker 网络名时，填写宿主机内网地址：
-
-```text
-http://192.168.x.x:9000/webhook
-```
-
-不推荐：
-
-```text
-http://127.0.0.1:9000/webhook
-```
-
----
-
-## 插件设置建议
-
-- 保持 MoviePilot 原生识别优先
-- 默认使用 `standard`
-- 网盘拼音、漏词、规避命名较多时再切 `enhanced`
-
----
-
-## 补充说明
-
-- 本仓库只包含插件，不包含 Gateway 镜像
-- Gateway 默认推荐 `direct_llm`
-- 如果你已经有 OpenClaw，可以改用 `external_recognizer`
-- 默认推荐 MoviePilot 与 Gateway 同机部署
-- 不建议把跨主机 / 跨 NAS 作为默认方案
+如果 MoviePilot 和 Gateway 不在同一 Docker 网络内，再改用宿主机可访问的地址。

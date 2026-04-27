@@ -1,4 +1,7 @@
-# v2.0.0-alpha.1 发布文案
+# v2.0.0-alpha.1 历史发布文案
+
+> 这是旧 AI Gateway 拆分阶段的历史发布草稿，仅保留作归档参考。
+> 当前仓库已经演进为多插件套件，发布前请以 `docs/GITHUB_PUBLISH.md` 和 `scripts/pre-release-check.sh` 为准。
 
 ## GitHub Release 页面填写
 
