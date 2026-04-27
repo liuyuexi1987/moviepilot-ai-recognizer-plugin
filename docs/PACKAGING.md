@@ -57,6 +57,7 @@ bash scripts/pre-release-check.sh
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill helper 的本地 `selftest` 必须通过
 - `AgentResourceOfficer` Skill 安装脚本的 `--dry-run` 必须通过
 - 发布脚本中的插件清单必须和 `package.json` 一致
+- 每个 ZIP 必须包含 `<PluginName>/__init__.py`
 - 每个 ZIP 必须包含 `<PluginName>/README.md`
 - ZIP 中不能包含 `__pycache__`、`.pyc`、`.pyo`、`.DS_Store`
 

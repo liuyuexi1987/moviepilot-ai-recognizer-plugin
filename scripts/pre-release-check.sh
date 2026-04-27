@@ -165,6 +165,7 @@ import zipfile
 plugin_name = os.environ["PLUGIN_NAME"]
 zip_path = os.environ["ZIP_PATH"]
 required_readme = f"{plugin_name}/README.md"
+required_init = f"{plugin_name}/__init__.py"
 bad_entries = []
 with zipfile.ZipFile(zip_path) as zip_file:
     names = set(zip_file.namelist())
@@ -173,6 +174,9 @@ with zipfile.ZipFile(zip_path) as zip_file:
             bad_entries.append(name)
 if required_readme not in names:
     print(f"{zip_path} 缺少 {required_readme}")
+    raise SystemExit(1)
+if required_init not in names:
+    print(f"{zip_path} 缺少 {required_init}")
     raise SystemExit(1)
 if bad_entries:
     print(f"{zip_path} 包含不应发布的生成文件:")
