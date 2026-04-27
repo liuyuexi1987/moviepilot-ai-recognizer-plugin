@@ -6,6 +6,12 @@
 使用 agent-resource-officer skill，先调用 auto，自动读取 startup 和推荐 request_templates。
 ```
 
+## Low Token Auto
+
+```text
+使用 agent-resource-officer skill，先调用 auto --summary-only，只返回自动启动流的最小决策摘要。
+```
+
 ## Manual Startup
 
 ```text

@@ -41,6 +41,7 @@ Prefer the bundled helper:
 ```bash
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py auto
+python3 scripts/aro_request.py auto --summary-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --limit 5 --summary-only
 python3 scripts/aro_request.py selfcheck
@@ -59,10 +60,17 @@ Fast path:
 
 ```bash
 python3 scripts/aro_request.py auto
+python3 scripts/aro_request.py auto --summary-only
 python3 scripts/aro_request.py doctor --limit 5
 ```
 
 `auto` calls `startup`, reads `recommended_request_templates`, then fetches the recommended low-token recipe.
+
+If you want the automatic flow but only need the decision summary, prefer:
+
+```bash
+python3 scripts/aro_request.py auto --summary-only
+```
 
 `doctor` is the read-only diagnostic entry. It combines:
 

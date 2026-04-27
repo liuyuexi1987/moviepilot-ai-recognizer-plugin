@@ -29,6 +29,7 @@ ARO_API_KEY=your_moviepilot_api_token
 
 ```bash
 python3 scripts/aro_request.py auto
+python3 scripts/aro_request.py auto --summary-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --summary-only
 python3 scripts/aro_request.py startup
@@ -41,6 +42,12 @@ python3 scripts/aro_request.py pick --choice 1
 ```
 
 `auto` 会先读取 `startup.recommended_request_templates`，再自动拉取推荐的低 token recipe。
+
+如果只想拿自动启动流的最小决策结果，直接用：
+
+```bash
+python3 scripts/aro_request.py auto --summary-only
+```
 
 `doctor` 是只读诊断入口，会一次返回 `startup + selfcheck + sessions + recover` 的压缩结果，适合外部智能体在真正执行前做开场检查。
 

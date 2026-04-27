@@ -168,6 +168,21 @@ def recovery_helper_commands(recovery):
     }
 
 
+def request_templates_summary(data):
+    payload = data_payload(data)
+    detail = payload.get("recommended_recipe_detail") if isinstance(payload, dict) else {}
+    first_call = detail.get("first_call") if isinstance(detail, dict) else {}
+    return {
+        "selected_recipe": payload.get("selected_recipe") or payload.get("recommended_recipe") or "",
+        "recommended_recipe": payload.get("recommended_recipe") or "",
+        "first_template": detail.get("first_template") or "",
+        "first_endpoint": first_call.get("endpoint") or "",
+        "first_method": first_call.get("method") or "",
+        "requires_confirmation": bool(detail.get("confirmation_required_templates")),
+        "confirmation_message": detail.get("confirmation_message") or "",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="AgentResourceOfficer request helper")
     parser.add_argument(
@@ -256,6 +271,15 @@ def main():
             "startup": compact(startup),
             "request_templates": compact(templates),
         }
+        if args.summary_only and not args.full:
+            summary = {
+                "startup_ok": bool((output.get("startup") or {}).get("success")),
+                "recommended_recipe_request": (recommended or {}).get("recipe") or recipe,
+                "recommended_recipe_reason": (recommended or {}).get("reason") or "",
+                **request_templates_summary(templates),
+            }
+            print_json(summary)
+            return 0
         print_json(output if not args.full else {"startup": startup, "request_templates": templates})
         return 0
 
