@@ -96,6 +96,32 @@ if f"## {helper_version}" not in changelog:
     raise SystemExit(1)
 print(f"agent_resource_officer_helper_version_ok {helper_version}")
 PY
+python3 - <<'PY'
+import ast
+from pathlib import Path
+
+helper_file = Path("skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py")
+tree = ast.parse(helper_file.read_text(encoding="utf-8"))
+helper_version = ""
+for node in ast.walk(tree):
+    if not isinstance(node, ast.Assign):
+        continue
+    for target in node.targets:
+        if isinstance(target, ast.Name) and target.id == "HELPER_VERSION" and isinstance(node.value, ast.Constant):
+            helper_version = str(node.value.value)
+if not helper_version:
+    print("hdhive-search-unlock-to-115 helper 版本未找到")
+    raise SystemExit(1)
+readme = Path("skills/hdhive-search-unlock-to-115/README.md").read_text(encoding="utf-8")
+changelog = Path("skills/hdhive-search-unlock-to-115/CHANGELOG.md").read_text(encoding="utf-8")
+if f"当前 helper 版本：`{helper_version}`" not in readme:
+    print("hdhive-search-unlock-to-115 README helper 版本未同步")
+    raise SystemExit(1)
+if f"## {helper_version}" not in changelog:
+    print("hdhive-search-unlock-to-115 CHANGELOG 缺少当前 helper 版本")
+    raise SystemExit(1)
+print(f"hdhive_skill_helper_version_ok {helper_version}")
+PY
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
 PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'

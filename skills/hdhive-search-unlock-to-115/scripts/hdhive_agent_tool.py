@@ -13,6 +13,9 @@ import search_hdhive
 import unlock_hdhive
 
 
+HELPER_VERSION = "0.1.0"
+
+
 def format_search_for_agent(payload: Dict[str, Any]) -> str:
     return search_hdhive.format_text(payload, compact=True)
 
@@ -88,6 +91,12 @@ def command_unlock(args: argparse.Namespace) -> int:
     return 0 if payload.get("success") else 1
 
 
+def command_version(args: argparse.Namespace) -> int:
+    payload = {"success": True, "helper_version": HELPER_VERSION}
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return 0
+
+
 def command_selftest(args: argparse.Namespace) -> int:
     checks = []
 
@@ -146,9 +155,16 @@ def command_selftest(args: argparse.Namespace) -> int:
     check("unlock_text_has_url", "https://115cdn.com/s/example" in unlock_text)
     check("unlock_text_has_access_code", "提取码: abcd" in unlock_text)
     check("unlock_text_has_transfer_ok", "115转存: 成功" in unlock_text)
+    check("helper_version_present", bool(HELPER_VERSION))
 
     failed = [item for item in checks if not item["ok"]]
-    payload = {"success": not failed, "passed": len(checks) - len(failed), "failed": len(failed), "checks": checks}
+    payload = {
+        "success": not failed,
+        "helper_version": HELPER_VERSION,
+        "passed": len(checks) - len(failed),
+        "failed": len(failed),
+        "checks": checks,
+    }
     if args.output == "json":
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
@@ -193,6 +209,9 @@ def build_parser() -> argparse.ArgumentParser:
     unlock_parser.add_argument("--mp-base-url", default=search_hdhive.DEFAULT_MP_BASE_URL)
     unlock_parser.add_argument("--output", choices=["text", "json"], default="text")
     unlock_parser.set_defaults(func=command_unlock)
+
+    version_parser = subparsers.add_parser("version", help="Print helper version")
+    version_parser.set_defaults(func=command_version)
 
     selftest_parser = subparsers.add_parser("selftest", help="Run local helper formatting tests")
     selftest_parser.add_argument("--output", choices=["text", "json"], default="text")
