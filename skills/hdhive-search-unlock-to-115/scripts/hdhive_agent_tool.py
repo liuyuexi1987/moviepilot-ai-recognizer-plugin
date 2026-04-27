@@ -88,6 +88,76 @@ def command_unlock(args: argparse.Namespace) -> int:
     return 0 if payload.get("success") else 1
 
 
+def command_selftest(args: argparse.Namespace) -> int:
+    checks = []
+
+    def check(name: str, ok: bool) -> None:
+        checks.append({"name": name, "ok": bool(ok)})
+
+    search_payload = {
+        "success": True,
+        "query": {"keyword": "测试电影", "selected_type": "movie", "year": ""},
+        "candidates": [
+            {"tmdb_id": 1001, "title": "测试电影", "year": "2026", "media_type": "movie", "actors": ["演员甲", "演员乙"]},
+            {"tmdb_id": 1002, "title": "测试电影2", "year": "2027", "media_type": "movie", "actors": []},
+        ],
+        "results": [
+            {
+                "index": 1,
+                "slug": "slug-115",
+                "title": "测试电影 4K",
+                "matched_title": "测试电影",
+                "matched_year": "2026",
+                "pan_type": "115",
+                "share_size": "50GB",
+                "video_resolution": ["4K"],
+                "source": ["REMUX"],
+                "unlock_points": 0,
+            },
+            {
+                "index": 2,
+                "slug": "slug-quark",
+                "title": "测试电影 1080P",
+                "matched_title": "测试电影",
+                "matched_year": "2026",
+                "pan_type": "quark",
+                "share_size": "12GB",
+                "video_resolution": ["1080P"],
+                "source": ["WEB-DL"],
+                "unlock_points": 4,
+            },
+        ],
+    }
+    search_text = format_search_for_agent(search_payload)
+    check("search_text_has_candidates", "候选影片" in search_text)
+    check("search_text_has_actor_names", "演员甲 / 演员乙" in search_text)
+    check("search_text_has_free_marker", "免费" in search_text)
+    check("search_text_has_points_marker", "4分" in search_text)
+    check("search_text_has_slug", "slug=slug-115" in search_text)
+
+    unlock_payload = {
+        "success": True,
+        "message": "已返回资源链接",
+        "selected": {"title": "测试电影 4K", "slug": "slug-115"},
+        "unlock": {"full_url": "https://115cdn.com/s/example?password=abcd", "access_code": "abcd"},
+        "transfer_115": {"requested": True, "path": "/待整理", "ok": True, "message": "success"},
+    }
+    unlock_text = format_unlock_for_agent(unlock_payload)
+    check("unlock_text_has_url", "https://115cdn.com/s/example" in unlock_text)
+    check("unlock_text_has_access_code", "提取码: abcd" in unlock_text)
+    check("unlock_text_has_transfer_ok", "115转存: 成功" in unlock_text)
+
+    failed = [item for item in checks if not item["ok"]]
+    payload = {"success": not failed, "passed": len(checks) - len(failed), "failed": len(failed), "checks": checks}
+    if args.output == "json":
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"selftest {'ok' if payload['success'] else 'failed'}: passed={payload['passed']} failed={payload['failed']}")
+        for item in failed:
+            print(f"- {item['name']}")
+    return 0 if payload["success"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Single-entry HDHive agent helper.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -123,6 +193,10 @@ def build_parser() -> argparse.ArgumentParser:
     unlock_parser.add_argument("--mp-base-url", default=search_hdhive.DEFAULT_MP_BASE_URL)
     unlock_parser.add_argument("--output", choices=["text", "json"], default="text")
     unlock_parser.set_defaults(func=command_unlock)
+
+    selftest_parser = subparsers.add_parser("selftest", help="Run local helper formatting tests")
+    selftest_parser.add_argument("--output", choices=["text", "json"], default="text")
+    selftest_parser.set_defaults(func=command_selftest)
 
     return parser
 

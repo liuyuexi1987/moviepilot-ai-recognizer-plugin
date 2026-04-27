@@ -11,6 +11,15 @@
    - `TMDB_API_KEY`
 3. 再让智能体使用这个 Skill
 
+## 本地自测
+
+`selftest` 不连接 MoviePilot，只验证 helper 的搜索/解锁文本格式是否仍符合智能体读取习惯：
+
+```bash
+python3 scripts/hdhive_agent_tool.py selftest
+python3 scripts/hdhive_agent_tool.py selftest --output json
+```
+
 ## 备注
 
 - 这是面向公开仓库的通用模板

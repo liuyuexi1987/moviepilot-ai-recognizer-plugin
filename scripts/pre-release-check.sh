@@ -61,6 +61,8 @@ print(f"syntax_ok files={count}")
 PY
 python3 skills/agent-resource-officer/scripts/aro_request.py selftest >/dev/null
 echo "agent_resource_officer_skill_selftest_ok"
+python3 skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest >/dev/null
+echo "hdhive_skill_selftest_ok"
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
 PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'
