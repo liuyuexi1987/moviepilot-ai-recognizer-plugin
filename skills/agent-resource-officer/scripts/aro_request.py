@@ -258,7 +258,7 @@ def recipe_helper_commands(recipe_summary, recipe_request):
     }
 
 
-def run_selftest():
+def selftest_result():
     checks = []
 
     def check(name, condition):
@@ -318,8 +318,13 @@ def run_selftest():
         "failed": len(failed),
         "checks": checks,
     }
+    return result
+
+
+def run_selftest():
+    result = selftest_result()
     print_json(result)
-    return 0 if not failed else 1
+    return 0 if result.get("success") else 1
 
 
 def main():
@@ -331,6 +336,7 @@ def main():
             "config-check",
             "decide",
             "doctor",
+            "readiness",
             "selftest",
             "startup",
             "selfcheck",
@@ -395,6 +401,42 @@ def main():
             "base_url_source": "arg:--base-url" if args.base_url else config_source(config, "ARO_BASE_URL", "MP_BASE_URL", "MOVIEPILOT_URL"),
             "api_key_set": bool(api_key),
             "api_key_source": "arg:--api-key" if args.api_key else config_source(config, "ARO_API_KEY", "MP_API_TOKEN"),
+        }
+        print_json(result)
+        return 0 if result["success"] else 2
+    if args.command == "readiness":
+        config_result = {
+            "success": bool(base_url and api_key),
+            "config_path": CONFIG_PATH_DISPLAY,
+            "config_file_exists": os.path.exists(CONFIG_PATH),
+            "base_url_set": bool(base_url),
+            "base_url_source": "arg:--base-url" if args.base_url else config_source(config, "ARO_BASE_URL", "MP_BASE_URL", "MOVIEPILOT_URL"),
+            "api_key_set": bool(api_key),
+            "api_key_source": "arg:--api-key" if args.api_key else config_source(config, "ARO_API_KEY", "MP_API_TOKEN"),
+        }
+        local_result = selftest_result()
+        live_result = {"success": False, "skipped": True, "reason": "missing config"}
+        if config_result["success"]:
+            try:
+                live_response = request(base_url, api_key, "GET", assistant_path("selfcheck"))
+                live_compact = compact(live_response)
+                live_result = {
+                    "success": bool((live_compact or {}).get("ok") or (live_compact or {}).get("success")),
+                    "skipped": False,
+                    "version": (live_compact or {}).get("version") or "",
+                    "message": (live_compact or {}).get("message") or "",
+                }
+            except Exception as exc:
+                live_result = {"success": False, "skipped": False, "reason": str(exc)}
+        result = {
+            "success": bool(config_result["success"] and local_result["success"] and live_result["success"]),
+            "config": config_result,
+            "local_selftest": {
+                "success": local_result["success"],
+                "passed": local_result["passed"],
+                "failed": local_result["failed"],
+            },
+            "live_selfcheck": live_result,
         }
         print_json(result)
         return 0 if result["success"] else 2

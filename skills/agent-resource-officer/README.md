@@ -37,6 +37,7 @@ python3 scripts/aro_request.py doctor --summary-only
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py config-check
+python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py selfcheck
@@ -51,6 +52,8 @@ python3 scripts/aro_request.py pick --choice 1
 `selftest` 不连接 MoviePilot，只验证本地 helper 的决策和命令生成逻辑。
 
 `config-check` 只检查连接配置来源和是否存在，不输出真实 API Key。
+
+`readiness` 会一次运行配置检查、本地 selftest 和 MoviePilot 插件 selfcheck。
 
 `decide` 是单次决策入口：
 

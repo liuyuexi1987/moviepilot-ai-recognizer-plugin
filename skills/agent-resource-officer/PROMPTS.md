@@ -84,6 +84,12 @@
 使用 agent-resource-officer skill，运行 config-check，确认连接配置存在，但不要输出 API Key。
 ```
 
+## Readiness
+
+```text
+使用 agent-resource-officer skill，运行 readiness，确认配置、本地 helper 和 MoviePilot 插件接口都可用。
+```
+
 ## Doctor
 
 ```text
