@@ -397,10 +397,20 @@ python3 scripts/aro_request.py decide --command-only --confirmed
 
 当前已经包含：
 
+- `plugins/airecoginzerforwarder`
+- `plugins.v2/airecoginzerforwarder`
+- `plugins/airecognizerenhancer`
+- `plugins.v2/airecognizerenhancer`
+- `plugins/agentresourceofficer`
+- `plugins.v2/agentresourceofficer`
+- `plugins/feishucommandbridgelong`
+- `plugins.v2/feishucommandbridgelong`
 - `plugins/hdhiveopenapi`
 - `plugins.v2/hdhiveopenapi`
 - `plugins/hdhivedailysign`
 - `plugins.v2/hdhivedailysign`
+- `plugins/quarksharesaver`
+- `plugins.v2/quarksharesaver`
 - `plugins/zspacemediafreshmix`
 - `plugins.v2/zspacemediafreshmix`
 
@@ -416,14 +426,20 @@ plugins/
 plugins.v2/
 skills/
 AIRecoginzerForwarder/
+AIRecognizerEnhancer/
+AgentResourceOfficer/
+FeishuCommandBridgeLong/
 HdhiveOpenApi/
+HDHiveDailySign/
+QuarkShareSaver/
+ZspaceMediaFreshMix/
 docs/
 ```
 
 其中：
 
 - `plugins` 和 `plugins.v2` 是 MoviePilot 实际读取的插件目录
-- 根目录下的 `AIRecoginzerForwarder/`、`HdhiveOpenApi/` 主要放 README 和补充说明
+- 根目录下的同名插件目录主要放主源码、README 和补充说明；部分旧插件代码仍以 `plugins/`、`plugins.v2/` 为准
 
 ---
 
