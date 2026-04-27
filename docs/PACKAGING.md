@@ -83,10 +83,22 @@ bash scripts/write-dist-sha256.sh
 bash scripts/verify-dist.sh
 ```
 
+也可以校验其他目录：
+
+```bash
+DIST_DIR=/path/to/downloaded-artifact bash scripts/verify-dist.sh
+```
+
 如果要生成可复制到 GitHub Release 的 Markdown 表格：
 
 ```bash
 bash scripts/print-release-summary.sh
+```
+
+如果要下载并校验最近一次成功 CI artifact：
+
+```bash
+bash scripts/verify-ci-artifact.sh
 ```
 
 当前完整检查覆盖：
@@ -117,6 +129,7 @@ bash scripts/print-release-summary.sh
 - `dist/SHA256SUMS.txt` 必须随 ZIP 一起生成
 - `dist/MANIFEST.json` 必须随 ZIP 一起生成
 - `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、基础目录结构和不应发布的生成文件
+- `scripts/verify-ci-artifact.sh` 必须能下载并校验 GitHub Actions artifact
 - `scripts/print-release-summary.sh` 必须能基于 `MANIFEST.json` 输出 Release Markdown 表格
 - Markdown 文档中的本地相对链接必须存在
 - 仓库文本中不能包含已知本机路径、历史密码、历史 API Key 或 Bearer JWT 片段

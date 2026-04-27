@@ -4,23 +4,24 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-python3 - <<'PY'
+DIST_DIR="${DIST_DIR:-dist}" python3 - <<'PY'
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import zipfile
 
-dist_dir = Path("dist")
+dist_dir = Path(os.environ["DIST_DIR"])
 manifest = dist_dir / "SHA256SUMS.txt"
 json_manifest = dist_dir / "MANIFEST.json"
 if not dist_dir.exists():
-    print("dist 目录不存在")
+    print(f"{dist_dir} 目录不存在")
     raise SystemExit(1)
 if not manifest.exists():
-    print("dist/SHA256SUMS.txt 不存在")
+    print(f"{manifest} 不存在")
     raise SystemExit(1)
 if not json_manifest.exists():
-    print("dist/MANIFEST.json 不存在")
+    print(f"{json_manifest} 不存在")
     raise SystemExit(1)
 
 zip_files = sorted(dist_dir.glob("*.zip"))

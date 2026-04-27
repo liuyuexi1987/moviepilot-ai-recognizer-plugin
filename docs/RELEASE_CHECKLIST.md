@@ -50,4 +50,16 @@ gh run list --limit 3
 
 CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-plugin-zips-<commit>`，里面包含本次 `dist/*.zip`、`SHA256SUMS.txt` 和 `MANIFEST.json`。
 
+如需在本地下载并校验最近一次成功 CI artifact：
+
+```bash
+bash scripts/verify-ci-artifact.sh
+```
+
+也可以指定 run id：
+
+```bash
+bash scripts/verify-ci-artifact.sh 25017759143
+```
+
 也可以在 GitHub 页面手动运行：Actions -> CI -> Run workflow。
