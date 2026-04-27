@@ -153,6 +153,17 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - 推荐提示词：
   [skills/agent-resource-officer/PROMPTS.md](./skills/agent-resource-officer/PROMPTS.md)
 
+外部智能体优先从这几个 helper 命令开始：
+
+```bash
+python3 scripts/aro_request.py readiness
+python3 scripts/aro_request.py decide --summary-only
+python3 scripts/aro_request.py decide --command-only
+python3 scripts/aro_request.py decide --command-only --confirmed
+```
+
+其中 `readiness` 用来确认配置、本地 helper 和插件接口都正常；`decide --summary-only` 用来判断继续旧会话还是开始新流程；`--command-only` 只输出下一步 helper 命令，遇到需要确认的动作时，只有加 `--confirmed` 才会输出执行命令。
+
 如果你是为了“把影巢搜索 -> 选择 -> 解锁 -> 115 落地”这条链路交给 AI 智能体，直接看这里：
 
 - 公开版 Skill 模板：
