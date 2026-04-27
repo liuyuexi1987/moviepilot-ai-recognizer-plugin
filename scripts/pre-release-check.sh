@@ -103,6 +103,9 @@ for plugin_id, meta in pkg.items():
     if missing_fields:
         failed.append((plugin_id, "package.json", {"missing_fields": ",".join(missing_fields)}))
         continue
+    if meta.get("v2") is not True:
+        failed.append((plugin_id, "package.json", {"invalid_v2": meta.get("v2")}))
+        continue
     icon_file = Path("icons") / str(meta.get("icon"))
     if not icon_file.exists():
         failed.append((plugin_id, "package.json", {"missing_icon": str(icon_file)}))
