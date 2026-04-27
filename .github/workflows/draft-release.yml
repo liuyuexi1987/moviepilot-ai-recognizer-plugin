@@ -1,0 +1,39 @@
+name: Draft Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v2026.04.28"
+        required: true
+        type: string
+      dry_run:
+        description: "Run checks without creating the GitHub Draft Release"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y zip rsync
+      - name: Build and validate release assets
+        env:
+          TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            bash scripts/create-draft-release.sh "$TAG" --dry-run
+          else
+            bash scripts/create-draft-release.sh "$TAG"
+          fi

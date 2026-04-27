@@ -77,3 +77,11 @@ bash scripts/create-draft-release.sh v2026.04.28 --dry-run
 ```bash
 bash scripts/create-draft-release.sh v2026.04.28
 ```
+
+也可以在 GitHub Actions 手动触发：
+
+```bash
+gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
+```
+
+确认 dry-run 通过后，再用 `dry_run=false` 创建 Draft Release。

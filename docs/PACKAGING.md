@@ -107,6 +107,12 @@ bash scripts/verify-ci-artifact.sh
 bash scripts/create-draft-release.sh v2026.04.28 --dry-run
 ```
 
+也可以走 GitHub Actions 手动 dry-run：
+
+```bash
+gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
+```
+
 当前完整检查覆盖：
 
 - `AIRecoginzerForwarder`
