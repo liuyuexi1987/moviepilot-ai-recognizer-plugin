@@ -90,6 +90,12 @@ bash scripts/verify-release-download.sh v2026.04.28
 bash scripts/verify-release-assets.sh /path/to/release-assets
 ```
 
+如果 Draft Release 已存在，需要用当前 `dist/` 重新覆盖 notes 和附件：
+
+```bash
+bash scripts/update-draft-release-assets.sh v2026.04.28 --skip-check
+```
+
 也可以在 GitHub 页面手动运行：Actions -> CI -> Run workflow。
 
 ## 6. 创建 Draft Release
