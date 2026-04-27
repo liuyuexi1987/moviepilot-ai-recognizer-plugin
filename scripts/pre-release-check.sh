@@ -4,6 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+PACKAGE_PLUGINS=(
+  AIRecoginzerForwarder
+  AIRecognizerEnhancer
+  AgentResourceOfficer
+  FeishuCommandBridgeLong
+  QuarkShareSaver
+)
+
 release_git_status() {
   git status --short -- . ':(exclude)SESSION_HANDOFF_*.md'
 }
@@ -89,18 +97,9 @@ if failed:
 PY
 
 echo "[5/6] 打包本地安装 ZIP..."
-bash scripts/package-plugin.sh >/dev/null
-
-VERSION="$(python3 - <<'PY'
-from pathlib import Path
-import re
-text = Path("AIRecoginzerForwarder/__init__.py").read_text(encoding="utf-8")
-match = re.search(r'plugin_version\s*=\s*"([^"]+)"', text)
-print(match.group(1) if match else "unknown")
-PY
-)"
-
-ZIP_PATH="dist/AIRecoginzerForwarder-${VERSION}.zip"
+for plugin_name in "${PACKAGE_PLUGINS[@]}"; do
+  bash scripts/package-plugin.sh "$plugin_name" >/dev/null
+done
 
 echo "[6/6] 检查关键文件..."
 test -f package.v2.json
@@ -116,8 +115,21 @@ test -f plugins/airecognizerenhancer/__init__.py
 test -f plugins/quarksharesaver/__init__.py
 test -f AIRecoginzerForwarder/README.md
 test -f AIRecoginzerForwarder/requirements.txt
-test -f "$ZIP_PATH"
+for plugin_name in "${PACKAGE_PLUGINS[@]}"; do
+  version="$(PLUGIN_NAME="$plugin_name" python3 - <<'PY'
+from pathlib import Path
+import os
+import re
+
+plugin_name = os.environ["PLUGIN_NAME"]
+text = Path(plugin_name, "__init__.py").read_text(encoding="utf-8")
+match = re.search(r'plugin_version\s*=\s*"([^"]+)"', text)
+print(match.group(1) if match else "unknown")
+PY
+)"
+  test -f "dist/${plugin_name}-${version}.zip"
+done
 
 echo
 echo "插件仓库发布前检查通过。"
-echo "ZIP 包：$ROOT_DIR/$ZIP_PATH"
+echo "ZIP 包目录：$ROOT_DIR/dist"
