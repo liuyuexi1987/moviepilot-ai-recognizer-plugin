@@ -63,6 +63,15 @@ import json
 from pathlib import Path
 
 pkg = json.loads(Path("package.json").read_text(encoding="utf-8"))
+pkg_v2 = json.loads(Path("package.v2.json").read_text(encoding="utf-8"))
+normalized_pkg_v2 = {
+    plugin_id: {key: value for key, value in meta.items() if key != "v2"}
+    for plugin_id, meta in pkg.items()
+}
+if normalized_pkg_v2 != pkg_v2:
+    print("package.v2.json 与 package.json 去除 v2 字段后的内容不一致")
+    raise SystemExit(1)
+
 failed = []
 for plugin_id, meta in pkg.items():
     candidates = [
