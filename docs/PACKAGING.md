@@ -90,6 +90,7 @@ bash scripts/sync-package-v2.sh
 - `package.json` 中每个插件必须标记 `v2: true`
 - `package.json` 当前版本必须出现在对应插件的 `history` 中
 - `package.json` 中每个插件都必须能在根目录、`plugins/` 或 `plugins.v2/` 找到 `__init__.py`
+- 仓库首页 `README.md` 必须列出 `package.json` 中每个插件的 ID、展示名和当前版本
 - `docs/PLUGIN_INSTALL.md` 必须列出当前版本对应的 ZIP 文件名
 - Markdown 文档中的本地相对链接必须存在
 - 仓库文本中不能包含已知本机路径、历史密码、历史 API Key 或 Bearer JWT 片段

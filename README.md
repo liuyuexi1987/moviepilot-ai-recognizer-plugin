@@ -35,30 +35,31 @@
 
 `AI识别增强` 已进入第一版可用阶段，方向是逐步替代旧版 AI Gateway 转发链路。
 
-当前核心版本：
+当前发布版本：
 
+- `AIRecoginzerForwarder`（AI 识别转发）：`2.0.1`
+- `AIRecognizerEnhancer`（AI识别增强）：`0.1.11`
 - `AgentResourceOfficer`：`0.1.107`
-- `FeishuCommandBridgeLong`：`0.5.25`
-- `AIRecognizerEnhancer`：`0.1.11`
+- `FeishuCommandBridgeLong`（飞书命令桥接）：`0.5.25`
+- `HdhiveOpenApi`（影巢 OpenAPI）：`0.3.0`
+- `HDHiveDailySign`（HDHive Daily Sign）：`1.0.0`
+- `QuarkShareSaver`（夸克分享转存）：`0.1.0`
+- `ZspaceMediaFreshMix`（极影视刷新（自用魔改））：`1.0.0`
 
 ## 插件分工
 
 当前线上主插件仍然是这些：
 
-1. `AIRecoginzerForwarder`
-2. `AgentResourceOfficer`
-3. `FeishuCommandBridgeLong`
-4. `HdhiveOpenApi`
-5. `HDHiveDailySign`
-6. `QuarkShareSaver`
-7. `ZspaceMediaFreshMix`
+1. `AIRecoginzerForwarder`：AI 识别转发
+2. `AIRecognizerEnhancer`：AI识别增强
+3. `AgentResourceOfficer`：Agent资源官
+4. `FeishuCommandBridgeLong`：飞书命令桥接
+5. `HdhiveOpenApi`：影巢 OpenAPI
+6. `HDHiveDailySign`：HDHive Daily Sign
+7. `QuarkShareSaver`：夸克分享转存
+8. `ZspaceMediaFreshMix`：极影视刷新（自用魔改）
 
-另外还有一个已经进入首版可用阶段的新目录：
-
-- `AIRecognizerEnhancer`
-  - 这是新识别线的固定落点
-  - 当前已经能接住 `NameRecognize` 并回写结构化识别结果
-  - 仍在继续打磨，不直接删除旧 `AIRecoginzerForwarder`
+其中 `AIRecognizerEnhancer` 是新识别线的固定落点，当前已经能接住 `NameRecognize` 并回写结构化识别结果；旧 `AIRecoginzerForwarder` 暂时继续保留。
 
 它们各自更像这样：
 

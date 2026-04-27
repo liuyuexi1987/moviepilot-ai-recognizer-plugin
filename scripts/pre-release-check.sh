@@ -160,6 +160,17 @@ if missing_zip_names:
     print("docs/PLUGIN_INSTALL.md 缺少当前 ZIP 文件名:")
     print("\n".join(missing_zip_names))
     raise SystemExit(1)
+
+root_readme = Path("README.md").read_text(encoding="utf-8")
+missing_readme_items = []
+for plugin_id, meta in pkg.items():
+    for item in (plugin_id, str(meta.get("name") or ""), str(meta.get("version") or "")):
+        if item and item not in root_readme:
+            missing_readme_items.append(f"{plugin_id}: README.md missing {item}")
+if missing_readme_items:
+    print("README.md 插件清单与 package.json 不一致:")
+    print("\n".join(missing_readme_items))
+    raise SystemExit(1)
 PY
 
 echo "检查 Markdown 本地链接..."
