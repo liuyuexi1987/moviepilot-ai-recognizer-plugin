@@ -86,6 +86,7 @@ bash scripts/verify-ci-artifact.sh 25017759143
 如果已经从 GitHub Release 页面下载了全部附件，也可以直接校验下载目录：
 
 ```bash
+bash scripts/verify-release-download.sh v2026.04.28
 bash scripts/verify-release-assets.sh /path/to/release-assets
 ```
 
