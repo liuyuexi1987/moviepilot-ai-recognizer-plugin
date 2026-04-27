@@ -36,6 +36,7 @@ python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --summary-only
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py selftest
+python3 scripts/aro_request.py commands
 python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py startup
@@ -50,6 +51,8 @@ python3 scripts/aro_request.py pick --choice 1
 `auto` 会先读取 `startup.recommended_request_templates`，再自动拉取推荐的低 token recipe。
 
 `selftest` 不连接 MoviePilot，只验证本地 helper 的决策和命令生成逻辑。
+
+`commands` 会输出 helper 命令目录、是否联网、是否可能写入。
 
 `config-check` 只检查连接配置来源和是否存在，不输出真实 API Key。
 

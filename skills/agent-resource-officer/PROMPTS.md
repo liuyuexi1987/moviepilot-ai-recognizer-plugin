@@ -78,6 +78,12 @@
 使用 agent-resource-officer skill，先运行 selftest，验证本地 helper 的命令生成逻辑。
 ```
 
+## Command Catalog
+
+```text
+使用 agent-resource-officer skill，运行 commands，查看 helper 支持的命令、联网需求和写入风险。
+```
+
 ## Config Check
 
 ```text

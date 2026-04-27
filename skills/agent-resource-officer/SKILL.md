@@ -48,6 +48,7 @@ python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --limit 5 --summary-only
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py selftest
+python3 scripts/aro_request.py commands
 python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py selfcheck
@@ -64,6 +65,12 @@ Use `selftest` to validate local helper logic without connecting to MoviePilot:
 
 ```bash
 python3 scripts/aro_request.py selftest
+```
+
+Use `commands` when an external agent needs the local helper command catalog:
+
+```bash
+python3 scripts/aro_request.py commands
 ```
 
 Use `config-check` to verify connection settings without printing secrets:
