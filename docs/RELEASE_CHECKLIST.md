@@ -63,3 +63,17 @@ bash scripts/verify-ci-artifact.sh 25017759143
 ```
 
 也可以在 GitHub 页面手动运行：Actions -> CI -> Run workflow。
+
+## 6. 创建 Draft Release
+
+先 dry-run，确认附件和说明能生成：
+
+```bash
+bash scripts/create-draft-release.sh v2026.04.28 --dry-run
+```
+
+确认无误后创建 GitHub Draft Release：
+
+```bash
+bash scripts/create-draft-release.sh v2026.04.28
+```

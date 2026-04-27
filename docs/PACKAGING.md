@@ -101,6 +101,12 @@ bash scripts/print-release-summary.sh
 bash scripts/verify-ci-artifact.sh
 ```
 
+如果要创建 GitHub Draft Release，先 dry-run：
+
+```bash
+bash scripts/create-draft-release.sh v2026.04.28 --dry-run
+```
+
 当前完整检查覆盖：
 
 - `AIRecoginzerForwarder`
