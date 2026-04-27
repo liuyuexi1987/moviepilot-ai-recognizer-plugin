@@ -4,13 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+release_git_status() {
+  git status --short -- . ':(exclude)SESSION_HANDOFF_*.md'
+}
+
 echo "[1/6] 同步官方仓库布局..."
 bash scripts/sync-repo-layout.sh >/dev/null
 
 echo "[2/6] 检查 Git 工作区是否干净..."
-if [ -n "$(git status --short)" ]; then
+if [ -n "$(release_git_status)" ]; then
   echo "Git 工作区不干净，请先提交或处理变更；如果只有同步结果，请提交同步后的文件。" >&2
-  git status --short
+  release_git_status
   exit 1
 fi
 
