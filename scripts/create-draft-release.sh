@@ -69,8 +69,6 @@ trap cleanup EXIT
   echo
   echo "本次 Release 附件包含 MoviePilot 本地安装 ZIP、公开 Skill ZIP、PLUGIN/SKILL SHA256SUMS 和 MANIFEST。"
   echo
-  echo "## MoviePilot 插件"
-  echo
   bash scripts/print-release-summary.sh
   echo
   echo "## 公开 Skill 模板"

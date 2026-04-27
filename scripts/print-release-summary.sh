@@ -19,7 +19,7 @@ if not isinstance(plugins, list) or not plugins:
     print("dist/MANIFEST.json 缺少 plugins 列表")
     raise SystemExit(1)
 
-print("## Plugin ZIPs")
+print("## MoviePilot 插件 ZIP")
 print()
 print("| Plugin | Name | Version | ZIP | Size | SHA256 |")
 print("| --- | --- | --- | --- | ---: | --- |")
