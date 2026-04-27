@@ -1,5 +1,7 @@
 # MoviePilot-Plugins
 
+[![CI](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml)
+
 这个仓库现在的方向不是“插件越多越好”，而是把关键能力收拢成更清楚的两条线：
 
 - `MoviePilot` 负责搜索、订阅、整理、入库
