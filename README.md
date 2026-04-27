@@ -153,6 +153,13 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 
 ## 智能体 Skill 模板
 
+GitHub Actions 和 Draft Release artifact 会同时附带公开 Skill ZIP：
+
+- `agent-resource-officer-<version>.zip`
+- `hdhive-search-unlock-to-115-<version>.zip`
+
+如果你从源码仓库安装，也可以直接运行下面的 `install.sh`。
+
 如果你是为了让外部智能体直接控制 `AgentResourceOfficer` 这条新主线，优先看这里：
 
 - AgentResourceOfficer Skill 模板：

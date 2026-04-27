@@ -53,6 +53,13 @@ dist/
 
 仓库同时提供两个公开 Skill 模板，给外部智能体调用 MoviePilot 资源工作流使用：
 
+发布产物里会包含：
+
+- `agent-resource-officer-<version>.zip`
+- `hdhive-search-unlock-to-115-<version>.zip`
+
+如果使用源码仓库，也可以直接运行安装脚本：
+
 ```bash
 bash skills/agent-resource-officer/install.sh --dry-run
 bash skills/agent-resource-officer/install.sh
