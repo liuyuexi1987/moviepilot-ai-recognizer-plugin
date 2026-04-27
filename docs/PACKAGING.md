@@ -65,6 +65,8 @@ bash scripts/pre-release-check.sh
 bash scripts/sync-package-v2.sh
 ```
 
+`pre-release-check.sh` 也会自动运行这个同步脚本；如果 `package.v2.json` 因此发生变化，工作区检查会失败并提示先提交。
+
 当前完整检查覆盖：
 
 - `AIRecoginzerForwarder`

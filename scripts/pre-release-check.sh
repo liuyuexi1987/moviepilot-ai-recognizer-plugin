@@ -21,6 +21,7 @@ release_git_status() {
 
 echo "[1/6] 同步官方仓库布局..."
 bash scripts/sync-repo-layout.sh >/dev/null
+bash scripts/sync-package-v2.sh >/dev/null
 
 echo "[2/6] 检查 Git 工作区是否干净..."
 if [ -n "$(release_git_status)" ]; then
