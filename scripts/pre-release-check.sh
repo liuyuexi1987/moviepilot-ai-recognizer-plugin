@@ -9,7 +9,10 @@ PACKAGE_PLUGINS=(
   AIRecognizerEnhancer
   AgentResourceOfficer
   FeishuCommandBridgeLong
+  HdhiveOpenApi
+  HDHiveDailySign
   QuarkShareSaver
+  ZspaceMediaFreshMix
 )
 
 release_git_status() {

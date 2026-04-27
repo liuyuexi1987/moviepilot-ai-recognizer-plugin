@@ -32,7 +32,7 @@ bash scripts/package-plugin.sh FeishuCommandBridgeLong
 
 脚本会自动先同步一次官方仓库布局，再生成 ZIP。
 
-发布前完整检查会一次打包当前可本地安装的主源码插件：
+发布前完整检查会一次打包当前仓库清单里的可本地安装插件：
 
 ```bash
 bash scripts/pre-release-check.sh
@@ -44,7 +44,10 @@ bash scripts/pre-release-check.sh
 - `AIRecognizerEnhancer`
 - `AgentResourceOfficer`
 - `FeishuCommandBridgeLong`
+- `HdhiveOpenApi`
+- `HDHiveDailySign`
 - `QuarkShareSaver`
+- `ZspaceMediaFreshMix`
 
 ## 输出位置
 
