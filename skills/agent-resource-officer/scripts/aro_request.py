@@ -107,6 +107,18 @@ def print_json(data):
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def print_summary(summary, command_only=False):
+    if command_only:
+        command = str(
+            (summary or {}).get("execute_helper_command")
+            or (summary or {}).get("inspect_helper_command")
+            or ""
+        ).strip()
+        print(command)
+        return
+    print_json(summary)
+
+
 def shell_quote(value):
     text = str(value or "")
     return "'" + text.replace("'", "'\"'\"'") + "'"
@@ -282,6 +294,7 @@ def main():
     parser.add_argument("--json", dest="json_body")
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--summary-only", action="store_true")
+    parser.add_argument("--command-only", action="store_true")
     args = parser.parse_args()
 
     config = read_config()
@@ -319,7 +332,7 @@ def main():
             "startup": compact(startup),
             "request_templates": compact(templates),
         }
-        if args.summary_only and not args.full:
+        if (args.summary_only or args.command_only) and not args.full:
             summary = {
                 "startup_ok": bool((output.get("startup") or {}).get("success")),
                 "recommended_recipe_request": (recommended or {}).get("recipe") or recipe,
@@ -327,7 +340,7 @@ def main():
                 **request_templates_summary(templates),
                 **recipe_helper_commands(request_templates_summary(templates), (recommended or {}).get("recipe") or recipe),
             }
-            print_json(summary)
+            print_summary(summary, command_only=args.command_only)
             return 0
         print_json(output if not args.full else {"startup": startup, "request_templates": templates})
         return 0
@@ -379,8 +392,8 @@ def main():
             **helper_commands,
         }
         output["summary"] = summary
-        if args.summary_only and not args.full:
-            print_json(summary)
+        if (args.summary_only or args.command_only) and not args.full:
+            print_summary(summary, command_only=args.command_only)
             return 0
         if not args.full:
             output["summary"] = summary
@@ -421,8 +434,8 @@ def main():
                 "recommended_tool": recover_data.get("recommended_tool") or "",
                 **helper_commands,
             }
-            if args.summary_only and not args.full:
-                print_json(summary)
+            if (args.summary_only or args.command_only) and not args.full:
+                print_summary(summary, command_only=args.command_only)
                 return 0
             print_json({
                 "summary": summary,
@@ -467,8 +480,8 @@ def main():
             **template_summary,
             **helper_commands,
         }
-        if args.summary_only and not args.full:
-            print_json(summary)
+        if (args.summary_only or args.command_only) and not args.full:
+            print_summary(summary, command_only=args.command_only)
             return 0
         print_json({
             "summary": summary,
@@ -639,7 +652,7 @@ def main():
         body = load_json_arg(args.json_body) if args.json_body else None
 
     result = request(base_url, api_key, method, path, body=body, query=query)
-    if args.command == "recover" and args.summary_only and not args.full:
+    if args.command == "recover" and (args.summary_only or args.command_only) and not args.full:
         output = compact(result)
         recovery = ((output or {}).get("recovery") or {}) if isinstance(output, dict) else {}
         helper_commands = recovery_helper_commands(recovery)
@@ -652,7 +665,7 @@ def main():
             "recommended_tool": recovery.get("recommended_tool") or "",
             **helper_commands,
         }
-        print_json(summary)
+        print_summary(summary, command_only=args.command_only)
         return 0
     output = result if args.full else compact(result)
     print_json(output)

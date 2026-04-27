@@ -43,6 +43,7 @@ python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py auto
 python3 scripts/aro_request.py auto --summary-only
 python3 scripts/aro_request.py decide --summary-only
+python3 scripts/aro_request.py decide --command-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --limit 5 --summary-only
 python3 scripts/aro_request.py recover --summary-only
@@ -98,6 +99,14 @@ For `auto --summary-only` and `decide --summary-only`, the start-recipe branch a
 
 - `inspect_helper_command`
 - `execute_helper_command`
+
+If a caller only wants the next helper command, use:
+
+```bash
+python3 scripts/aro_request.py decide --command-only
+python3 scripts/aro_request.py auto --command-only
+python3 scripts/aro_request.py recover --command-only
+```
 
 If token budget is tight, prefer:
 

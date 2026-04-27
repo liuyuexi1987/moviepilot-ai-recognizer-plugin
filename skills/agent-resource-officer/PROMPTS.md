@@ -18,6 +18,12 @@
 使用 agent-resource-officer skill，先调用 decide --summary-only，告诉我现在应该继续旧会话还是按推荐 recipe 开始新流程。
 ```
 
+## Command Only Decide
+
+```text
+使用 agent-resource-officer skill，调用 decide --command-only，只返回下一步 helper 命令。
+```
+
 ## Manual Startup
 
 ```text
