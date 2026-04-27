@@ -114,6 +114,7 @@ for plugin_id, meta in pkg.items():
     ]
     found = [item for item in candidates if item.exists()]
     if not found:
+        failed.append((plugin_id, "source", {"missing_init": "no __init__.py found in root/plugins/plugins.v2"}))
         continue
     for init_file in found:
         tree = ast.parse(init_file.read_text(encoding="utf-8"))
