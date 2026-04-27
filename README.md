@@ -33,6 +33,12 @@
 
 `AI识别增强` 已进入第一版可用阶段，方向是逐步替代旧版 AI Gateway 转发链路。
 
+当前核心版本：
+
+- `AgentResourceOfficer`：`0.1.107`
+- `FeishuCommandBridgeLong`：`0.5.25`
+- `AIRecognizerEnhancer`：`0.1.11`
+
 ## 插件分工
 
 当前线上主插件仍然是这些：
@@ -98,7 +104,7 @@
 
 也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
 
-从 `AgentResourceOfficer 0.1.12` 开始，115 分享链接“直接转存到目标目录”已经有轻量直转层，并新增了和 `P115StrmHelper` 同款的扫码登录能力：可以优先使用扫码得到的客户端会话，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
+当前 `AgentResourceOfficer 0.1.107` 已经具备 115 分享链接轻量直转层，并接入和 `P115StrmHelper` 同款的扫码登录能力：可以优先使用扫码得到的客户端会话，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
 
 如果升级 MoviePilot 后 `P115StrmHelper` 因旧事件导入失败无法加载，可以使用仓库里的兼容脚本恢复：
 
