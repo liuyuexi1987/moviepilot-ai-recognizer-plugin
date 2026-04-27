@@ -28,11 +28,12 @@ bash scripts/pre-release-check.sh
 
 ## 4. 上传 ZIP
 
-Release 附件上传 `dist/` 下的全部 ZIP 和 `SHA256SUMS.txt`：
+Release 附件上传 `dist/` 下的全部 ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`：
 
 ```bash
 ls -1 dist/*.zip
 cat dist/SHA256SUMS.txt
+cat dist/MANIFEST.json
 bash scripts/verify-dist.sh
 ```
 
@@ -46,6 +47,6 @@ bash scripts/verify-dist.sh
 gh run list --limit 3
 ```
 
-CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-plugin-zips-<commit>`，里面包含本次 `dist/*.zip` 和 `SHA256SUMS.txt`。
+CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-plugin-zips-<commit>`，里面包含本次 `dist/*.zip`、`SHA256SUMS.txt` 和 `MANIFEST.json`。
 
 也可以在 GitHub 页面手动运行：Actions -> CI -> Run workflow。

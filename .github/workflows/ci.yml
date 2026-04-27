@@ -27,5 +27,6 @@ jobs:
           path: |
             dist/*.zip
             dist/SHA256SUMS.txt
+            dist/MANIFEST.json
           if-no-files-found: error
           retention-days: 14

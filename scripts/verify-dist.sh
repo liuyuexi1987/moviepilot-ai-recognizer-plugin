@@ -6,16 +6,21 @@ cd "$ROOT_DIR"
 
 python3 - <<'PY'
 from hashlib import sha256
+import json
 from pathlib import Path
 import zipfile
 
 dist_dir = Path("dist")
 manifest = dist_dir / "SHA256SUMS.txt"
+json_manifest = dist_dir / "MANIFEST.json"
 if not dist_dir.exists():
     print("dist 目录不存在")
     raise SystemExit(1)
 if not manifest.exists():
     print("dist/SHA256SUMS.txt 不存在")
+    raise SystemExit(1)
+if not json_manifest.exists():
+    print("dist/MANIFEST.json 不存在")
     raise SystemExit(1)
 
 zip_files = sorted(dist_dir.glob("*.zip"))
@@ -47,10 +52,39 @@ if missing or extra:
         print("\n".join(extra))
     raise SystemExit(1)
 
+manifest_data = json.loads(json_manifest.read_text(encoding="utf-8"))
+manifest_plugins = manifest_data.get("plugins")
+if not isinstance(manifest_plugins, list):
+    print("MANIFEST.json 缺少 plugins 列表")
+    raise SystemExit(1)
+manifest_by_zip = {}
+for item in manifest_plugins:
+    if not isinstance(item, dict) or not item.get("zip"):
+        print("MANIFEST.json 插件条目格式错误")
+        raise SystemExit(1)
+    manifest_by_zip[item["zip"]] = item
+missing_json = sorted(zip_names - set(manifest_by_zip))
+extra_json = sorted(set(manifest_by_zip) - zip_names)
+if missing_json or extra_json:
+    if missing_json:
+        print("MANIFEST.json 缺少 ZIP:")
+        print("\n".join(missing_json))
+    if extra_json:
+        print("MANIFEST.json 包含不存在的 ZIP:")
+        print("\n".join(extra_json))
+    raise SystemExit(1)
+
 for zip_file in zip_files:
     actual = sha256(zip_file.read_bytes()).hexdigest()
     if expected[zip_file.name] != actual:
         print(f"{zip_file} SHA256 不匹配")
+        raise SystemExit(1)
+    manifest_item = manifest_by_zip[zip_file.name]
+    if manifest_item.get("sha256") != actual:
+        print(f"{zip_file} MANIFEST.json SHA256 不匹配")
+        raise SystemExit(1)
+    if manifest_item.get("size") != zip_file.stat().st_size:
+        print(f"{zip_file} MANIFEST.json size 不匹配")
         raise SystemExit(1)
     plugin_name = zip_file.name.rsplit("-", 1)[0]
     required_readme = f"{plugin_name}/README.md"

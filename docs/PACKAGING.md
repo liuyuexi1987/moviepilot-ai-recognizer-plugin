@@ -38,7 +38,7 @@ bash scripts/package-plugin.sh --all
 
 `--all` 和 `pre-release-check.sh` 会在打包前清理 `dist/*.zip`，避免旧版本 ZIP 混在发布附件里。
 
-`--all` 会在打包后自动生成 `SHA256SUMS.txt` 并执行 `scripts/verify-dist.sh`。
+`--all` 会在打包后自动生成 `SHA256SUMS.txt`、`MANIFEST.json` 并执行 `scripts/verify-dist.sh`。
 
 如需打包其他插件，例如 `AgentResourceOfficer` 或飞书桥接插件：
 
@@ -69,9 +69,9 @@ bash scripts/sync-package-v2.sh
 
 `pre-release-check.sh` 也会自动运行这个同步脚本；如果 `package.v2.json` 因此发生变化，工作区检查会失败并提示先提交。
 
-完整检查会在 `dist/` 下额外生成 `SHA256SUMS.txt`，用于核对每个 ZIP 的 SHA256。
+完整检查会在 `dist/` 下额外生成 `SHA256SUMS.txt` 和 `MANIFEST.json`，用于核对每个 ZIP 的 SHA256，并给自动化脚本读取插件 ID、展示名、版本、文件名和大小。
 
-如需只刷新当前 `dist/*.zip` 的校验清单：
+如需只刷新当前 `dist/*.zip` 的校验清单和机器可读 manifest：
 
 ```bash
 bash scripts/write-dist-sha256.sh
@@ -109,7 +109,8 @@ bash scripts/verify-dist.sh
 - 仓库首页 `README.md` 必须列出 `package.json` 中每个插件的 ID、展示名和当前版本
 - `docs/PLUGIN_INSTALL.md` 必须列出当前版本对应的 ZIP 文件名
 - `dist/SHA256SUMS.txt` 必须随 ZIP 一起生成
-- `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、基础目录结构和不应发布的生成文件
+- `dist/MANIFEST.json` 必须随 ZIP 一起生成
+- `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、基础目录结构和不应发布的生成文件
 - Markdown 文档中的本地相对链接必须存在
 - 仓库文本中不能包含已知本机路径、历史密码、历史 API Key 或 Bearer JWT 片段
 - 每个 ZIP 必须包含 `<PluginName>/__init__.py`

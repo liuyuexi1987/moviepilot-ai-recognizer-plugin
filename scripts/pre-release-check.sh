@@ -255,6 +255,7 @@ echo "[6/6] 检查关键文件..."
 test -f package.v2.json
 test -f package.json
 test -f dist/SHA256SUMS.txt
+test -f dist/MANIFEST.json
 test -f plugins/airecoginzerforwarder/__init__.py
 test -f plugins/airecoginzerforwarder/requirements.txt
 test -f plugins.v2/airecoginzerforwarder/__init__.py
