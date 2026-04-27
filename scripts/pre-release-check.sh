@@ -137,8 +137,30 @@ with open("package.json", "r", encoding="utf-8") as file_obj:
     package = json.load(file_obj)
 print((package.get(plugin_name) or {}).get("version") or "unknown")
 PY
-)"
-  test -f "dist/${plugin_name}-${version}.zip"
+  )"
+  zip_path="dist/${plugin_name}-${version}.zip"
+  test -f "$zip_path"
+  PLUGIN_NAME="$plugin_name" ZIP_PATH="$zip_path" python3 - <<'PY'
+import os
+import zipfile
+
+plugin_name = os.environ["PLUGIN_NAME"]
+zip_path = os.environ["ZIP_PATH"]
+required_readme = f"{plugin_name}/README.md"
+bad_entries = []
+with zipfile.ZipFile(zip_path) as zip_file:
+    names = set(zip_file.namelist())
+    for name in names:
+        if "__pycache__" in name or name.endswith((".pyc", ".pyo", ".DS_Store")):
+            bad_entries.append(name)
+if required_readme not in names:
+    print(f"{zip_path} 缺少 {required_readme}")
+    raise SystemExit(1)
+if bad_entries:
+    print(f"{zip_path} 包含不应发布的生成文件:")
+    print("\n".join(sorted(bad_entries)))
+    raise SystemExit(1)
+PY
 done
 
 echo
