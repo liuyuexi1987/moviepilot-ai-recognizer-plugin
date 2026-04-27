@@ -180,12 +180,18 @@ required_ci_fragments = [
     "dist/MANIFEST.json",
     "if-no-files-found: error",
 ]
-missing_ci_fragments = [
-    fragment for fragment in required_ci_fragments if fragment not in ci_workflow
-]
-if missing_ci_fragments:
+draft_release_workflow = Path(".github/workflows/draft-release.yml").read_text(encoding="utf-8")
+missing_workflow_fragments = []
+for workflow_name, workflow_text in (
+    ("ci.yml", ci_workflow),
+    ("draft-release.yml", draft_release_workflow),
+):
+    for fragment in required_ci_fragments:
+        if fragment not in workflow_text:
+            missing_workflow_fragments.append(f"{workflow_name}: {fragment}")
+if missing_workflow_fragments:
     print(".github/workflows/ci.yml 缺少发布 artifact 配置:")
-    print("\n".join(missing_ci_fragments))
+    print("\n".join(missing_workflow_fragments))
     raise SystemExit(1)
 PY
 

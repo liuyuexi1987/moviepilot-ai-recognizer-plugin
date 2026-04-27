@@ -37,3 +37,13 @@ jobs:
           else
             bash scripts/create-draft-release.sh "$TAG"
           fi
+      - name: Upload release asset artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: draft-release-assets-${{ inputs.tag }}-${{ github.sha }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            dist/MANIFEST.json
+          if-no-files-found: error
+          retention-days: 14

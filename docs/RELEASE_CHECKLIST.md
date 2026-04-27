@@ -84,4 +84,4 @@ bash scripts/create-draft-release.sh v2026.04.28
 gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 ```
 
-确认 dry-run 通过后，再用 `dry_run=false` 创建 Draft Release。
+dry-run 通过后会生成 `draft-release-assets-<tag>-<commit>` artifact，可先下载核对。确认无误后，再用 `dry_run=false` 创建 Draft Release。
