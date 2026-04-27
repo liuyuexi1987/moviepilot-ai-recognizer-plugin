@@ -133,6 +133,7 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 - 发布脚本中的插件清单必须和 `package.json` 一致
 - `package-plugin.sh --list` 输出必须和发布插件清单一致
 - `package.json` 插件市场展示字段和图标文件必须存在
+- `package.json` 中 `version`、`labels`、`level`、`history` 等字段类型必须符合预期
 - `package.json` 中每个插件必须标记 `v2: true`
 - `package.json` 当前版本必须出现在对应插件的 `history` 中
 - `package.json` 中每个插件都必须能在根目录、`plugins/` 或 `plugins.v2/` 找到 `__init__.py`

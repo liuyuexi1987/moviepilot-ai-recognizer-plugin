@@ -76,6 +76,7 @@ PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'
 import ast
 import json
 import os
+import re
 from pathlib import Path
 
 pkg = json.loads(Path("package.json").read_text(encoding="utf-8"))
@@ -107,6 +108,25 @@ for plugin_id, meta in pkg.items():
     ]
     if missing_fields:
         failed.append((plugin_id, "package.json", {"missing_fields": ",".join(missing_fields)}))
+        continue
+    if not isinstance(meta.get("version"), str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.]+)?", meta.get("version", "")):
+        failed.append((plugin_id, "package.json", {"invalid_version": meta.get("version")}))
+        continue
+    if not isinstance(meta.get("labels"), str):
+        failed.append((plugin_id, "package.json", {"invalid_labels_type": type(meta.get("labels")).__name__}))
+        continue
+    if not isinstance(meta.get("level"), int) or meta.get("level") < 1:
+        failed.append((plugin_id, "package.json", {"invalid_level": meta.get("level")}))
+        continue
+    if not isinstance(meta.get("history"), dict) or not meta.get("history"):
+        failed.append((plugin_id, "package.json", {"invalid_history": type(meta.get("history")).__name__}))
+        continue
+    bad_history = [
+        key for key, value in meta.get("history", {}).items()
+        if not isinstance(key, str) or not key.strip() or not isinstance(value, str) or not value.strip()
+    ]
+    if bad_history:
+        failed.append((plugin_id, "package.json", {"invalid_history_items": ",".join(map(str, bad_history))}))
         continue
     if meta.get("v2") is not True:
         failed.append((plugin_id, "package.json", {"invalid_v2": meta.get("v2")}))
