@@ -20,6 +20,14 @@ bash scripts/package-plugin.sh --list
 
 ## 3. 执行完整检查
 
+如果只改了 Skill，可以先跑轻量检查：
+
+```bash
+bash scripts/check-skills.sh
+```
+
+最终发布前仍然执行完整检查：
+
 ```bash
 bash scripts/pre-release-check.sh
 ```

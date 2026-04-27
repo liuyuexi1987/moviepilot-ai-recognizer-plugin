@@ -131,6 +131,7 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill helper 的本地 `selftest` 必须通过
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill helper 版本必须同步到 README 和 CHANGELOG
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill 安装脚本的 `--dry-run` 必须通过
+- 以上 Skill 检查可以单独运行 `bash scripts/check-skills.sh`
 - 发布脚本中的插件清单必须和 `package.json` 一致
 - `package-plugin.sh --list` 输出必须和发布插件清单一致
 - `package.json` 插件市场展示字段和图标文件必须存在

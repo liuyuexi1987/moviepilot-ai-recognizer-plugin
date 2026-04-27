@@ -64,66 +64,7 @@ if failed:
     raise SystemExit(1)
 print(f"syntax_ok files={count}")
 PY
-python3 skills/agent-resource-officer/scripts/aro_request.py selftest >/dev/null
-echo "agent_resource_officer_skill_selftest_ok"
-bash skills/agent-resource-officer/install.sh --dry-run --target "$ROOT_DIR/.tmp-skill-install-check/agent-resource-officer" >/dev/null
-echo "agent_resource_officer_skill_install_dry_run_ok"
-python3 skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest >/dev/null
-echo "hdhive_skill_selftest_ok"
-bash skills/hdhive-search-unlock-to-115/install.sh --dry-run --target "$ROOT_DIR/.tmp-skill-install-check/hdhive-search-unlock-to-115" >/dev/null
-echo "hdhive_skill_install_dry_run_ok"
-python3 - <<'PY'
-import ast
-from pathlib import Path
-
-helper_file = Path("skills/agent-resource-officer/scripts/aro_request.py")
-tree = ast.parse(helper_file.read_text(encoding="utf-8"))
-helper_version = ""
-for node in ast.walk(tree):
-    if not isinstance(node, ast.Assign):
-        continue
-    for target in node.targets:
-        if isinstance(target, ast.Name) and target.id == "HELPER_VERSION" and isinstance(node.value, ast.Constant):
-            helper_version = str(node.value.value)
-if not helper_version:
-    print("未找到 AgentResourceOfficer helper 版本")
-    raise SystemExit(1)
-readme = Path("skills/agent-resource-officer/README.md").read_text(encoding="utf-8")
-changelog = Path("skills/agent-resource-officer/CHANGELOG.md").read_text(encoding="utf-8")
-if f"当前 helper 版本：`{helper_version}`" not in readme:
-    print("AgentResourceOfficer Skill README helper 版本未同步")
-    raise SystemExit(1)
-if f"## {helper_version}" not in changelog:
-    print("AgentResourceOfficer Skill CHANGELOG 缺少当前 helper 版本")
-    raise SystemExit(1)
-print(f"agent_resource_officer_helper_version_ok {helper_version}")
-PY
-python3 - <<'PY'
-import ast
-from pathlib import Path
-
-helper_file = Path("skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py")
-tree = ast.parse(helper_file.read_text(encoding="utf-8"))
-helper_version = ""
-for node in ast.walk(tree):
-    if not isinstance(node, ast.Assign):
-        continue
-    for target in node.targets:
-        if isinstance(target, ast.Name) and target.id == "HELPER_VERSION" and isinstance(node.value, ast.Constant):
-            helper_version = str(node.value.value)
-if not helper_version:
-    print("hdhive-search-unlock-to-115 helper 版本未找到")
-    raise SystemExit(1)
-readme = Path("skills/hdhive-search-unlock-to-115/README.md").read_text(encoding="utf-8")
-changelog = Path("skills/hdhive-search-unlock-to-115/CHANGELOG.md").read_text(encoding="utf-8")
-if f"当前 helper 版本：`{helper_version}`" not in readme:
-    print("hdhive-search-unlock-to-115 README helper 版本未同步")
-    raise SystemExit(1)
-if f"## {helper_version}" not in changelog:
-    print("hdhive-search-unlock-to-115 CHANGELOG 缺少当前 helper 版本")
-    raise SystemExit(1)
-print(f"hdhive_skill_helper_version_ok {helper_version}")
-PY
+bash scripts/check-skills.sh
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
 PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'
