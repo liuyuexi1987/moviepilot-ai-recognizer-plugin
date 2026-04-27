@@ -19,6 +19,7 @@ Personal MoviePilot plugin suite for agent-driven resource workflows, AI recogni
 - 发布前执行一次：
   - `bash scripts/pre-release-check.sh`
 - Release 附件可上传 `dist/` 下生成的全部 ZIP
+- GitHub Actions 已支持手动运行，可在 Actions -> CI -> Run workflow 主动触发一次完整发布检查
 
 ## 当前 ZIP 覆盖
 
