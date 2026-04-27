@@ -107,13 +107,15 @@ def print_json(data):
     print(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def print_summary(summary, command_only=False):
+def print_summary(summary, command_only=False, confirmed=False):
     if command_only:
-        command = str(
-            (summary or {}).get("execute_helper_command")
-            or (summary or {}).get("inspect_helper_command")
-            or ""
-        ).strip()
+        summary = summary or {}
+        requires_confirmation = bool(summary.get("requires_confirmation"))
+        command = str(summary.get("execute_helper_command") or "").strip()
+        if requires_confirmation and not confirmed:
+            command = str(summary.get("inspect_helper_command") or command).strip()
+        if not command:
+            command = str(summary.get("inspect_helper_command") or "").strip()
         print(command)
         return
     print_json(summary)
@@ -295,6 +297,7 @@ def main():
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--summary-only", action="store_true")
     parser.add_argument("--command-only", action="store_true")
+    parser.add_argument("--confirmed", action="store_true")
     args = parser.parse_args()
 
     config = read_config()
@@ -340,7 +343,7 @@ def main():
                 **request_templates_summary(templates),
                 **recipe_helper_commands(request_templates_summary(templates), (recommended or {}).get("recipe") or recipe),
             }
-            print_summary(summary, command_only=args.command_only)
+            print_summary(summary, command_only=args.command_only, confirmed=args.confirmed)
             return 0
         print_json(output if not args.full else {"startup": startup, "request_templates": templates})
         return 0
@@ -387,13 +390,14 @@ def main():
             "startup_ok": bool((output.get("startup") or {}).get("success")),
             "selfcheck_ok": bool((output.get("selfcheck") or {}).get("ok")),
             "recovery_can_resume": recovery_can_resume(((output.get("recover") or {}).get("recovery") or {}), helper_commands),
+            "requires_confirmation": recovery_can_resume(((output.get("recover") or {}).get("recovery") or {}), helper_commands),
             "recommended_action": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_action") or "",
             "recommended_tool": ((output.get("recover") or {}).get("recovery") or {}).get("recommended_tool") or "",
             **helper_commands,
         }
         output["summary"] = summary
         if (args.summary_only or args.command_only) and not args.full:
-            print_summary(summary, command_only=args.command_only)
+            print_summary(summary, command_only=args.command_only, confirmed=args.confirmed)
             return 0
         if not args.full:
             output["summary"] = summary
@@ -432,10 +436,11 @@ def main():
                 "reason": recover_data.get("reason") or "",
                 "recommended_action": recover_data.get("recommended_action") or "",
                 "recommended_tool": recover_data.get("recommended_tool") or "",
+                "requires_confirmation": True,
                 **helper_commands,
             }
             if (args.summary_only or args.command_only) and not args.full:
-                print_summary(summary, command_only=args.command_only)
+                print_summary(summary, command_only=args.command_only, confirmed=args.confirmed)
                 return 0
             print_json({
                 "summary": summary,
@@ -481,7 +486,7 @@ def main():
             **helper_commands,
         }
         if (args.summary_only or args.command_only) and not args.full:
-            print_summary(summary, command_only=args.command_only)
+            print_summary(summary, command_only=args.command_only, confirmed=args.confirmed)
             return 0
         print_json({
             "summary": summary,
@@ -663,9 +668,10 @@ def main():
             "reason": recovery.get("reason") or "",
             "recommended_action": recovery.get("recommended_action") or "",
             "recommended_tool": recovery.get("recommended_tool") or "",
+            "requires_confirmation": recovery_can_resume(recovery, helper_commands),
             **helper_commands,
         }
-        print_summary(summary, command_only=args.command_only)
+        print_summary(summary, command_only=args.command_only, confirmed=args.confirmed)
         return 0
     output = result if args.full else compact(result)
     print_json(output)

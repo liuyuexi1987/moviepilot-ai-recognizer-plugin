@@ -57,7 +57,10 @@ python3 scripts/aro_request.py pick --choice 1
 
 ```bash
 python3 scripts/aro_request.py decide --command-only
+python3 scripts/aro_request.py decide --command-only --confirmed
 ```
+
+默认会在需要确认的场景输出查看命令；已经获得用户确认后，再加 `--confirmed` 输出执行命令。
 
 如果只想拿自动启动流的最小决策结果，直接用：
 

@@ -106,7 +106,10 @@ If a caller only wants the next helper command, use:
 python3 scripts/aro_request.py decide --command-only
 python3 scripts/aro_request.py auto --command-only
 python3 scripts/aro_request.py recover --command-only
+python3 scripts/aro_request.py decide --command-only --confirmed
 ```
+
+`--command-only` prints an inspect command when the next action requires confirmation. Add `--confirmed` only after the user has approved the write-side-effect step.
 
 If token budget is tight, prefer:
 

@@ -24,6 +24,12 @@
 使用 agent-resource-officer skill，调用 decide --command-only，只返回下一步 helper 命令。
 ```
 
+## Confirmed Command
+
+```text
+使用 agent-resource-officer skill，在我已经确认执行后，调用 decide --command-only --confirmed，只返回执行用 helper 命令。
+```
+
 ## Manual Startup
 
 ```text
