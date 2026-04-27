@@ -53,8 +53,7 @@ fi
 if [ "$SKIP_CHECK" -eq 0 ]; then
   bash scripts/pre-release-check.sh
 else
-  bash scripts/verify-dist.sh
-  bash scripts/verify-skill-dist.sh
+  bash scripts/verify-release-assets.sh dist
 fi
 
 notes_file="$(mktemp)"

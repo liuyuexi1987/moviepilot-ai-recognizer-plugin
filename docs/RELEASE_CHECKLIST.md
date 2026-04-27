@@ -45,6 +45,7 @@ cat dist/SHA256SUMS.txt
 cat dist/MANIFEST.json
 cat dist/skills/SHA256SUMS.txt
 cat dist/skills/MANIFEST.json
+bash scripts/verify-release-assets.sh
 bash scripts/verify-dist.sh
 bash scripts/verify-skill-dist.sh
 bash scripts/print-release-summary.sh

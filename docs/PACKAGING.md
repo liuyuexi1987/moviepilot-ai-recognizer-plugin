@@ -84,16 +84,20 @@ bash scripts/verify-skill-dist.sh
 bash scripts/write-dist-sha256.sh
 ```
 
-如果只想校验已经生成或从 CI artifact 下载下来的 `dist/` 目录：
+如果只想校验已经生成或从 CI artifact 下载下来的完整发布产物目录：
 
 ```bash
+bash scripts/verify-release-assets.sh
 bash scripts/verify-dist.sh
+bash scripts/verify-skill-dist.sh
 ```
 
 也可以校验其他目录：
 
 ```bash
+bash scripts/verify-release-assets.sh /path/to/downloaded-artifact
 DIST_DIR=/path/to/downloaded-artifact bash scripts/verify-dist.sh
+DIST_DIR=/path/to/downloaded-artifact/skills bash scripts/verify-skill-dist.sh
 ```
 
 如果要生成可复制到 GitHub Release 的 Markdown 表格：
@@ -153,6 +157,7 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 - `dist/skills/` 必须生成公开 Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`
 - `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、插件元数据、基础目录结构和不应发布的生成文件
 - `scripts/verify-skill-dist.sh` 必须能验证 Skill ZIP SHA256、MANIFEST、基础目录结构和不应发布的生成文件
+- `scripts/verify-release-assets.sh` 必须能一次校验插件 ZIP 和 Skill ZIP
 - `scripts/verify-ci-artifact.sh` 必须能下载并校验 GitHub Actions artifact
 - `scripts/print-release-summary.sh` 必须能基于 `MANIFEST.json` 输出 Release Markdown 表格
 - `.github/workflows/ci.yml` 和 `draft-release.yml` 必须使用 artifact 上传步骤，并包含插件 ZIP、Skill ZIP、`SHA256SUMS.txt`、`MANIFEST.json`

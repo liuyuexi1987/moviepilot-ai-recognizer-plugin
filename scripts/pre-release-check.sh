@@ -302,6 +302,7 @@ fi
 echo "package_plugin_list_ok"
 bash scripts/package-plugin.sh --all
 bash scripts/package-skills.sh
+bash scripts/verify-release-assets.sh dist >/dev/null
 bash scripts/print-release-summary.sh >/dev/null
 bash scripts/print-skill-release-summary.sh >/dev/null
 bash scripts/create-draft-release.sh v0.0.0-dry-run --dry-run --skip-check >/dev/null
