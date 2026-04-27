@@ -249,11 +249,7 @@ if [ "$listed_plugins" != "$expected_plugins" ]; then
   exit 1
 fi
 echo "package_plugin_list_ok"
-for plugin_name in "${PACKAGE_PLUGINS[@]}"; do
-  bash scripts/package-plugin.sh "$plugin_name" >/dev/null
-done
-bash scripts/write-dist-sha256.sh
-bash scripts/verify-dist.sh
+bash scripts/package-plugin.sh --all
 
 echo "[6/6] 检查关键文件..."
 test -f package.v2.json
