@@ -9,6 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
+HELPER_VERSION = "0.1.0"
 
 
 def read_config():
@@ -312,7 +313,10 @@ def selftest_result():
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []
+    catalog_names = {item.get("name") for item in catalog_commands}
+    check("helper_version_present", catalog.get("helper_version") == HELPER_VERSION)
     check("commands_schema_version", catalog.get("schema_version") == "commands.v1")
+    check("commands_catalog_includes_version", "version" in catalog_names)
     check("commands_writes_are_boolean", all(isinstance(item.get("writes"), bool) for item in catalog_commands))
     check("commands_have_write_condition", all("write_condition" in item for item in catalog_commands))
     check("commands_recommended_start", catalog.get("recommended_start") == "python3 scripts/aro_request.py decide --summary-only")
@@ -338,8 +342,10 @@ def commands_catalog():
     return {
         "success": True,
         "schema_version": "commands.v1",
+        "helper_version": HELPER_VERSION,
         "recommended_start": "python3 scripts/aro_request.py decide --summary-only",
         "commands": [
+            {"name": "version", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper version"},
             {"name": "config-check", "network": False, "writes": False, "write_condition": "", "purpose": "check local connection settings without printing secrets"},
             {"name": "selftest", "network": False, "writes": False, "write_condition": "", "purpose": "test local helper decision and command generation logic"},
             {"name": "readiness", "network": True, "writes": False, "write_condition": "", "purpose": "run config-check, selftest, and live plugin selfcheck"},
@@ -382,6 +388,7 @@ def main():
             "history",
             "plans",
             "raw",
+            "version",
         ],
     )
     parser.add_argument("--base-url")
@@ -418,6 +425,9 @@ def main():
 
     if args.command == "commands":
         print_json(commands_catalog())
+        return 0
+    if args.command == "version":
+        print_json({"success": True, "helper_version": HELPER_VERSION})
         return 0
 
     if args.command == "selftest":
@@ -464,6 +474,7 @@ def main():
                 live_result = {"success": False, "skipped": False, "reason": str(exc)}
         result = {
             "success": bool(config_result["success"] and local_result["success"] and live_result["success"]),
+            "helper_version": HELPER_VERSION,
             "config": config_result,
             "local_selftest": {
                 "success": local_result["success"],

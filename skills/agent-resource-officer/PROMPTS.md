@@ -84,6 +84,12 @@
 使用 agent-resource-officer skill，运行 commands，查看 helper 支持的命令、联网需求和写入风险。
 ```
 
+## Helper Version
+
+```text
+使用 agent-resource-officer skill，运行 version，确认当前 helper 版本。
+```
+
 ## Config Check
 
 ```text
