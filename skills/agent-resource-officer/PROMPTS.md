@@ -131,3 +131,9 @@
 ```text
 使用 agent-resource-officer skill，先看最近 plans 和 history，不要默认只看 default 会话；如果发现未执行计划，再告诉我是否值得继续。
 ```
+
+## Execute Exact Plan
+
+```text
+使用 agent-resource-officer skill，精确执行这个 dry-run 计划：plan-execute --plan-id plan-xxx。执行前先确认这是我要的 plan_id。
+```

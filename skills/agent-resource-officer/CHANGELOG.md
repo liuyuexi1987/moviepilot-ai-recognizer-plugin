@@ -2,6 +2,10 @@
 
 ## 0.1.0
 
+- Bumped helper script to `0.1.2`.
+- Added `--plan-id` support for exact `plans` inspection and `plan-execute`.
+- Recovery helper commands now preserve `plan_id` when the plugin recommends executing a saved plan.
+- Compact helper output now preserves `plan_id` and `execute_plan_body` from dry-run workflow responses.
 - Bumped helper script to `0.1.1`.
 - Completed the `commands` catalog so every helper subcommand is represented.
 - Marked `workflow` as a dry-run plan write in the command catalog.

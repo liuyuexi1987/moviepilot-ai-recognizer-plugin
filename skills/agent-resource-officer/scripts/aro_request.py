@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.1"
+HELPER_VERSION = "0.1.2"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -95,6 +95,14 @@ def compact(data):
             "requested_recipe",
             "invalid_recipe",
             "selected_names",
+            "session",
+            "session_id",
+            "plan_id",
+            "workflow",
+            "plan_auto_selected",
+            "execute_plan_body",
+            "executed",
+            "has_pending",
             "recommended_request_templates",
             "recommended_recipe_detail",
             "next_actions",
@@ -173,10 +181,12 @@ def recovery_helper_commands(recovery):
     name = str(template.get("name") or action_body.get("name") or "").strip()
     session = str(body.get("session") or action_body.get("session") or "").strip()
     session_id = str(body.get("session_id") or action_body.get("session_id") or "").strip()
+    plan_id = str(body.get("plan_id") or action_body.get("plan_id") or "").strip()
     target_path = str(body.get("path") or action_body.get("path") or "").strip()
 
     session_part = f" --session {shell_quote(session)}" if session else ""
     session_id_part = f" --session-id {shell_quote(session_id)}" if session_id else ""
+    plan_id_part = f" --plan-id {shell_quote(plan_id)}" if plan_id else ""
     path_part = f" --path {shell_quote(target_path)}" if target_path else ""
 
     inspect = None
@@ -210,7 +220,7 @@ def recovery_helper_commands(recovery):
     elif name in {"execute_plan", "execute_latest_plan", "execute_session_latest_plan"}:
         execute = (
             "python3 scripts/aro_request.py plan-execute"
-            f"{session_part}{session_id_part}"
+            f"{session_part}{session_id_part}{plan_id_part}"
         )
     elif name == "inspect_session_state":
         execute = inspect
@@ -311,6 +321,17 @@ def selftest_result():
     check("resume_pending_115_is_resumable", recovery_can_resume(p115_recovery, p115_commands))
     check("resume_pending_115_execute_command", p115_commands.get("execute_helper_command") == "python3 scripts/aro_request.py recover --session 's1' --session-id 'assistant::s1' --execute")
 
+    plan_recovery = {
+        "mode": "execute_plan",
+        "can_resume": True,
+        "action_template": {
+            "name": "execute_plan",
+            "body": {"session": "s1", "plan_id": "plan-123"},
+        },
+    }
+    plan_commands = recovery_helper_commands(plan_recovery)
+    check("execute_plan_includes_plan_id", plan_commands.get("execute_helper_command") == "python3 scripts/aro_request.py plan-execute --session 's1' --plan-id 'plan-123'")
+
     bootstrap_commands = recipe_helper_commands({"first_template": "startup_probe"}, "bootstrap")
     check("bootstrap_execute_command", bootstrap_commands.get("execute_helper_command") == "python3 scripts/aro_request.py startup")
     check("bootstrap_inspect_command", bootstrap_commands.get("inspect_helper_command") == "python3 scripts/aro_request.py templates --recipe 'bootstrap' --policy-only")
@@ -334,6 +355,18 @@ def selftest_result():
 
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
+
+    compact_workflow = compact({
+        "success": True,
+        "data": {
+            "action": "workflow_plan",
+            "plan_id": "plan-123",
+            "workflow": "hdhive_candidates",
+            "execute_plan_body": {"plan_id": "plan-123"},
+        },
+    })
+    check("compact_preserves_plan_id", compact_workflow.get("plan_id") == "plan-123")
+    check("compact_preserves_execute_plan_body", (compact_workflow.get("execute_plan_body") or {}).get("plan_id") == "plan-123")
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []
@@ -387,7 +420,7 @@ def commands_catalog():
             {"name": "route", "network": True, "writes": True, "write_condition": "depends on text and routed action", "purpose": "route natural-language resource requests"},
             {"name": "pick", "network": True, "writes": True, "write_condition": "depends on current session and selected action", "purpose": "continue numbered choices or actions"},
             {"name": "workflow", "network": True, "writes": True, "write_condition": "saves a dry-run plan; does not unlock or transfer", "purpose": "create dry-run workflow plans"},
-            {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan", "purpose": "execute the latest or selected saved plan"},
+            {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan; use --plan-id for exact execution", "purpose": "execute a saved plan by plan_id or latest unexecuted session plan"},
             {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
             {"name": "session", "network": True, "writes": False, "write_condition": "", "purpose": "inspect one assistant session"},
             {"name": "sessions", "network": True, "writes": False, "write_condition": "", "purpose": "list recent assistant sessions"},
@@ -413,6 +446,7 @@ def main():
     parser.add_argument("--text")
     parser.add_argument("--session")
     parser.add_argument("--session-id")
+    parser.add_argument("--plan-id")
     parser.add_argument("--kind")
     parser.add_argument("--has-pending-p115", action="store_true")
     parser.add_argument("--choice", type=int)
@@ -761,6 +795,8 @@ def main():
             "prefer_unexecuted": True,
             "compact": True,
         }
+        if args.plan_id:
+            body["plan_id"] = args.plan_id
         if args.session:
             body["session"] = args.session
         if args.session_id:
@@ -838,6 +874,8 @@ def main():
             "compact": "true",
             "limit": str(args.limit),
         }
+        if args.plan_id:
+            query["plan_id"] = args.plan_id
         if args.session:
             query["session"] = args.session
         if args.session_id:

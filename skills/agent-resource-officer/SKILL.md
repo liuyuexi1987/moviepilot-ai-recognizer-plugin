@@ -234,7 +234,9 @@ python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py recover --execute
 python3 scripts/aro_request.py history --limit 10
 python3 scripts/aro_request.py plans --limit 10
+python3 scripts/aro_request.py plans --plan-id plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
+python3 scripts/aro_request.py plan-execute --plan-id plan-xxx
 ```
 
 Notes:
