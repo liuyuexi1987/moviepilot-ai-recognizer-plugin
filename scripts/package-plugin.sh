@@ -3,6 +3,21 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
+
+if [[ "${1:-}" == "--list" ]]; then
+  ROOT_DIR="$ROOT_DIR" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+package_file = Path(os.environ["ROOT_DIR"]) / "package.json"
+package = json.loads(package_file.read_text(encoding="utf-8"))
+for plugin_id, meta in package.items():
+    print(f"{plugin_id}\t{meta.get('version', 'unknown')}")
+PY
+  exit 0
+fi
+
 REQUESTED_PLUGIN_NAME="${1:-AIRecoginzerForwarder}"
 PLUGIN_NAME="$(REQUESTED_PLUGIN_NAME="$REQUESTED_PLUGIN_NAME" ROOT_DIR="$ROOT_DIR" python3 - <<'PY'
 import json

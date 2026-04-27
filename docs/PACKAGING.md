@@ -23,6 +23,12 @@ bash scripts/package-plugin.sh
 
 默认打包 `AIRecoginzerForwarder`。
 
+查看当前可打包插件：
+
+```bash
+bash scripts/package-plugin.sh --list
+```
+
 如需打包其他插件，例如 `AgentResourceOfficer` 或飞书桥接插件：
 
 ```bash
