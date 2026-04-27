@@ -77,7 +77,7 @@ bash scripts/pre-release-check.sh
 - `AgentResourceOfficer` Skill 安装脚本的 `--dry-run` 必须通过
 - 发布脚本中的插件清单必须和 `package.json` 一致
 - `package-plugin.sh --list` 输出必须和发布插件清单一致
-- `package.json` 插件必填字段和图标文件必须存在
+- `package.json` 插件市场展示字段和图标文件必须存在
 - `package.json` 中每个插件都必须能在根目录、`plugins/` 或 `plugins.v2/` 找到 `__init__.py`
 - `docs/PLUGIN_INSTALL.md` 必须列出当前版本对应的 ZIP 文件名
 - 每个 ZIP 必须包含 `<PluginName>/__init__.py`

@@ -97,7 +97,7 @@ failed = []
 for plugin_id, meta in pkg.items():
     missing_fields = [
         key
-        for key in ("name", "description", "version", "author", "icon")
+        for key in ("name", "description", "version", "author", "icon", "labels", "level", "history")
         if not str(meta.get(key) or "").strip()
     ]
     if missing_fields:
