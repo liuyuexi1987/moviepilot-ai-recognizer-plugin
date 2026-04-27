@@ -4,26 +4,33 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+EXPECTED_SKILLS=(
+  agent-resource-officer
+  hdhive-search-unlock-to-115
+)
+
 skill_install_dry_run() {
   local skill_name="$1"
   bash "skills/${skill_name}/install.sh" --dry-run --target "$ROOT_DIR/.tmp-skill-install-check/${skill_name}" >/dev/null
   echo "${skill_name}_install_dry_run_ok"
 }
 
-for required in \
-  skills/agent-resource-officer/SKILL.md \
-  skills/agent-resource-officer/README.md \
-  skills/agent-resource-officer/CHANGELOG.md \
-  skills/agent-resource-officer/install.sh \
-  skills/hdhive-search-unlock-to-115/SKILL.md \
-  skills/hdhive-search-unlock-to-115/README.md \
-  skills/hdhive-search-unlock-to-115/CHANGELOG.md \
-  skills/hdhive-search-unlock-to-115/install.sh
-do
-  if [[ ! -f "$required" ]]; then
-    echo "Skill 文件缺失: $required" >&2
-    exit 1
-  fi
+actual_skills="$(find skills -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
+expected_skills="$(printf '%s\n' "${EXPECTED_SKILLS[@]}" | sort | tr '\n' ' ' | sed 's/ $//')"
+if [[ "$actual_skills" != "$expected_skills" ]]; then
+  echo "skills/ 目录清单与发布检查清单不一致" >&2
+  echo "expected: $expected_skills" >&2
+  echo "actual:   $actual_skills" >&2
+  exit 1
+fi
+
+for skill_name in "${EXPECTED_SKILLS[@]}"; do
+  for required in SKILL.md README.md CHANGELOG.md install.sh; do
+    if [[ ! -f "skills/${skill_name}/${required}" ]]; then
+      echo "Skill 文件缺失: skills/${skill_name}/${required}" >&2
+      exit 1
+    fi
+  done
 done
 
 python3 skills/agent-resource-officer/scripts/aro_request.py selftest >/dev/null
