@@ -53,6 +53,8 @@ bash scripts/pre-release-check.sh
 
 完整检查还会校验：
 
+- 插件代码和仓库内 Skill helper 脚本必须能通过 Python 语法检查
+- `AgentResourceOfficer` Skill helper 的本地 `selftest` 必须通过
 - 发布脚本中的插件清单必须和 `package.json` 一致
 - 每个 ZIP 必须包含 `<PluginName>/README.md`
 - ZIP 中不能包含 `__pycache__`、`.pyc`、`.pyo`、`.DS_Store`

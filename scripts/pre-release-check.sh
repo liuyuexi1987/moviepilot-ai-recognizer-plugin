@@ -41,6 +41,7 @@ roots = [
     Path("QuarkShareSaver"),
     Path("plugins"),
     Path("plugins.v2"),
+    Path("skills"),
 ]
 failed = []
 count = 0
@@ -58,6 +59,8 @@ if failed:
     raise SystemExit(1)
 print(f"syntax_ok files={count}")
 PY
+python3 skills/agent-resource-officer/scripts/aro_request.py selftest >/dev/null
+echo "agent_resource_officer_skill_selftest_ok"
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
 PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'
