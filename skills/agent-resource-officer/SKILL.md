@@ -237,6 +237,7 @@ python3 scripts/aro_request.py plans --limit 10
 python3 scripts/aro_request.py plans --plan-id plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
 python3 scripts/aro_request.py plan-execute --plan-id plan-xxx
+python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
 ```
 
 Notes:
@@ -244,6 +245,7 @@ Notes:
 - `sessions`, `history`, `plans`, and `recover` no longer force `session=default` when you do not pass `--session`.
 - Use `--session` or `--session-id` only when you want to narrow to one conversation.
 - Use `sessions --kind ...` or `sessions --has-pending-p115` when you want recovery-oriented filtering.
+- Use `plans-clear --plan-id ...` for exact saved-plan cleanup. Treat bulk cleanup flags as write-side-effect operations requiring confirmation.
 
 ## Confirmation Rules
 

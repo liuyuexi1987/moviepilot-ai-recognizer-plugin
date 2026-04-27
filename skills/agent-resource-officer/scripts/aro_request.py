@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.2"
+HELPER_VERSION = "0.1.3"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -31,6 +31,7 @@ HELPER_COMMANDS = [
     "sessions",
     "history",
     "plans",
+    "plans-clear",
     "raw",
     "version",
 ]
@@ -102,6 +103,10 @@ def compact(data):
             "plan_auto_selected",
             "execute_plan_body",
             "executed",
+            "removed",
+            "removed_count",
+            "matched",
+            "remaining",
             "has_pending",
             "recommended_request_templates",
             "recommended_recipe_detail",
@@ -367,6 +372,15 @@ def selftest_result():
     })
     check("compact_preserves_plan_id", compact_workflow.get("plan_id") == "plan-123")
     check("compact_preserves_execute_plan_body", (compact_workflow.get("execute_plan_body") or {}).get("plan_id") == "plan-123")
+    compact_clear = compact({
+        "success": True,
+        "data": {
+            "action": "plans_clear",
+            "removed": 1,
+            "remaining": 0,
+        },
+    })
+    check("compact_preserves_plan_clear_counts", compact_clear.get("removed") == 1 and compact_clear.get("remaining") == 0)
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []
@@ -426,6 +440,7 @@ def commands_catalog():
             {"name": "sessions", "network": True, "writes": False, "write_condition": "", "purpose": "list recent assistant sessions"},
             {"name": "history", "network": True, "writes": False, "write_condition": "", "purpose": "list recent assistant execution history"},
             {"name": "plans", "network": True, "writes": False, "write_condition": "", "purpose": "list saved workflow plans"},
+            {"name": "plans-clear", "network": True, "writes": True, "write_condition": "clears saved plans matching --plan-id, session filters, --executed, or --all-plans", "purpose": "clear saved workflow plans"},
             {"name": "raw", "network": True, "writes": True, "write_condition": "depends on method, path, and JSON body", "purpose": "call a raw assistant endpoint for debugging"},
         ],
     }
@@ -458,6 +473,8 @@ def main():
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--executed", action="store_true")
+    parser.add_argument("--unexecuted", action="store_true")
+    parser.add_argument("--all-plans", action="store_true")
     parser.add_argument("--include-actions", action="store_true")
     parser.add_argument("--prefer-unexecuted", action="store_true")
     parser.add_argument("--include-raw-results", action="store_true")
@@ -469,6 +486,10 @@ def main():
     parser.add_argument("--command-only", action="store_true")
     parser.add_argument("--confirmed", action="store_true")
     args = parser.parse_args()
+
+    if args.executed and args.unexecuted:
+        print("--executed and --unexecuted cannot be used together", file=sys.stderr)
+        return 2
 
     if args.command == "commands":
         print_json(commands_catalog())
@@ -882,8 +903,28 @@ def main():
             query["session_id"] = args.session_id
         if args.executed:
             query["executed"] = "true"
+        if args.unexecuted:
+            query["executed"] = "false"
         if args.include_actions:
             query["include_actions"] = "true"
+    elif args.command == "plans-clear":
+        method = "POST"
+        path = assistant_path("plans/clear")
+        body = {
+            "limit": args.limit,
+        }
+        if args.plan_id:
+            body["plan_id"] = args.plan_id
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
+        if args.executed:
+            body["executed"] = True
+        if args.unexecuted:
+            body["executed"] = False
+        if args.all_plans:
+            body["all_plans"] = True
     elif args.command == "raw":
         method = args.method
         path = args.api_path or assistant_path("startup")

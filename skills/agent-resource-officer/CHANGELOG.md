@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Bumped helper script to `0.1.3`.
+- Added `plans-clear` for exact saved-plan cleanup and bulk cleanup filters.
 - Bumped helper script to `0.1.2`.
 - Added `--plan-id` support for exact `plans` inspection and `plan-execute`.
 - Recovery helper commands now preserve `plan_id` when the plugin recommends executing a saved plan.

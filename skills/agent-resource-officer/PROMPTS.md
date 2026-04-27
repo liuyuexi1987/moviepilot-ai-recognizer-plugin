@@ -137,3 +137,9 @@
 ```text
 使用 agent-resource-officer skill，精确执行这个 dry-run 计划：plan-execute --plan-id plan-xxx。执行前先确认这是我要的 plan_id。
 ```
+
+## Clear Exact Plan
+
+```text
+使用 agent-resource-officer skill，清理这个已确认不需要的 dry-run 计划：plans-clear --plan-id plan-xxx。不要批量清理其他计划。
+```

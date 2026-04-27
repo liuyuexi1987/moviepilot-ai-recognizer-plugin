@@ -120,10 +120,12 @@ python3 scripts/aro_request.py plans --limit 10
 python3 scripts/aro_request.py plans --plan-id plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
 python3 scripts/aro_request.py plan-execute --plan-id plan-xxx
+python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
 ```
 
 - `sessions` / `history` / `plans` / `recover` 默认不再强制绑到 `default` 会话。
 - 只有显式传 `--session` 或 `--session-id` 时，才会收窄到单个会话。
+- `plans-clear` 是写入型清理命令，优先使用 `--plan-id` 精确清理；批量清理时再使用 `--session`、`--executed`、`--unexecuted` 或 `--all-plans`。
 
 ## 说明
 
