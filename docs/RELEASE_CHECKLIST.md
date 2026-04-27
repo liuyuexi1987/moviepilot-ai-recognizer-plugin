@@ -83,6 +83,12 @@ bash scripts/verify-ci-artifact.sh
 bash scripts/verify-ci-artifact.sh 25017759143
 ```
 
+如果已经从 GitHub Release 页面下载了全部附件，也可以直接校验下载目录：
+
+```bash
+bash scripts/verify-release-assets.sh /path/to/release-assets
+```
+
 也可以在 GitHub 页面手动运行：Actions -> CI -> Run workflow。
 
 ## 6. 创建 Draft Release
