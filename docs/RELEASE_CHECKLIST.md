@@ -24,7 +24,7 @@ bash scripts/package-plugin.sh --list
 bash scripts/pre-release-check.sh
 ```
 
-这个命令会同步 `plugins/` 和 `plugins.v2/`，检查元数据、Skill helper、ZIP 内容，并重新生成 `dist/*.zip`。
+这个命令会同步 `plugins/` 和 `plugins.v2/`，检查元数据、Skill helper、ZIP 内容，并重新生成 `dist/*.zip`、`SHA256SUMS.txt` 和 `MANIFEST.json`。
 
 ## 4. 上传 ZIP
 

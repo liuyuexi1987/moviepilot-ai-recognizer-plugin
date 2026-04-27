@@ -36,7 +36,7 @@ bash scripts/package-plugin.sh --list
 bash scripts/package-plugin.sh --all
 ```
 
-`--all` 和 `pre-release-check.sh` 会在打包前清理 `dist/*.zip`，避免旧版本 ZIP 混在发布附件里。
+`--all` 和 `pre-release-check.sh` 会在打包前清理 `dist/*.zip`、`SHA256SUMS.txt` 和 `MANIFEST.json`，避免旧版本产物混在发布附件里。
 
 `--all` 会在打包后自动生成 `SHA256SUMS.txt`、`MANIFEST.json` 并执行 `scripts/verify-dist.sh`。
 

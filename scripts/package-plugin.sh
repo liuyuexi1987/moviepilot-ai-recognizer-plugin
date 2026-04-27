@@ -41,7 +41,7 @@ fi
 
 if [[ "${1:-}" == "--all" ]]; then
   mkdir -p "$DIST_DIR"
-  rm -f "$DIST_DIR"/*.zip
+  rm -f "$DIST_DIR"/*.zip "$DIST_DIR/SHA256SUMS.txt" "$DIST_DIR/MANIFEST.json"
   ROOT_DIR="$ROOT_DIR" python3 - <<'PY' | while IFS= read -r plugin_name; do
 import json
 import os
