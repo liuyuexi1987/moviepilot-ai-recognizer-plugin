@@ -72,6 +72,12 @@
 使用 agent-resource-officer skill，执行 selfcheck，确认 AgentResourceOfficer 协议和请求模板都正常。
 ```
 
+## Local Selftest
+
+```text
+使用 agent-resource-officer skill，先运行 selftest，验证本地 helper 的命令生成逻辑。
+```
+
 ## Doctor
 
 ```text

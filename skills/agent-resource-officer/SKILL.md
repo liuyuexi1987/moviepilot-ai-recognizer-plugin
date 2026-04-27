@@ -47,6 +47,7 @@ python3 scripts/aro_request.py decide --command-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --limit 5 --summary-only
 python3 scripts/aro_request.py recover --summary-only
+python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
 python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
@@ -56,6 +57,12 @@ python3 scripts/aro_request.py pick --choice 1
 ```
 
 The helper uses `?apikey=...`, which is the recommended HTTP auth mode for plugin assistant endpoints.
+
+Use `selftest` to validate local helper logic without connecting to MoviePilot:
+
+```bash
+python3 scripts/aro_request.py selftest
+```
 
 ## Core Startup Flow
 

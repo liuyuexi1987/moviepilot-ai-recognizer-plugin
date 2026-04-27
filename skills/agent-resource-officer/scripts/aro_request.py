@@ -244,6 +244,56 @@ def recipe_helper_commands(recipe_summary, recipe_request):
     }
 
 
+def run_selftest():
+    checks = []
+
+    def check(name, condition):
+        checks.append({"name": name, "ok": bool(condition)})
+
+    start_new_recovery = {
+        "mode": "start_new",
+        "can_resume": True,
+        "action_template": {
+            "name": "start_pansou_search",
+            "body": {"session": "empty", "session_id": "assistant::empty"},
+        },
+    }
+    check("start_new_is_not_resumable", not recovery_can_resume(start_new_recovery))
+
+    p115_recovery = {
+        "mode": "resume_pending_115",
+        "can_resume": True,
+        "action_template": {
+            "name": "resume_pending_115",
+            "body": {"session": "s1", "session_id": "assistant::s1"},
+        },
+    }
+    p115_commands = recovery_helper_commands(p115_recovery)
+    check("resume_pending_115_is_resumable", recovery_can_resume(p115_recovery, p115_commands))
+    check("resume_pending_115_execute_command", p115_commands.get("execute_helper_command") == "python3 scripts/aro_request.py recover --session 's1' --session-id 'assistant::s1' --execute")
+
+    bootstrap_commands = recipe_helper_commands({"first_template": "startup_probe"}, "bootstrap")
+    check("bootstrap_execute_command", bootstrap_commands.get("execute_helper_command") == "python3 scripts/aro_request.py startup")
+    check("bootstrap_inspect_command", bootstrap_commands.get("inspect_helper_command") == "python3 scripts/aro_request.py templates --recipe 'bootstrap' --policy-only")
+
+    workflow_commands = recipe_helper_commands({"first_template": "workflow_dry_run"}, "plan")
+    check("workflow_dry_run_command", workflow_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>")
+
+    quote_value = shell_quote("a'b")
+    check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
+
+    passed = sum(1 for item in checks if item.get("ok"))
+    failed = [item for item in checks if not item.get("ok")]
+    result = {
+        "success": not failed,
+        "passed": passed,
+        "failed": len(failed),
+        "checks": checks,
+    }
+    print_json(result)
+    return 0 if not failed else 1
+
+
 def main():
     parser = argparse.ArgumentParser(description="AgentResourceOfficer request helper")
     parser.add_argument(
@@ -252,6 +302,7 @@ def main():
             "auto",
             "decide",
             "doctor",
+            "selftest",
             "startup",
             "selfcheck",
             "templates",
@@ -299,6 +350,9 @@ def main():
     parser.add_argument("--command-only", action="store_true")
     parser.add_argument("--confirmed", action="store_true")
     args = parser.parse_args()
+
+    if args.command == "selftest":
+        return run_selftest()
 
     config = read_config()
     base_url = args.base_url or config_value(config, "ARO_BASE_URL", "MP_BASE_URL", "MOVIEPILOT_URL")

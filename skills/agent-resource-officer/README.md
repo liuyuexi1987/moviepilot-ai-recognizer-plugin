@@ -35,6 +35,7 @@ python3 scripts/aro_request.py decide --command-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --summary-only
 python3 scripts/aro_request.py recover --summary-only
+python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py selfcheck
@@ -45,6 +46,8 @@ python3 scripts/aro_request.py pick --choice 1
 ```
 
 `auto` 会先读取 `startup.recommended_request_templates`，再自动拉取推荐的低 token recipe。
+
+`selftest` 不连接 MoviePilot，只验证本地 helper 的决策和命令生成逻辑。
 
 `decide` 是单次决策入口：
 
