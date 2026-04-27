@@ -35,6 +35,7 @@ ls -1 dist/*.zip
 cat dist/SHA256SUMS.txt
 cat dist/MANIFEST.json
 bash scripts/verify-dist.sh
+bash scripts/print-release-summary.sh
 ```
 
 不要上传历史旧包。`pre-release-check.sh` 会在打包前清理旧 ZIP。

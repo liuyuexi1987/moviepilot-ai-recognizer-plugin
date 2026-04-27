@@ -250,6 +250,7 @@ if [ "$listed_plugins" != "$expected_plugins" ]; then
 fi
 echo "package_plugin_list_ok"
 bash scripts/package-plugin.sh --all
+bash scripts/print-release-summary.sh >/dev/null
 
 echo "[6/6] 检查关键文件..."
 test -f package.v2.json
