@@ -90,7 +90,7 @@ class _RequestContextShim:
 class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
-    plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/world.png"
+    plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
     plugin_version = "0.1.107"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
