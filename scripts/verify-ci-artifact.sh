@@ -44,9 +44,16 @@ cleanup() {
 trap cleanup EXIT
 
 gh run download "$RUN_ID" --repo "$REPO" --dir "$tmp_dir" >/dev/null
-artifact_dir="$(find "$tmp_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+artifact_dir="$(
+  find "$tmp_dir" -mindepth 1 -maxdepth 1 -type d | while IFS= read -r candidate_dir; do
+    if [ -f "$candidate_dir/SHA256SUMS.txt" ] && [ -f "$candidate_dir/MANIFEST.json" ]; then
+      printf '%s\n' "$candidate_dir"
+      break
+    fi
+  done
+)"
 if [ -z "$artifact_dir" ]; then
-  echo "CI run $RUN_ID artifact 下载后没有目录。" >&2
+  echo "CI run $RUN_ID artifact 下载后没有可校验的发布产物目录。" >&2
   exit 1
 fi
 
