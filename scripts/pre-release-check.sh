@@ -129,14 +129,13 @@ test -f AIRecoginzerForwarder/README.md
 test -f AIRecoginzerForwarder/requirements.txt
 for plugin_name in "${PACKAGE_PLUGINS[@]}"; do
   version="$(PLUGIN_NAME="$plugin_name" python3 - <<'PY'
-from pathlib import Path
+import json
 import os
-import re
 
 plugin_name = os.environ["PLUGIN_NAME"]
-text = Path(plugin_name, "__init__.py").read_text(encoding="utf-8")
-match = re.search(r'plugin_version\s*=\s*"([^"]+)"', text)
-print(match.group(1) if match else "unknown")
+with open("package.json", "r", encoding="utf-8") as file_obj:
+    package = json.load(file_obj)
+print((package.get(plugin_name) or {}).get("version") or "unknown")
 PY
 )"
   test -f "dist/${plugin_name}-${version}.zip"
