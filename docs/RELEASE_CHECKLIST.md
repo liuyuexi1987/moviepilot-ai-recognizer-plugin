@@ -61,7 +61,7 @@ bash scripts/print-skill-release-summary.sh
 gh run list --limit 3
 ```
 
-CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-plugin-zips-<commit>`，里面包含本次插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`。
+CI 通过后会在该 run 的 Artifacts 区域生成 `moviepilot-release-assets-<commit>`，里面包含本次插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`。
 
 如需在本地下载并校验最近一次成功 CI artifact：
 
@@ -97,4 +97,4 @@ bash scripts/create-draft-release.sh v2026.04.28
 gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 ```
 
-dry-run 通过后会生成 `draft-release-assets-<tag>-<commit>` artifact，可先下载核对。确认无误后，再用 `dry_run=false` 创建 Draft Release。
+dry-run 通过后会生成 `moviepilot-release-assets-<tag>-<commit>` artifact，可先下载核对。确认无误后，再用 `dry_run=false` 创建 Draft Release。

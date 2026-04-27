@@ -20,10 +20,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y zip rsync
       - name: Run release checks
         run: bash scripts/pre-release-check.sh
-      - name: Upload plugin ZIP artifacts
+      - name: Upload release asset artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: moviepilot-plugin-zips-${{ github.sha }}
+          name: moviepilot-release-assets-${{ github.sha }}
           path: |
             dist/*.zip
             dist/SHA256SUMS.txt

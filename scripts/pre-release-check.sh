@@ -190,6 +190,7 @@ if missing_readme_items:
 ci_workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 required_ci_fragments = [
     "actions/upload-artifact@v7",
+    "moviepilot-release-assets-",
     "dist/*.zip",
     "dist/SHA256SUMS.txt",
     "dist/MANIFEST.json",
