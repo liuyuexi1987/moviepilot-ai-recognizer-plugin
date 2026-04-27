@@ -310,6 +310,13 @@ def selftest_result():
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
 
+    catalog = commands_catalog()
+    catalog_commands = catalog.get("commands") or []
+    check("commands_schema_version", catalog.get("schema_version") == "commands.v1")
+    check("commands_writes_are_boolean", all(isinstance(item.get("writes"), bool) for item in catalog_commands))
+    check("commands_have_write_condition", all("write_condition" in item for item in catalog_commands))
+    check("commands_recommended_start", catalog.get("recommended_start") == "python3 scripts/aro_request.py decide --summary-only")
+
     passed = sum(1 for item in checks if item.get("ok"))
     failed = [item for item in checks if not item.get("ok")]
     result = {
