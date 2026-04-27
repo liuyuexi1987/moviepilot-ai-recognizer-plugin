@@ -50,6 +50,8 @@ python3 scripts/aro_request.py pick --choice 1
 - 有可恢复会话时，返回 `decision=continue_session`
 - 没有可恢复会话时，返回 `decision=start_recipe`
 
+无论落到哪一边，低 token 摘要都会尽量附带下一步 helper 命令。
+
 如果只想拿自动启动流的最小决策结果，直接用：
 
 ```bash

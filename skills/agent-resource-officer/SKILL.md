@@ -94,6 +94,11 @@ It also returns local helper suggestions:
 - `helper_commands.inspect_helper_command`
 - `helper_commands.execute_helper_command`
 
+For `auto --summary-only` and `decide --summary-only`, the start-recipe branch also returns:
+
+- `inspect_helper_command`
+- `execute_helper_command`
+
 If token budget is tight, prefer:
 
 ```bash

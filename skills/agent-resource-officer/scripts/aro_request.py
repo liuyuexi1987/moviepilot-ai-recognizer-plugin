@@ -192,6 +192,44 @@ def request_templates_summary(data):
     }
 
 
+def recipe_helper_commands(recipe_summary, recipe_request):
+    recipe_summary = recipe_summary if isinstance(recipe_summary, dict) else {}
+    recipe_request = str(recipe_request or "").strip()
+    first_template = str(recipe_summary.get("first_template") or "").strip()
+    first_method = str(recipe_summary.get("first_method") or "").strip().upper()
+    first_endpoint = str(recipe_summary.get("first_endpoint") or "").strip()
+
+    inspect = ""
+    if recipe_request:
+        inspect = (
+            "python3 scripts/aro_request.py templates"
+            f" --recipe {shell_quote(recipe_request)} --policy-only"
+        )
+
+    execute = ""
+    if first_template == "startup_probe":
+        execute = "python3 scripts/aro_request.py startup"
+    elif first_template == "selfcheck_probe":
+        execute = "python3 scripts/aro_request.py selfcheck"
+    elif first_template == "maintain_preview":
+        execute = "python3 scripts/aro_request.py maintain"
+    elif first_template == "maintain_execute":
+        execute = "python3 scripts/aro_request.py maintain --execute"
+    elif first_template == "saved_plan_execute":
+        execute = "python3 scripts/aro_request.py plan-execute"
+    elif first_template == "pick_continue":
+        execute = "python3 scripts/aro_request.py recover --execute"
+    elif first_template == "workflow_dry_run":
+        execute = "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>"
+    elif first_endpoint:
+        execute = f"# {first_method or 'CALL'} {first_endpoint}"
+
+    return {
+        "inspect_helper_command": inspect,
+        "execute_helper_command": execute,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="AgentResourceOfficer request helper")
     parser.add_argument(
@@ -287,6 +325,7 @@ def main():
                 "recommended_recipe_request": (recommended or {}).get("recipe") or recipe,
                 "recommended_recipe_reason": (recommended or {}).get("reason") or "",
                 **request_templates_summary(templates),
+                **recipe_helper_commands(request_templates_summary(templates), (recommended or {}).get("recipe") or recipe),
             }
             print_json(summary)
             return 0
@@ -412,6 +451,7 @@ def main():
             },
         )
         template_summary = request_templates_summary(templates)
+        helper_commands = recipe_helper_commands(template_summary, recipe)
         summary = {
             "decision": "start_recipe",
             "startup_ok": bool((startup_compact or {}).get("success")),
@@ -425,6 +465,7 @@ def main():
                 else ((recommended or {}).get("reason") or "")
             ),
             **template_summary,
+            **helper_commands,
         }
         if args.summary_only and not args.full:
             print_json(summary)
