@@ -97,21 +97,56 @@ PY
 done
 
 python3 - <<'PY'
+import ast
 from hashlib import sha256
 import json
 from pathlib import Path
 
 dist_dir = Path("dist/skills")
-zip_files = sorted(dist_dir.glob("*.zip"))
-if not zip_files:
+skill_sources = [
+    ("agent-resource-officer", Path("skills/agent-resource-officer/scripts/aro_request.py")),
+    ("hdhive-search-unlock-to-115", Path("skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py")),
+]
+
+
+def read_helper_version(helper_file: Path) -> str:
+    tree = ast.parse(helper_file.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == "HELPER_VERSION" and isinstance(node.value, ast.Constant):
+                return str(node.value.value)
+    return ""
+
+
+expected = []
+for skill_id, helper_file in skill_sources:
+    version = read_helper_version(helper_file)
+    if not version:
+        print(f"{helper_file} 缺少 HELPER_VERSION")
+        raise SystemExit(1)
+    expected.append((skill_id, version, dist_dir / f"{skill_id}-{version}.zip"))
+
+if not expected:
     print("dist/skills 目录没有生成 ZIP 文件")
+    raise SystemExit(1)
+expected_names = {zip_file.name for _, _, zip_file in expected}
+actual_names = {zip_file.name for zip_file in dist_dir.glob("*.zip")}
+missing = sorted(expected_names - actual_names)
+extra = sorted(actual_names - expected_names)
+if missing or extra:
+    if missing:
+        print("dist/skills 缺少预期 ZIP:")
+        print("\n".join(missing))
+    if extra:
+        print("dist/skills 包含未知 ZIP:")
+        print("\n".join(extra))
     raise SystemExit(1)
 
 lines = []
 skills = []
-for zip_file in zip_files:
-    stem = zip_file.name[:-4]
-    skill_id, version = stem.rsplit("-", 1)
+for skill_id, version, zip_file in expected:
     digest = sha256(zip_file.read_bytes()).hexdigest()
     lines.append(f"{digest}  {zip_file.name}")
     skills.append(
@@ -128,7 +163,7 @@ for zip_file in zip_files:
     json.dumps({"skills": skills}, ensure_ascii=False, indent=2) + "\n",
     encoding="utf-8",
 )
-print(f"skill_sha256_manifest_ok files={len(zip_files)}")
+print(f"skill_sha256_manifest_ok files={len(expected)}")
 PY
 
 bash scripts/verify-skill-dist.sh
