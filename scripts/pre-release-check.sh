@@ -171,6 +171,22 @@ if missing_readme_items:
     print("README.md 插件清单与 package.json 不一致:")
     print("\n".join(missing_readme_items))
     raise SystemExit(1)
+
+ci_workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+required_ci_fragments = [
+    "actions/upload-artifact@v7",
+    "dist/*.zip",
+    "dist/SHA256SUMS.txt",
+    "dist/MANIFEST.json",
+    "if-no-files-found: error",
+]
+missing_ci_fragments = [
+    fragment for fragment in required_ci_fragments if fragment not in ci_workflow
+]
+if missing_ci_fragments:
+    print(".github/workflows/ci.yml 缺少发布 artifact 配置:")
+    print("\n".join(missing_ci_fragments))
+    raise SystemExit(1)
 PY
 
 echo "检查 Markdown 本地链接..."
