@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.5
+
+- Expanded local `selftest` coverage for maintain command generation and request-template summary parsing.
+
 ## 0.1.4
 
 - `maintain` preview now sends a clean GET dry-run request without `execute=true`.
