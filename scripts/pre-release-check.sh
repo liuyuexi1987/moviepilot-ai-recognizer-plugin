@@ -181,6 +181,12 @@ required_ci_fragments = [
     "if-no-files-found: error",
 ]
 draft_release_workflow = Path(".github/workflows/draft-release.yml").read_text(encoding="utf-8")
+required_draft_release_fragments = [
+    "workflow_dispatch:",
+    "contents: write",
+    "scripts/create-draft-release.sh",
+    "dry_run",
+]
 missing_workflow_fragments = []
 for workflow_name, workflow_text in (
     ("ci.yml", ci_workflow),
@@ -189,8 +195,11 @@ for workflow_name, workflow_text in (
     for fragment in required_ci_fragments:
         if fragment not in workflow_text:
             missing_workflow_fragments.append(f"{workflow_name}: {fragment}")
+for fragment in required_draft_release_fragments:
+    if fragment not in draft_release_workflow:
+        missing_workflow_fragments.append(f"draft-release.yml: {fragment}")
 if missing_workflow_fragments:
-    print(".github/workflows/ci.yml 缺少发布 artifact 配置:")
+    print(".github/workflows 缺少发布流程配置:")
     print("\n".join(missing_workflow_fragments))
     raise SystemExit(1)
 PY

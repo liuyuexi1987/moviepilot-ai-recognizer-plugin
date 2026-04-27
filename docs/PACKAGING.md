@@ -143,7 +143,8 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 - `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、基础目录结构和不应发布的生成文件
 - `scripts/verify-ci-artifact.sh` 必须能下载并校验 GitHub Actions artifact
 - `scripts/print-release-summary.sh` 必须能基于 `MANIFEST.json` 输出 Release Markdown 表格
-- `.github/workflows/ci.yml` 必须使用 artifact 上传步骤，并包含 ZIP、`SHA256SUMS.txt`、`MANIFEST.json`
+- `.github/workflows/ci.yml` 和 `draft-release.yml` 必须使用 artifact 上传步骤，并包含 ZIP、`SHA256SUMS.txt`、`MANIFEST.json`
+- `draft-release.yml` 必须保留手动触发、`dry_run` 输入和创建 Draft Release 所需的 `contents: write` 权限
 - Markdown 文档中的本地相对链接必须存在
 - 仓库文本中不能包含已知本机路径、历史密码、历史 API Key 或 Bearer JWT 片段
 - 每个 ZIP 必须包含 `<PluginName>/__init__.py`
