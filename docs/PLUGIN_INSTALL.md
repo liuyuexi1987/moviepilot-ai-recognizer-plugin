@@ -22,6 +22,14 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 bash scripts/pre-release-check.sh
 ```
 
+如果只是本地临时打包、不需要完整验收，也可以执行：
+
+```bash
+bash scripts/package-plugin.sh --all
+```
+
+正式发布前仍建议使用 `pre-release-check.sh`，它会额外检查元数据、Skill helper 和 ZIP 内容。
+
 生成目录：
 
 ```text
