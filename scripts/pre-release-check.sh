@@ -70,6 +70,32 @@ bash skills/agent-resource-officer/install.sh --dry-run --target "$ROOT_DIR/.tmp
 echo "agent_resource_officer_skill_install_dry_run_ok"
 python3 skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest >/dev/null
 echo "hdhive_skill_selftest_ok"
+python3 - <<'PY'
+import ast
+from pathlib import Path
+
+helper_file = Path("skills/agent-resource-officer/scripts/aro_request.py")
+tree = ast.parse(helper_file.read_text(encoding="utf-8"))
+helper_version = ""
+for node in ast.walk(tree):
+    if not isinstance(node, ast.Assign):
+        continue
+    for target in node.targets:
+        if isinstance(target, ast.Name) and target.id == "HELPER_VERSION" and isinstance(node.value, ast.Constant):
+            helper_version = str(node.value.value)
+if not helper_version:
+    print("未找到 AgentResourceOfficer helper 版本")
+    raise SystemExit(1)
+readme = Path("skills/agent-resource-officer/README.md").read_text(encoding="utf-8")
+changelog = Path("skills/agent-resource-officer/CHANGELOG.md").read_text(encoding="utf-8")
+if f"当前 helper 版本：`{helper_version}`" not in readme:
+    print("AgentResourceOfficer Skill README helper 版本未同步")
+    raise SystemExit(1)
+if f"## {helper_version}" not in changelog:
+    print("AgentResourceOfficer Skill CHANGELOG 缺少当前 helper 版本")
+    raise SystemExit(1)
+print(f"agent_resource_officer_helper_version_ok {helper_version}")
+PY
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
 PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'
