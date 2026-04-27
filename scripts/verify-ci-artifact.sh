@@ -14,15 +14,24 @@ if ! command -v unzip >/dev/null 2>&1; then
   exit 1
 fi
 
+REPO="${GITHUB_REPOSITORY:-}"
+if [ -z "$REPO" ]; then
+  REPO="$(gh repo view --json nameWithOwner --jq '.nameWithOwner')"
+fi
+if [ -z "$REPO" ] || [ "$REPO" = "null" ]; then
+  echo "无法识别当前 GitHub 仓库。" >&2
+  exit 1
+fi
+
 if [ -z "$RUN_ID" ]; then
-  RUN_ID="$(gh run list --workflow CI --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+  RUN_ID="$(gh run list --repo "$REPO" --workflow CI --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
 fi
 if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
   echo "未找到可用的成功 CI run。" >&2
   exit 1
 fi
 
-artifact_count="$(gh api "repos/liuyuexi1987/MoviePilot-Plugins/actions/runs/$RUN_ID/artifacts" --jq '.artifacts | length')"
+artifact_count="$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --jq '.artifacts | length')"
 if [ "$artifact_count" -lt 1 ]; then
   echo "CI run $RUN_ID 没有 artifact。" >&2
   exit 1
@@ -34,7 +43,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-gh run download "$RUN_ID" --dir "$tmp_dir" >/dev/null
+gh run download "$RUN_ID" --repo "$REPO" --dir "$tmp_dir" >/dev/null
 artifact_dir="$(find "$tmp_dir" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 if [ -z "$artifact_dir" ]; then
   echo "CI run $RUN_ID artifact 下载后没有目录。" >&2
