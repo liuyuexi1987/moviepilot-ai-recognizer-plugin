@@ -2,6 +2,8 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制资源工作流。
 
+当前 helper 版本：`0.1.4`
+
 ## 使用方式
 
 1. 把整个目录复制到自己的 Skill 搜索路径，例如：
