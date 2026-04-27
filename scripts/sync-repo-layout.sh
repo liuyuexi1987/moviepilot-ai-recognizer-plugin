@@ -41,8 +41,16 @@ sync_plugin() {
 }
 
 echo "已同步官方插件仓库目录："
-sync_plugin "$ROOT_DIR/AIRecoginzerForwarder" "airecoginzerforwarder"
-sync_plugin "$ROOT_DIR/AIRecognizerEnhancer" "airecognizerenhancer"
-sync_plugin "$ROOT_DIR/AgentResourceOfficer" "agentresourceofficer"
-sync_plugin "$ROOT_DIR/FeishuCommandBridgeLong" "feishucommandbridgelong"
-sync_plugin "$ROOT_DIR/QuarkShareSaver" "quarksharesaver"
+ROOT_DIR="$ROOT_DIR" python3 - <<'PY' | while IFS=$'\t' read -r src_dir target_name; do
+import json
+import os
+from pathlib import Path
+
+root_dir = Path(os.environ["ROOT_DIR"])
+package = json.loads((root_dir / "package.json").read_text(encoding="utf-8"))
+for plugin_id in package:
+    if (root_dir / plugin_id / "__init__.py").exists():
+        print(f"{plugin_id}\t{plugin_id.lower()}")
+PY
+  sync_plugin "$ROOT_DIR/$src_dir" "$target_name"
+done
