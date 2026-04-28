@@ -189,6 +189,17 @@ if missing_readme_items:
     print("\n".join(missing_readme_items))
     raise SystemExit(1)
 
+changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+missing_changelog_items = []
+for plugin_id, meta in pkg.items():
+    current_version_line = f"- `{plugin_id}`: `{meta.get('version')}`"
+    if current_version_line not in changelog:
+        missing_changelog_items.append(f"{plugin_id}: CHANGELOG.md missing {current_version_line}")
+if missing_changelog_items:
+    print("CHANGELOG.md 当前核心版本与 package.json 不一致:")
+    print("\n".join(missing_changelog_items))
+    raise SystemExit(1)
+
 ci_workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 required_ci_fragments = [
     "actions/upload-artifact@v7",
