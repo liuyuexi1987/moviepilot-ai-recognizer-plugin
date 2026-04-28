@@ -329,13 +329,45 @@ class FeishuChannel:
 
     def health(self) -> Dict[str, Any]:
         legacy_bridge_running = self.is_legacy_bridge_running()
+        sdk_available = lark is not None
+        app_id_configured = bool(self.app_id)
+        app_secret_configured = bool(self.app_secret)
+        verification_token_configured = bool(self.verification_token)
+        missing_requirements = []
+        if not sdk_available:
+            missing_requirements.append("lark-oapi")
+        if not app_id_configured:
+            missing_requirements.append("feishu_app_id")
+        if not app_secret_configured:
+            missing_requirements.append("feishu_app_secret")
+        conflict_warning = bool(self.enabled and legacy_bridge_running)
+        ready_to_start = bool(self.enabled and sdk_available and app_id_configured and app_secret_configured and not conflict_warning)
+        safe_to_enable = bool((not legacy_bridge_running) and sdk_available and app_id_configured and app_secret_configured)
+        if conflict_warning:
+            recommended_action = "disable_legacy_bridge_or_use_different_app"
+            migration_hint = "内置飞书入口和旧飞书桥接同时运行，建议关闭旧桥接或使用不同飞书 App。"
+        elif not self.enabled and legacy_bridge_running:
+            recommended_action = "keep_legacy_or_disable_it_before_migration"
+            migration_hint = "内置飞书入口关闭，旧飞书桥接运行中；迁移前先关闭旧桥接。"
+        elif not self.enabled:
+            recommended_action = "configure_and_enable_feishu_channel"
+            migration_hint = "内置飞书入口关闭；配置飞书凭证后可开启。"
+        elif missing_requirements:
+            recommended_action = "complete_feishu_requirements"
+            migration_hint = "内置飞书入口已启用，但依赖或飞书凭证不完整。"
+        elif not self.is_running():
+            recommended_action = "restart_moviepilot_or_resave_config"
+            migration_hint = "内置飞书入口已启用但长连接未运行，建议保存配置或重启 MoviePilot。"
+        else:
+            recommended_action = "none"
+            migration_hint = "内置飞书入口运行正常。"
         return {
             "enabled": self.enabled,
             "running": self.is_running(),
-            "sdk_available": lark is not None,
-            "app_id_configured": bool(self.app_id),
-            "app_secret_configured": bool(self.app_secret),
-            "verification_token_configured": bool(self.verification_token),
+            "sdk_available": sdk_available,
+            "app_id_configured": app_id_configured,
+            "app_secret_configured": app_secret_configured,
+            "verification_token_configured": verification_token_configured,
             "allow_all": self.allow_all,
             "reply_enabled": self.reply_enabled,
             "allowed_chat_count": len(self.allowed_chat_ids),
@@ -344,7 +376,12 @@ class FeishuChannel:
             "command_whitelist": self.command_whitelist,
             "alias_count": len(self.parse_alias_text(self.command_aliases)),
             "legacy_bridge_running": legacy_bridge_running,
-            "conflict_warning": bool(self.enabled and legacy_bridge_running),
+            "conflict_warning": conflict_warning,
+            "ready_to_start": ready_to_start,
+            "safe_to_enable": safe_to_enable,
+            "missing_requirements": missing_requirements,
+            "recommended_action": recommended_action,
+            "migration_hint": migration_hint,
         }
 
     def handle_long_connection_event(self, data: Any) -> None:

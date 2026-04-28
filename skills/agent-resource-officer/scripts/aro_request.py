@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.10"
+HELPER_VERSION = "0.1.11"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -122,6 +122,11 @@ def compact(data):
             "alias_count",
             "legacy_bridge_running",
             "conflict_warning",
+            "ready_to_start",
+            "safe_to_enable",
+            "missing_requirements",
+            "migration_hint",
+            "recommended_action",
             "p115_ready",
             "p115_direct_ready",
             "hdhive_configured",

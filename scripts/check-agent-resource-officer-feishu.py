@@ -73,12 +73,16 @@ def main():
     health = channel.health()
     check("health has legacy_bridge_running", "legacy_bridge_running" in health)
     check("health has conflict_warning", "conflict_warning" in health)
+    check("health has safe_to_enable", "safe_to_enable" in health)
+    check("health has recommended_action", "recommended_action" in health)
+    check("health has migration_hint", "migration_hint" in health)
     check("default conflict false", health["conflict_warning"] is False)
 
     channel.configure({"feishu_enabled": True})
     channel.is_legacy_bridge_running = lambda: True
     health = channel.health()
     check("conflict true when both enabled", health["legacy_bridge_running"] is True and health["conflict_warning"] is True)
+    check("conflict recommends disabling legacy", health["recommended_action"] == "disable_legacy_bridge_or_use_different_app")
 
     required_form_models = [
         '"model": "feishu_reply_receive_id_type"',

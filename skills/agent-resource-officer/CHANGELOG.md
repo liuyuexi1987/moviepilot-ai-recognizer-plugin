@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.11
+
+- Compact output now preserves Feishu migration fields such as `ready_to_start`, `safe_to_enable`, `missing_requirements`, and `migration_hint`.
+
 ## 0.1.10
 
 - Compact output now preserves service health fields, warnings, defaults, and Quark/P115 readiness fields for lower-token diagnostics.
