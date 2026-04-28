@@ -40,6 +40,12 @@
 
 ## 历史版本
 
+## v2026.04.28.1
+
+- 同日补丁发布，更新 `FeishuCommandBridgeLong 0.5.26`。
+- 插件市场描述明确旧飞书桥接的兼容/备份定位，新用户优先使用 `AgentResourceOfficer` 内置飞书入口。
+- Release 附件重新打包，包含 `FeishuCommandBridgeLong-0.5.26.zip`。
+
 ## v2026.04.28
 
 - 正式发布多插件套件 Release，附件包含 8 个 MoviePilot 本地安装 ZIP、2 个公开 Skill ZIP、插件/Skill manifest 和 SHA256 校验文件。
