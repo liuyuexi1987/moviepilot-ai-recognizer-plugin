@@ -10,7 +10,7 @@ Usage:
   bash scripts/create-draft-release.sh <tag> [--dry-run] [--skip-check]
 
 Options:
-  <tag>         GitHub Release tag, for example v2026.04.28
+  <tag>         GitHub Release tag, for example v2026.04.28.1
   --dry-run     Run checks and print the release command without creating a release
   --skip-check  Skip pre-release-check.sh and use existing dist/ files
   --help        Show this help
