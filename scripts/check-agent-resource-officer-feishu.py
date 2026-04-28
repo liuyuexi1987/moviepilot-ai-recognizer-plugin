@@ -50,6 +50,10 @@ def main():
     channel_cls = load_channel_class()
     channel = channel_cls(FakePlugin())
     channel.configure({})
+    default_whitelist = set(channel_cls.default_command_whitelist())
+    default_alias_targets = set(channel_cls.parse_alias_text(channel_cls.default_command_aliases()).values())
+    missing_alias_targets = sorted(default_alias_targets - default_whitelist)
+    check("all default alias targets are whitelisted", not missing_alias_targets)
 
     cases = {
         "yc蜘蛛侠": "/smart_entry 蜘蛛侠",
