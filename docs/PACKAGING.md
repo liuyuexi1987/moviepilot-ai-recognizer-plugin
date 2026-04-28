@@ -193,7 +193,7 @@ dist/skills/
 例如：
 
 ```text
-AgentResourceOfficer-0.1.110.zip
+AgentResourceOfficer-<当前版本>.zip
 ```
 
 ## 使用方式
