@@ -40,7 +40,7 @@
 - `AIRecoginzerForwarder`（AI 识别转发）：`2.0.1`
 - `AIRecognizerEnhancer`（AI识别增强）：`0.1.11`
 - `AgentResourceOfficer`：`0.1.111`
-- `FeishuCommandBridgeLong`（飞书命令桥接）：`0.5.25`
+- `FeishuCommandBridgeLong`（飞书命令桥接）：`0.5.26`
 - `HdhiveOpenApi`（影巢 OpenAPI）：`0.3.0`
 - `HDHiveDailySign`（HDHive Daily Sign）：`1.0.0`
 - `QuarkShareSaver`（夸克分享转存）：`0.1.0`

@@ -137,9 +137,9 @@ _SMART_CACHE_FILE = Path("/config/plugins/FeishuCommandBridgeLong/.smart_cache.j
 
 class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
-    plugin_desc = "使用飞书长连接接收消息事件并转发为 MoviePilot 命令执行。"
+    plugin_desc = "旧飞书长连接兼容/备份入口；新用户建议优先使用 Agent资源官 内置飞书入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.5.25"
+    plugin_version = "0.5.26"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
