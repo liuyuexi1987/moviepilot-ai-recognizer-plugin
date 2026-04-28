@@ -1,4 +1,5 @@
 import concurrent.futures
+import asyncio
 import os
 import threading
 import time
@@ -29,6 +30,7 @@ from app.plugins import _PluginBase
 from .services.hdhive_openapi import HDHiveOpenApiService
 from .services.p115_transfer import P115TransferService
 from .services.quark_transfer import QuarkTransferService
+from .feishu_channel import FeishuChannel
 from .agenttool import (
     AssistantCapabilitiesTool,
     AssistantExecuteActionTool,
@@ -91,7 +93,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.107"
+    plugin_version = "0.1.108"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -115,10 +117,23 @@ class AgentResourceOfficer(_PluginBase):
     _p115_client_type = "alipaymini"
     _p115_cookie = ""
     _p115_prefer_direct = True
+    _feishu_enabled = False
+    _feishu_allow_all = False
+    _feishu_reply_enabled = True
+    _feishu_reply_receive_id_type = "chat_id"
+    _feishu_app_id = ""
+    _feishu_app_secret = ""
+    _feishu_verification_token = ""
+    _feishu_allowed_chat_ids: List[str] = []
+    _feishu_allowed_user_ids: List[str] = []
+    _feishu_command_whitelist: List[str] = []
+    _feishu_command_aliases = ""
+    _feishu_command_mode = "resource_officer"
 
     _quark_service: Optional[QuarkTransferService] = None
     _hdhive_service: Optional[HDHiveOpenApiService] = None
     _p115_service: Optional[P115TransferService] = None
+    _feishu_channel: Optional[FeishuChannel] = None
     _session_cache: Dict[str, Dict[str, Any]] = {}
     _agent_tools_reloaded = False
     _candidate_actor_cache: Dict[str, List[str]] = {}
@@ -213,6 +228,22 @@ class AgentResourceOfficer(_PluginBase):
         self._p115_client_type = P115TransferService.normalize_qrcode_client_type(config.get("p115_client_type"))
         self._p115_cookie = self._clean_text(config.get("p115_cookie"))
         self._p115_prefer_direct = bool(config.get("p115_prefer_direct", True))
+        self._feishu_enabled = bool(config.get("feishu_enabled", False))
+        self._feishu_allow_all = bool(config.get("feishu_allow_all", False))
+        self._feishu_reply_enabled = bool(config.get("feishu_reply_enabled", True))
+        self._feishu_reply_receive_id_type = self._clean_text(config.get("feishu_reply_receive_id_type") or "chat_id")
+        self._feishu_app_id = self._clean_text(config.get("feishu_app_id"))
+        self._feishu_app_secret = self._clean_text(config.get("feishu_app_secret"))
+        self._feishu_verification_token = self._clean_text(config.get("feishu_verification_token"))
+        self._feishu_allowed_chat_ids = FeishuChannel.split_lines(config.get("feishu_allowed_chat_ids"))
+        self._feishu_allowed_user_ids = FeishuChannel.split_lines(config.get("feishu_allowed_user_ids"))
+        self._feishu_command_whitelist = FeishuChannel.merge_command_whitelist(
+            FeishuChannel.split_commands(config.get("feishu_command_whitelist"))
+        )
+        self._feishu_command_aliases = FeishuChannel.merge_command_aliases(
+            self._clean_text(config.get("feishu_command_aliases"))
+        )
+        self._feishu_command_mode = self._clean_text(config.get("feishu_command_mode") or "resource_officer")
         self._quark_service = QuarkTransferService(
             cookie=self._quark_cookie,
             timeout=self._quark_timeout,
@@ -234,6 +265,11 @@ class AgentResourceOfficer(_PluginBase):
         self._restore_execution_history()
         self._restore_workflow_plans()
         self._agent_tools_reloaded = False
+        self._ensure_feishu_channel().configure(self._build_config())
+        if self._enabled and self._feishu_enabled:
+            self._feishu_channel.start()
+        elif self._feishu_channel is not None:
+            self._feishu_channel.stop()
 
     def get_state(self) -> bool:
         if self._enabled and not self._agent_tools_reloaded:
@@ -431,6 +467,18 @@ class AgentResourceOfficer(_PluginBase):
             "p115_client_type": self._p115_client_type,
             "p115_cookie": self._p115_cookie,
             "p115_prefer_direct": self._p115_prefer_direct,
+            "feishu_enabled": self._feishu_enabled,
+            "feishu_allow_all": self._feishu_allow_all,
+            "feishu_reply_enabled": self._feishu_reply_enabled,
+            "feishu_reply_receive_id_type": self._feishu_reply_receive_id_type,
+            "feishu_app_id": self._feishu_app_id,
+            "feishu_app_secret": self._feishu_app_secret,
+            "feishu_verification_token": self._feishu_verification_token,
+            "feishu_allowed_chat_ids": "\n".join(self._feishu_allowed_chat_ids),
+            "feishu_allowed_user_ids": "\n".join(self._feishu_allowed_user_ids),
+            "feishu_command_whitelist": ",".join(self._feishu_command_whitelist),
+            "feishu_command_aliases": self._feishu_command_aliases,
+            "feishu_command_mode": self._feishu_command_mode,
         }
         if overrides:
             config.update(overrides)
@@ -596,7 +644,14 @@ class AgentResourceOfficer(_PluginBase):
         return []
 
     def stop_service(self):
+        if self._feishu_channel is not None:
+            self._feishu_channel.stop()
         return
+
+    def _ensure_feishu_channel(self) -> FeishuChannel:
+        if self._feishu_channel is None:
+            self._feishu_channel = FeishuChannel(self)
+        return self._feishu_channel
 
     def get_api(self) -> List[Dict[str, Any]]:
         return [
@@ -719,6 +774,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_share_route,
                 "methods": ["POST"],
                 "summary": "通过 Agent资源官 自动识别 115 / 夸克分享链接并执行对应转存",
+            },
+            {
+                "path": "/feishu/health",
+                "endpoint": self.api_feishu_health,
+                "methods": ["GET"],
+                "summary": "检查 Agent资源官 内置飞书入口状态",
             },
             {
                 "path": "/assistant/route",
@@ -911,6 +972,9 @@ class AgentResourceOfficer(_PluginBase):
         else:
             p115_ready = "复用 115 助手客户端"
         hdhive_summary = self._build_hdhive_page_summary()
+        feishu_health = self._ensure_feishu_channel().health()
+        feishu_state = "已启用" if feishu_health.get("enabled") else "未启用"
+        feishu_running = "运行中" if feishu_health.get("running") else "未运行"
         return [
             {
                 "component": "VCard",
@@ -929,6 +993,8 @@ class AgentResourceOfficer(_PluginBase):
                             f"\n115 运行状态：{'可用' if p115_health_ok else '待修复'}"
                             f"\n115 扫码接口：/p115/qrcode  /p115/qrcode/check"
                             "\n统一智能入口：/assistant/route  /assistant/pick"
+                            f"\n飞书入口：{feishu_state}，长连接：{feishu_running}"
+                            "\n飞书健康检查：/feishu/health"
                             "\n原生 Agent Tool：影巢会话搜索/选择、115 扫码、115 待任务查看/继续/取消、通用分享路由"
                             "\n\n已支持的影巢用户态 API：/hdhive/account /hdhive/checkin /hdhive/quota /hdhive/usage_today /hdhive/weekly_free_quota"
                             f"\n115 Cookie 判定：{cookie_state.get('message') or '当前会话可直接用于 115 直转'}"
@@ -1233,10 +1299,170 @@ class AgentResourceOfficer(_PluginBase):
                             },
                         ],
                     },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "飞书入口是可选 Channel，默认关闭。开启前请先关闭旧飞书桥接，避免同一个飞书机器人重复回复。",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "feishu_enabled",
+                                            "label": "启用内置飞书入口",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "feishu_allow_all",
+                                            "label": "允许所有飞书会话",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "feishu_reply_enabled",
+                                            "label": "发送飞书回复",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "feishu_app_id",
+                                            "label": "飞书 App ID",
+                                            "placeholder": "cli_xxxxxxxxx",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "feishu_app_secret",
+                                            "label": "飞书 App Secret",
+                                            "type": "password",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "feishu_verification_token",
+                                            "label": "Verification Token",
+                                            "type": "password",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "feishu_allowed_chat_ids",
+                                            "label": "允许的群聊 Chat ID",
+                                            "rows": 3,
+                                            "placeholder": "一个一行；allow_all 关闭时生效",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "feishu_allowed_user_ids",
+                                            "label": "允许的用户 Open ID",
+                                            "rows": 3,
+                                            "placeholder": "一个一行",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "feishu_command_aliases",
+                                            "label": "飞书命令别名",
+                                            "rows": 5,
+                                            "placeholder": FeishuChannel.default_command_aliases(),
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
                 ],
             }
         ]
         return form, self._build_config()
+
+    async def api_feishu_health(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        channel = self._ensure_feishu_channel()
+        return {
+            "success": True,
+            "message": "Agent资源官 内置飞书入口状态",
+            "data": {
+                "plugin_version": self.plugin_version,
+                "plugin_enabled": self._enabled,
+                **channel.health(),
+            },
+        }
 
     async def api_quark_health(self, request: Request):
         ok, message = self._check_api_access(request)
@@ -3090,6 +3316,8 @@ class AgentResourceOfficer(_PluginBase):
             "action": self._clean_text(data.get("action")) or "assistant_interaction",
             "ok": bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
             "compact": True,
+            "write_effect": data.get("write_effect") or self._assistant_write_effect_for_action(self._clean_text(data.get("action"))),
+            "error_code": self._clean_text(data.get("error_code")) or ("" if response.get("success") else "assistant_error"),
             "session": self._clean_text(data.get("session") or session_state.get("session")) or "default",
             "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
             "message_head": self._assistant_result_message_head(response.get("message")),
@@ -5082,6 +5310,10 @@ class AgentResourceOfficer(_PluginBase):
         payload = dict(data or {})
         session_name = self._clean_text(session) or "default"
         session_state = self._assistant_session_public_data(session=session_name)
+        payload["action"] = self._clean_text(payload.get("action")) or "assistant_response"
+        payload["ok"] = bool(payload.get("ok", True))
+        payload["write_effect"] = payload.get("write_effect") or self._assistant_write_effect_for_action(payload["action"])
+        payload["error_code"] = self._clean_text(payload.get("error_code")) or ("" if payload["ok"] else "assistant_error")
         payload["protocol_version"] = "assistant.v1"
         payload["session"] = session_name
         payload["session_id"] = session_state.get("session_id") or self._assistant_session_id(session_name)
@@ -5090,6 +5322,27 @@ class AgentResourceOfficer(_PluginBase):
         payload["action_templates"] = payload.get("action_templates") or session_state.get("action_templates") or []
         payload["recovery"] = payload.get("recovery") or session_state.get("recovery") or self._assistant_recovery_public_data(session_state=session_state)
         return payload
+
+    @staticmethod
+    def _assistant_write_effect_for_action(action: str) -> str:
+        action_name = str(action or "").strip()
+        if action_name in {
+            "share_route",
+            "hdhive_unlock",
+            "transfer_115",
+            "quark_transfer",
+            "p115_resume",
+            "p115_cancel",
+            "p115_qrcode_start",
+            "p115_qrcode_check",
+            "execute_actions",
+            "execute_plan",
+            "maintain",
+        }:
+            return "write"
+        if action_name in {"workflow_plan", "plans_clear", "session_clear", "sessions_clear"}:
+            return "state"
+        return "read"
 
     def _merge_assistant_structured_input(self, body: Dict[str, Any], parsed: Dict[str, str]) -> Dict[str, str]:
         merged = dict(parsed or {})
@@ -5602,6 +5855,67 @@ class AgentResourceOfficer(_PluginBase):
     def _is_115_url(value: str) -> bool:
         host = urlparse(value or "").netloc.lower()
         return host == "115.com" or host.endswith(".115.com") or "115cdn.com" in host
+
+    @staticmethod
+    def _run_coroutine_sync(coro):
+        try:
+            return asyncio.run(coro)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(coro)
+            finally:
+                loop.close()
+
+    def feishu_assistant_route(self, text: str, session: str) -> Dict[str, Any]:
+        return self._run_coroutine_sync(
+            self.api_assistant_route(
+                _JsonRequestShim(
+                    _RequestContextShim(),
+                    {
+                        "text": self._clean_text(text),
+                        "session": self._clean_text(session) or "feishu",
+                        "compact": False,
+                    },
+                )
+            )
+        )
+
+    def feishu_assistant_pick(self, arg: str, session: str) -> Dict[str, Any]:
+        index, target_path, action = self._parse_feishu_pick_arg(arg)
+        return self._run_coroutine_sync(
+            self.api_assistant_pick(
+                _JsonRequestShim(
+                    _RequestContextShim(),
+                    {
+                        "session": self._clean_text(session) or "feishu",
+                        "index": index,
+                        "action": action,
+                        "path": target_path,
+                        "compact": False,
+                    },
+                )
+            )
+        )
+
+    @classmethod
+    def _parse_feishu_pick_arg(cls, arg: str) -> Tuple[int, str, str]:
+        text = cls._clean_text(arg)
+        action = cls._normalize_pick_action(text)
+        index = 0
+        path = ""
+        if action:
+            return 0, "", action
+        match = re.search(r"\d+", text)
+        if match:
+            index = cls._safe_int(match.group(0), 0)
+        for token in text.split():
+            if "=" not in token:
+                continue
+            key, value = token.split("=", 1)
+            if key.strip().lower() in {"path", "dir", "目录", "位置"}:
+                path = cls._resolve_pan_path_value(value)
+        return index, path, action
 
     async def tool_hdhive_search_session(
         self,

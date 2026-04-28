@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制资源工作流。
 
-当前 helper 版本：`0.1.5`
+当前 helper 版本：`0.1.6`
 
 ## 使用方式
 
@@ -44,6 +44,7 @@ python3 scripts/aro_request.py decide --summary-only
 python3 scripts/aro_request.py decide --command-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --summary-only
+python3 scripts/aro_request.py feishu-health
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
@@ -96,6 +97,8 @@ python3 scripts/aro_request.py auto --summary-only
 ```
 
 `doctor` 是只读诊断入口，会一次返回 `startup + selfcheck + sessions + recover` 的压缩结果，适合外部智能体在真正执行前做开场检查。
+
+`feishu-health` 会检查 `AgentResourceOfficer` 内置飞书入口是否启用、长连接是否运行，以及飞书 SDK / 白名单 / 回复配置状态。
 
 如果只想拿最省 token 的决策结果，直接用：
 

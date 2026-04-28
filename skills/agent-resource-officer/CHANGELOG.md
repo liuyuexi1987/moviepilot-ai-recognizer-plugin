@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.6
+
+- Added `feishu-health` for checking the built-in AgentResourceOfficer Feishu Channel status.
+
 ## 0.1.5
 
 - Expanded local `selftest` coverage for maintain command generation and request-template summary parsing.

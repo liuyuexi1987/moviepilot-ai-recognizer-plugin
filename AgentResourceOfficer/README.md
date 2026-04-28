@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.1.107`
+- 当前版本：`0.1.108`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -72,10 +72,54 @@
 - 影巢候选已支持新主线分页、`详情` / `审查` 按需补主演，飞书切 `auto` 时也能复用
 - 影巢部分用户态接口受站点 Premium 权限限制；账号信息会优先回退到 `HDHiveDailySign` 的网页快照，签到会优先尝试 `HDHiveDailySign` 现有 Cookie 做网页兜底
 - `115` 自动转存已具备轻量直转层：可优先使用扫码得到的 115 客户端会话，或复用已加载的 115 客户端直接调用分享转存接口；直转失败时再回退 `P115StrmHelper`
-- 飞书入口仍会继续迁移进来
+- 已内置可选 `Feishu Channel`：可直接用飞书长连接接收消息，并复用资源官统一入口执行搜索、选择、转存、115 登录和 STRM 调度
 
 这意味着 `Agent资源官` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
 对于登录方式，当前已经不再推荐粘贴网页版 Cookie，而是优先走 `p115client` 同款扫码会话。
+
+## 飞书入口
+
+`Agent资源官` 现在可以直接作为飞书入口使用。这个入口默认关闭，开启前建议先关闭旧 `FeishuCommandBridgeLong`，避免同一个飞书机器人被两个插件同时监听。
+
+内置飞书入口只负责收消息、权限校验、回复和二维码图片发送；影巢、盘搜、115、夸克这些资源动作仍统一走 `assistant/route` 与 `assistant/pick`。
+
+常用命令：
+
+```txt
+处理 流浪地球2
+影巢搜索 流浪地球2
+yc流浪地球2
+2流浪地球2
+盘搜搜索 流浪地球2
+ps流浪地球2
+1流浪地球2
+链接 https://115cdn.com/s/xxxx path=/待整理
+链接 https://pan.quark.cn/s/xxxx path=/飞书
+选择 1
+详情
+审查
+n 下一页
+115登录
+115状态
+115任务
+继续115任务
+取消115任务
+```
+
+兼容的远程操作：
+
+```txt
+MP搜索 片名
+下载资源 1
+订阅媒体 片名
+订阅并搜索 片名
+刮削 /待整理/
+生成STRM
+全量STRM
+指定路径STRM /emby/movie
+```
+
+`生成STRM`、`全量STRM`、`指定路径STRM` 只调度已安装的 `P115StrmHelper`，不会把 STRM 生成逻辑搬进资源官。
 
 如遇到 `P115StrmHelper` 因 `TransferOverwriteCheckEventData` 导入失败而无法加载，可执行仓库脚本：
 
@@ -99,6 +143,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/p115/pending`
 - `POST /api/v1/plugin/AgentResourceOfficer/p115/pending/resume`
 - `POST /api/v1/plugin/AgentResourceOfficer/p115/pending/cancel`
+- `GET /api/v1/plugin/AgentResourceOfficer/feishu/health`
 - `GET /api/v1/plugin/AgentResourceOfficer/hdhive/health`
 - `GET /api/v1/plugin/AgentResourceOfficer/hdhive/account`
 - `POST /api/v1/plugin/AgentResourceOfficer/hdhive/checkin`

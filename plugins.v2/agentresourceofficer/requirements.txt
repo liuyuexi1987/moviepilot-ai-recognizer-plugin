@@ -1,1 +1,2 @@
 requests
+lark-oapi==1.5.3
