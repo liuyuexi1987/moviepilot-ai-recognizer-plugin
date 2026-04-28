@@ -184,6 +184,15 @@ python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py decide --c
 
 其中 `readiness` 用来确认配置、本地 helper 和插件接口都正常；`decide --summary-only` 用来判断继续旧会话还是开始新流程；`--command-only` 只输出下一步 helper 命令，遇到需要确认的动作时，只有加 `--confirmed` 才会输出执行命令。
 
+如果已经在本机 MoviePilot 部署了 `AgentResourceOfficer`，可以跑 live smoke 验证真实入口：
+
+```bash
+python3 scripts/smoke-agent-resource-officer.py
+python3 scripts/smoke-agent-resource-officer.py --include-search
+```
+
+默认只测自检、飞书健康和 `115状态` 路由；加 `--include-search` 会额外测 `ps关键词` 与 `yc关键词`，并自动清理测试会话。
+
 如果你是为了“把影巢搜索 -> 选择 -> 解锁 -> 115 落地”这条链路交给 AI 智能体，直接看这里：
 
 - 公开版 Skill 模板：
