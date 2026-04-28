@@ -80,6 +80,16 @@ def route(base_url: str, api_key: str, session: str, text: str) -> dict:
     )
 
 
+def request_templates(base_url: str, api_key: str, recipe: str) -> dict:
+    return request(
+        base_url,
+        api_key,
+        "POST",
+        "/api/v1/plugin/AgentResourceOfficer/assistant/request_templates",
+        body={"recipe": recipe, "include_templates": False},
+    )
+
+
 def clear_session(base_url: str, api_key: str, session: str) -> None:
     request(
         base_url,
@@ -111,6 +121,7 @@ def main() -> int:
     ]
     if args.include_search:
         sessions.extend([
+            f"smoke-aro-mp-search-{stamp}",
             f"smoke-aro-pansou-{stamp}",
             f"smoke-aro-hdhive-{stamp}",
         ])
@@ -125,16 +136,34 @@ def main() -> int:
         feishu_data = data(feishu)
         assert_ok("feishu_health", bool(feishu.get("success") and "sdk_available" in feishu_data), str(feishu.get("message") or ""))
 
+        workbuddy_templates = request_templates(base_url, api_key, "workbuddy")
+        workbuddy_templates_data = data(workbuddy_templates)
+        selected_names = workbuddy_templates_data.get("selected_names") or []
+        assert_ok(
+            "workbuddy_request_templates",
+            bool(
+                workbuddy_templates.get("success")
+                and workbuddy_templates_data.get("ok")
+                and workbuddy_templates_data.get("selected_recipe") == "workbuddy_quickstart"
+                and selected_names == ["startup_probe", "route_text", "pick_continue"]
+            ),
+            str(workbuddy_templates.get("message") or ""),
+        )
+
         status = route(base_url, api_key, sessions[0], "115状态")
         status_data = data(status)
         assert_ok("route_115_status", bool(status.get("success") and status_data.get("ok")), str(status.get("message") or ""))
 
         if args.include_search:
-            pansou = route(base_url, api_key, sessions[1], f"ps{args.pansou_keyword}")
+            mp_search = route(base_url, api_key, sessions[1], f"MP搜索 {args.keyword}")
+            mp_search_data = data(mp_search)
+            assert_ok("route_mp_search", bool(mp_search.get("success") and mp_search_data.get("ok")), str(mp_search.get("message") or ""))
+
+            pansou = route(base_url, api_key, sessions[2], f"ps{args.pansou_keyword}")
             pansou_data = data(pansou)
             assert_ok("route_pansou_alias", bool(pansou.get("success") and pansou_data.get("ok")), str(pansou.get("message") or ""))
 
-            hdhive = route(base_url, api_key, sessions[2], f"yc{args.keyword}")
+            hdhive = route(base_url, api_key, sessions[3], f"yc{args.keyword}")
             hdhive_data = data(hdhive)
             assert_ok("route_hdhive_alias", bool(hdhive.get("success") and hdhive_data.get("ok")), str(hdhive.get("message") or ""))
     finally:
