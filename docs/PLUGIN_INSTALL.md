@@ -80,9 +80,11 @@ python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py
 智能体 / 资源工作流主线：
 
 - `AgentResourceOfficer`
-- `FeishuCommandBridgeLong`
-- `QuarkShareSaver`
+- 需要独立夸克转存页面时再装 `QuarkShareSaver`
+- 需要旧飞书桥接兼容入口时再装 `FeishuCommandBridgeLong`
 - 需要旧影巢 OpenAPI 页面时再装 `HdhiveOpenApi`
+
+新用户优先使用 `AgentResourceOfficer` 内置飞书入口；同一个飞书 App 不建议同时开启资源官内置飞书和旧 `FeishuCommandBridgeLong`。
 
 AI 识别线：
 
