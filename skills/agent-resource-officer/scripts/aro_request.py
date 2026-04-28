@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.8"
+HELPER_VERSION = "0.1.9"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -29,7 +29,9 @@ HELPER_COMMANDS = [
     "maintain",
     "recover",
     "session",
+    "session-clear",
     "sessions",
+    "sessions-clear",
     "history",
     "plans",
     "plans-clear",
@@ -122,6 +124,9 @@ def compact(data):
             "executed",
             "removed",
             "removed_count",
+            "cleared",
+            "cleared_count",
+            "cleared_session_ids",
             "matched",
             "remaining",
             "has_pending",
@@ -487,7 +492,9 @@ def commands_catalog():
             {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan; use --plan-id for exact execution", "purpose": "execute a saved plan by plan_id or latest unexecuted session plan"},
             {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
             {"name": "session", "network": True, "writes": False, "write_condition": "", "purpose": "inspect one assistant session"},
+            {"name": "session-clear", "network": True, "writes": True, "write_condition": "clears exactly one assistant session by --session or --session-id", "purpose": "clear one assistant session, including abandoned pending 115 state"},
             {"name": "sessions", "network": True, "writes": False, "write_condition": "", "purpose": "list recent assistant sessions"},
+            {"name": "sessions-clear", "network": True, "writes": True, "write_condition": "clears assistant sessions matching --session, --session-id, --kind, --has-pending-p115, --stale-only, or --all-sessions", "purpose": "bulk clear assistant sessions"},
             {"name": "history", "network": True, "writes": False, "write_condition": "", "purpose": "list recent assistant execution history"},
             {"name": "plans", "network": True, "writes": False, "write_condition": "", "purpose": "list saved workflow plans"},
             {"name": "plans-clear", "network": True, "writes": True, "write_condition": "clears saved plans matching --plan-id, session filters, --executed, or --all-plans", "purpose": "clear saved workflow plans"},
@@ -525,6 +532,8 @@ def main():
     parser.add_argument("--executed", action="store_true")
     parser.add_argument("--unexecuted", action="store_true")
     parser.add_argument("--all-plans", action="store_true")
+    parser.add_argument("--stale-only", action="store_true")
+    parser.add_argument("--all-sessions", action="store_true")
     parser.add_argument("--include-actions", action="store_true")
     parser.add_argument("--prefer-unexecuted", action="store_true")
     parser.add_argument("--include-raw-results", action="store_true")
@@ -925,6 +934,16 @@ def main():
             query["session"] = args.session
         if args.session_id:
             query["session_id"] = args.session_id
+    elif args.command == "session-clear":
+        method = "POST"
+        path = assistant_path("session/clear")
+        body = {
+            "compact": True,
+        }
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
     elif args.command == "sessions":
         path = assistant_path("sessions")
         query = {
@@ -935,6 +954,24 @@ def main():
             query["kind"] = args.kind
         if args.has_pending_p115:
             query["has_pending_p115"] = "true"
+    elif args.command == "sessions-clear":
+        method = "POST"
+        path = assistant_path("sessions/clear")
+        body = {
+            "limit": args.limit,
+        }
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
+        if args.kind:
+            body["kind"] = args.kind
+        if args.has_pending_p115:
+            body["has_pending_p115"] = True
+        if args.stale_only:
+            body["stale_only"] = True
+        if args.all_sessions:
+            body["all_sessions"] = True
     elif args.command == "history":
         path = assistant_path("history")
         query = {

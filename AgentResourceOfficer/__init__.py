@@ -94,7 +94,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.111"
+    plugin_version = "0.1.112"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -2415,10 +2415,11 @@ class AgentResourceOfficer(_PluginBase):
                 "start_115_login",
             ])
 
+        can_resume = mode != "start_new" and bool(template)
         return {
             "mode": mode,
             "reason": reason,
-            "can_resume": bool(template),
+            "can_resume": can_resume,
             "recommended_action": self._clean_text((template or {}).get("name")),
             "recommended_tool": self._clean_text((template or {}).get("tool")),
             "action_template": template or None,
@@ -5262,6 +5263,15 @@ class AgentResourceOfficer(_PluginBase):
             and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("confirmation_required") or [])
             and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("non_cacheable_templates") or [])
         )
+        start_new_recovery = self._assistant_recovery_public_data(
+            session_state={"has_session": False},
+            action_templates=[{"name": "start_pansou_search", "tool": "agent_resource_officer_smart_entry"}],
+        )
+        start_new_recovery_ok = (
+            start_new_recovery.get("mode") == "start_new"
+            and start_new_recovery.get("can_resume") is False
+            and start_new_recovery.get("recommended_action") == "start_pansou_search"
+        )
         checks = {
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
@@ -5281,6 +5291,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_recommended_recipe_detail": request_templates_recommended_recipe_detail_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
             "startup_request_templates": startup_request_templates_ok,
+            "start_new_recovery_not_resumable": start_new_recovery_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),

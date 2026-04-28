@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制资源工作流。
 
-当前 helper 版本：`0.1.8`
+当前 helper 版本：`0.1.9`
 
 ## 使用方式
 
@@ -55,6 +55,8 @@ python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
+python3 scripts/aro_request.py session-clear --session default
+python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py pick --choice 1
@@ -118,6 +120,8 @@ python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py sessions --limit 10
 python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
 python3 scripts/aro_request.py session --session default
+python3 scripts/aro_request.py session-clear --session default
+python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py recover --execute
 python3 scripts/aro_request.py history --limit 10
@@ -130,6 +134,7 @@ python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
 
 - `sessions` / `history` / `plans` / `recover` 默认不再强制绑到 `default` 会话。
 - 只有显式传 `--session` 或 `--session-id` 时，才会收窄到单个会话。
+- `session-clear` / `sessions-clear` 是写入型清理命令，用于清理放弃的会话或 pending 115 恢复状态。
 - `plans-clear` 是写入型清理命令，优先使用 `--plan-id` 精确清理；批量清理时再使用 `--session`、`--executed`、`--unexecuted` 或 `--all-plans`。
 
 ## 说明

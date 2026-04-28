@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.9
+
+- Added `session-clear` and `sessions-clear` helper commands so agents can clear abandoned assistant sessions and pending 115 recovery state.
+
 ## 0.1.8
 
 - Added `--compact` as a compatibility no-op because compact output is already the default.
