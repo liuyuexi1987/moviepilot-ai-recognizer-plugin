@@ -39,6 +39,14 @@
 
 ## 历史版本
 
+## v2026.04.28
+
+- 正式发布多插件套件 Release，附件包含 8 个 MoviePilot 本地安装 ZIP、2 个公开 Skill ZIP、插件/Skill manifest 和 SHA256 校验文件。
+- `AgentResourceOfficer 0.1.111` 作为主资源入口，统一承接影巢、盘搜、115、夸克、飞书 Channel 和智能体 Tool。
+- 内置飞书入口默认关闭，可作为新远程控制入口；`FeishuCommandBridgeLong` 保留为兼容/备份插件。
+- 115 直转层支持扫码会话，并在必要时回退 `P115StrmHelper`；STRM 生成和 302 仍建议由 `P115StrmHelper` 负责。
+- 发布链路已验证：本地 `pre-release-check`、GitHub Actions、正式 Release 下载回验均通过。
+
 ## v2.0.0-alpha.1
 
 - 拆分为独立插件仓库
