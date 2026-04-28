@@ -311,10 +311,24 @@ class FeishuChannel:
     def is_running(self) -> bool:
         return self.runtime.is_running()
 
+    @staticmethod
+    def is_legacy_bridge_running() -> bool:
+        if PluginManager is None:
+            return False
+        try:
+            running_plugins = PluginManager().running_plugins or {}
+            return bool(
+                running_plugins.get("FeishuCommandBridgeLong")
+                or running_plugins.get("feishucommandbridgelong")
+            )
+        except Exception:
+            return False
+
     def connection_fingerprint(self) -> str:
         return "|".join([self.app_id, self.app_secret, self.verification_token])
 
     def health(self) -> Dict[str, Any]:
+        legacy_bridge_running = self.is_legacy_bridge_running()
         return {
             "enabled": self.enabled,
             "running": self.is_running(),
@@ -329,6 +343,8 @@ class FeishuChannel:
             "command_mode": self.command_mode,
             "command_whitelist": self.command_whitelist,
             "alias_count": len(self.parse_alias_text(self.command_aliases)),
+            "legacy_bridge_running": legacy_bridge_running,
+            "conflict_warning": bool(self.enabled and legacy_bridge_running),
         }
 
     def handle_long_connection_event(self, data: Any) -> None:

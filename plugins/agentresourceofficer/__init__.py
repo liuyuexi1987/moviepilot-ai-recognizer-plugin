@@ -94,7 +94,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.109"
+    plugin_version = "0.1.110"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -6178,7 +6178,8 @@ class AgentResourceOfficer(_PluginBase):
             f"SDK：{'可用' if data.get('sdk_available') else '缺失'}；"
             f"AppID：{'已填' if data.get('app_id_configured') else '未填'}；"
             f"AppSecret：{'已填' if data.get('app_secret_configured') else '未填'}；"
-            f"白名单：chat {data.get('allowed_chat_count') or 0} / user {data.get('allowed_user_count') or 0}"
+            f"白名单：chat {data.get('allowed_chat_count') or 0} / user {data.get('allowed_user_count') or 0}；"
+            f"旧桥接：{'运行中' if data.get('legacy_bridge_running') else '未运行'}"
         )
 
     async def tool_assistant_pulse(self) -> str:
