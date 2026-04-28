@@ -100,7 +100,8 @@
 可以把它理解成：
 
 - `AgentResourceOfficer` 是新的资源中枢入口
-- `FeishuCommandBridgeLong` 是远程操作入口
+- `AgentResourceOfficer` 内置飞书 Channel 是新的远程操作入口
+- `FeishuCommandBridgeLong` 是旧飞书兼容/备份入口
 - `HdhiveOpenApi` 是旧影巢能力入口
 - `QuarkShareSaver` 是夸克分享落盘入口
 - `P115StrmHelper` 是 115 文件落地和整理能力
@@ -265,16 +266,18 @@ python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py
 
 作用：
 
-- 用飞书长连接接收消息
-- 在飞书里直接发命令
-- 桥接到 MoviePilot、115 / STRM 和夸克转存流程
+- 作为旧飞书长连接桥接的兼容/备份入口
+- 保留老环境里已经习惯的飞书命令体验
+- 新资源动作建议逐步切到 `AgentResourceOfficer` 内置飞书入口
 
 适合场景：
 
-- 想在飞书里远程操作 MoviePilot
-- 想执行 `刮削`、`生成STRM`、`全量STRM`、`版本`
-- 想直接在飞书里发 `夸克转存` 命令
+- 已经装好旧飞书桥接，暂时不想迁移
+- 只需要旧命令快路径，例如 `刮削`、`生成STRM`、`全量STRM`、`版本`
+- 需要保留一个和 `AgentResourceOfficer` 内置飞书入口相互独立的备份入口
 - 不想折腾公网 webhook 和 HTTPS 回调
+
+新用户如果只想装一个入口，优先开启 `AgentResourceOfficer` 内置飞书 Channel；同一个飞书 App 不建议同时开启两个长连接入口。
 
 ---
 
@@ -474,7 +477,7 @@ docs/
 - `AIRecoginzerForwarder` 解决“识别失败后的兜底”
 - `AIRecognizerEnhancer` 解决“新识别增强线的结构化识别”
 - `AgentResourceOfficer` 解决“智能体统一资源入口和执行编排”
-- `FeishuCommandBridgeLong` 解决“飞书远程控制 MoviePilot”
+- `FeishuCommandBridgeLong` 解决“旧飞书远程控制兼容/备份”
 - `HdhiveOpenApi` 解决“影巢资源搜索、解锁和 115 落地”
 - `HDHiveDailySign` 解决“影巢每日签到”
 - `QuarkShareSaver` 解决“夸克分享链接稳定转存”
