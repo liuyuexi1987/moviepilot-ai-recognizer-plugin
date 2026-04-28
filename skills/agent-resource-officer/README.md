@@ -79,6 +79,7 @@ python3 scripts/aro_request.py pick --choice 1
 WorkBuddy、微信侧智能体或其他外部智能体接入时，可以直接复用：
 
 - [WorkBuddy 接入 Agent资源官](../../docs/WORKBUDDY_AGENT_RESOURCE_OFFICER.md)
+- [Skill 包内 WorkBuddy 接入文件](./WORKBUDDY.md)
 - `PROMPTS.md` 里的 `WorkBuddy` 提示词段落
 
 `decide` 是单次决策入口：
