@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.8
+
+- Added `--compact` as a compatibility no-op because compact output is already the default.
+
 ## 0.1.7
 
 - Compact `feishu-health` output now preserves key status fields such as `plugin_version`, `running`, `legacy_bridge_running`, and `conflict_warning`.

@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.7"
+HELPER_VERSION = "0.1.8"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -531,6 +531,11 @@ def main():
     parser.add_argument("--method", default="GET")
     parser.add_argument("--api-path")
     parser.add_argument("--json", dest="json_body")
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Compatibility no-op; compact output is the default unless --full is used.",
+    )
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--summary-only", action="store_true")
     parser.add_argument("--command-only", action="store_true")
