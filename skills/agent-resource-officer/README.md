@@ -76,6 +76,11 @@ python3 scripts/aro_request.py pick --choice 1
 
 `readiness` 会一次运行配置检查、本地 selftest 和 MoviePilot 插件 selfcheck。
 
+WorkBuddy、微信侧智能体或其他外部智能体接入时，可以直接复用：
+
+- [WorkBuddy 接入 Agent资源官](../../docs/WORKBUDDY_AGENT_RESOURCE_OFFICER.md)
+- `PROMPTS.md` 里的 `WorkBuddy` 提示词段落
+
 `decide` 是单次决策入口：
 
 - 有可恢复会话时，返回 `decision=continue_session`

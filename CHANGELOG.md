@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.1.115`
+- `AgentResourceOfficer`: `0.1.116`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.1.116`：新增 `workbuddy_quickstart` 请求模板和 `route_text` 模板，方便 WorkBuddy、微信侧智能体复现标准接入口。
 - `AgentResourceOfficer 0.1.115`：`assistant/route` 支持 `MP搜索`、`原生搜索`、`搜索资源`、`搜索` 前缀，统一外部智能体与飞书入口的原生 MP 搜索用法。
 - `AgentResourceOfficer 0.1.114`：飞书冲突检测会结合旧桥接配置、health 和 get_state，避免把已禁用但仍加载的旧插件误判为冲突。
 - `AgentResourceOfficer 0.1.113`：飞书健康检查补充可启用判断、缺失项和迁移建议，便于从旧飞书桥接迁移。
@@ -53,7 +54,7 @@
 ## v2026.04.28
 
 - 正式发布多插件套件 Release，附件包含 8 个 MoviePilot 本地安装 ZIP、2 个公开 Skill ZIP、插件/Skill manifest 和 SHA256 校验文件。
-- `AgentResourceOfficer 0.1.115` 作为主资源入口，统一承接影巢、盘搜、115、夸克、飞书 Channel 和智能体 Tool。
+- `AgentResourceOfficer 0.1.116` 作为主资源入口，统一承接影巢、盘搜、115、夸克、飞书 Channel 和智能体 Tool。
 - 内置飞书入口默认关闭，可作为新远程控制入口；`FeishuCommandBridgeLong` 保留为兼容/备份插件。
 - 115 直转层支持扫码会话，并在必要时回退 `P115StrmHelper`；STRM 生成和 302 仍建议由 `P115StrmHelper` 负责。
 - 发布链路已验证：本地 `pre-release-check`、GitHub Actions、正式 Release 下载回验均通过。

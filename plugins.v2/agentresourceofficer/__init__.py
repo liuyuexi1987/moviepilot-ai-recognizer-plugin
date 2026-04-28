@@ -94,7 +94,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.115"
+    plugin_version = "0.1.116"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4687,6 +4687,26 @@ class AgentResourceOfficer(_PluginBase):
                     "compact": True,
                 },
             },
+            "route_text": {
+                "description": "统一自然语言入口，适合 WorkBuddy、微信侧智能体或其他外部智能体直接转发用户文本。",
+                "side_effect": "depends_on_text",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                "tool": "agent_resource_officer_smart_entry",
+                "tool_args": {
+                    "text": "盘搜搜索 大君夫人",
+                    "session": "workbuddy",
+                    "compact": True,
+                },
+                "body": {
+                    "text": "盘搜搜索 大君夫人",
+                    "session": "workbuddy",
+                    "compact": True,
+                },
+            },
             "pick_continue": {
                 "description": "按编号继续当前会话，适合盘搜、影巢候选或资源列表选择。",
                 "side_effect": "depends_on_session",
@@ -4734,6 +4754,7 @@ class AgentResourceOfficer(_PluginBase):
             "plan_then_confirm": ["workflow_dry_run", "saved_plan_execute"],
             "continue_existing_session": ["pick_continue"],
             "maintenance_cycle": ["maintain_preview", "maintain_execute"],
+            "workbuddy_quickstart": ["startup_probe", "route_text", "pick_continue"],
         }
         recipe_aliases = {
             "bootstrap": "safe_bootstrap",
@@ -4753,6 +4774,12 @@ class AgentResourceOfficer(_PluginBase):
             "maintenance": "maintenance_cycle",
             "cleanup": "maintenance_cycle",
             "维护": "maintenance_cycle",
+            "workbuddy": "workbuddy_quickstart",
+            "work_buddy": "workbuddy_quickstart",
+            "workbody": "workbuddy_quickstart",
+            "work_body": "workbuddy_quickstart",
+            "外部智能体": "workbuddy_quickstart",
+            "微信智能体": "workbuddy_quickstart",
         }
         requested_recipe = self._clean_text(recipe)
         selected_recipe = recipe_aliases.get(requested_recipe, requested_recipe)
@@ -4779,7 +4806,7 @@ class AgentResourceOfficer(_PluginBase):
         write_side_effects = [
             name
             for name, item in templates.items()
-            if self._clean_text((item or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
+            if self._clean_text((item or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session", "depends_on_text"}
         ]
         cacheable_templates = [
             name
@@ -4850,6 +4877,11 @@ class AgentResourceOfficer(_PluginBase):
                 "description": "先预览维护建议，再在确认后执行低风险维护。",
                 "templates": recipe_templates_map["maintenance_cycle"],
             },
+            {
+                "name": "workbuddy_quickstart",
+                "description": "WorkBuddy/微信侧智能体接入：启动探测后，把用户文本交给统一入口，再按编号继续。",
+                "templates": recipe_templates_map["workbuddy_quickstart"],
+            },
         ]
         recipe_summaries: List[Dict[str, Any]] = []
         for recipe in recipes:
@@ -4867,7 +4899,7 @@ class AgentResourceOfficer(_PluginBase):
                 **recipe,
                 "requires_confirmation": any(bool(item.get("requires_confirmation")) for item in current_templates),
                 "has_write_effect": any(
-                    self._clean_text(item.get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
+                    self._clean_text(item.get("side_effect")) in {"write", "depends_on_action", "depends_on_session", "depends_on_text"}
                     for item in current_templates
                 ),
                 "cache_ttl_seconds": min(
@@ -4933,7 +4965,7 @@ class AgentResourceOfficer(_PluginBase):
             "write_templates": [
                 name
                 for name in recommended_recipe_templates
-                if self._clean_text((all_templates.get(name) or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session"}
+                if self._clean_text((all_templates.get(name) or {}).get("side_effect")) in {"write", "depends_on_action", "depends_on_session", "depends_on_text"}
             ],
             "first_call": {
                 "template": first_template,
@@ -5162,6 +5194,7 @@ class AgentResourceOfficer(_PluginBase):
                 "workflow_dry_run",
                 "saved_plan_execute",
                 "action_execute",
+                "route_text",
                 "pick_continue",
             ]
         )
