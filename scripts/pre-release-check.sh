@@ -318,7 +318,11 @@ bash scripts/package-skills.sh
 bash scripts/verify-release-assets.sh dist >/dev/null
 bash scripts/print-release-summary.sh >/dev/null
 bash scripts/print-skill-release-summary.sh >/dev/null
-bash scripts/generate-release-notes.sh v0.0.0-dry-run | grep -q "workbuddy / workbuddy --full"
+release_notes="$(bash scripts/generate-release-notes.sh v0.0.0-dry-run)"
+if [[ "$release_notes" != *"workbuddy / workbuddy --full"* ]]; then
+  echo "generate-release-notes.sh 缺少 workbuddy 重点说明" >&2
+  exit 1
+fi
 bash scripts/create-draft-release.sh v0.0.0-dry-run --dry-run --skip-check >/dev/null
 
 echo "[6/6] 检查关键文件..."
