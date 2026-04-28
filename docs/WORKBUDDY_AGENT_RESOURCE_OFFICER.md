@@ -25,6 +25,17 @@ MP_API_TOKEN=你的 MoviePilot API_TOKEN
 BASE_URL=http://127.0.0.1:3000
 ```
 
+## 快速生成提示词
+
+如果已经安装仓库里的 `agent-resource-officer` Skill，可以直接让 helper 输出可复制的提示词和最小工具约定：
+
+```bash
+python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py workbuddy
+python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py workbuddy --full
+```
+
+`workbuddy` 输出紧凑 JSON，适合直接喂给外部智能体；`workbuddy --full` 输出完整说明。
+
 ## 最小工具
 
 ### route

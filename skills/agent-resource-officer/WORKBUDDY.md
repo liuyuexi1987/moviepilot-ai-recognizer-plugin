@@ -154,11 +154,14 @@ POST /api/v1/plugin/AgentResourceOfficer/assistant/pick?apikey={MP_API_TOKEN}
 `AgentResourceOfficer 0.1.116+` 支持：
 
 ```bash
+python3 scripts/aro_request.py workbuddy
+python3 scripts/aro_request.py workbuddy --full
 python3 scripts/aro_request.py templates --recipe workbuddy --compact
 ```
 
 它会返回：
 
+- `workbuddy.v1` 紧凑提示词和工具约定
 - `startup_probe`
 - `route_text`
 - `pick_continue`
