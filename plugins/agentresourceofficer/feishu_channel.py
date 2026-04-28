@@ -4,6 +4,7 @@ import fcntl
 import importlib
 import json
 import re
+import sqlite3
 import sys
 import threading
 import time
@@ -317,10 +318,43 @@ class FeishuChannel:
             return False
         try:
             running_plugins = PluginManager().running_plugins or {}
-            return bool(
+            plugin = (
                 running_plugins.get("FeishuCommandBridgeLong")
                 or running_plugins.get("feishucommandbridgelong")
             )
+            if not plugin:
+                return False
+            config_db = Path("/config/user.db")
+            if config_db.exists():
+                try:
+                    with sqlite3.connect(str(config_db)) as conn:
+                        row = conn.execute(
+                            "select value from systemconfig where key=?",
+                            ("plugin.FeishuCommandBridgeLong",),
+                        ).fetchone()
+                    if row and row[0]:
+                        config = json.loads(row[0])
+                        if not bool(config.get("enabled")):
+                            return False
+                except Exception:
+                    pass
+            # MoviePilot may keep disabled plugins in running_plugins after loading.
+            # Treat the legacy bridge as a conflict only when it is actually enabled.
+            if hasattr(plugin, "health"):
+                try:
+                    health = plugin.health()
+                    if isinstance(health, dict):
+                        return bool(health.get("enabled") and health.get("running"))
+                except Exception:
+                    pass
+            if hasattr(plugin, "_enabled"):
+                return bool(getattr(plugin, "_enabled", False))
+            if hasattr(plugin, "get_state"):
+                try:
+                    return bool(plugin.get_state())
+                except Exception:
+                    return False
+            return False
         except Exception:
             return False
 
