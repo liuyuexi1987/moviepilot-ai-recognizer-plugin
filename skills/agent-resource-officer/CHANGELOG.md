@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.10
+
+- Compact output now preserves service health fields, warnings, defaults, and Quark/P115 readiness fields for lower-token diagnostics.
+
 ## 0.1.9
 
 - Added `session-clear` and `sessions-clear` helper commands so agents can clear abandoned assistant sessions and pending 115 recovery state.

@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.9"
+HELPER_VERSION = "0.1.10"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -105,6 +105,9 @@ def compact(data):
             "workflow",
             "plugin_version",
             "plugin_enabled",
+            "services",
+            "warnings",
+            "defaults",
             "enabled",
             "running",
             "sdk_available",
@@ -119,6 +122,13 @@ def compact(data):
             "alias_count",
             "legacy_bridge_running",
             "conflict_warning",
+            "p115_ready",
+            "p115_direct_ready",
+            "hdhive_configured",
+            "quark_configured",
+            "quark_cookie_configured",
+            "quark_cookie_valid",
+            "default_target_path",
             "plan_auto_selected",
             "execute_plan_body",
             "executed",
