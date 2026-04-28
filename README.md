@@ -154,7 +154,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 
 ## 智能体 Skill 模板
 
-GitHub Actions 和 Draft Release artifact 会同时附带公开 Skill ZIP：
+GitHub Actions artifact 和正式 Release 附件会同时附带公开 Skill ZIP：
 
 - `agent-resource-officer-<version>.zip`
 - `hdhive-search-unlock-to-115-<version>.zip`

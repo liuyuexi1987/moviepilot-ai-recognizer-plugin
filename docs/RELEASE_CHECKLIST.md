@@ -119,3 +119,21 @@ gh workflow run draft-release.yml -f tag=v2026.04.28 -f dry_run=true
 ```
 
 dry-run 通过后会生成 `moviepilot-release-assets-<tag>-<commit>` artifact，可先下载核对。确认无误后，再用 `dry_run=false` 创建 Draft Release。
+
+## 7. 发布正式 Release
+
+Draft Release 核对无误后发布正式 Release：
+
+```bash
+gh release edit v2026.04.28 --draft=false --latest --target main
+```
+
+发布后确认状态、tag 和公开附件：
+
+```bash
+gh release view v2026.04.28 --json tagName,isDraft,isPrerelease,url,publishedAt,targetCommitish
+git ls-remote --tags origin 'refs/tags/v2026.04.28'
+bash scripts/verify-release-download.sh v2026.04.28
+```
+
+正式发布后，`isDraft` 应为 `false`，公开下载校验必须通过。
