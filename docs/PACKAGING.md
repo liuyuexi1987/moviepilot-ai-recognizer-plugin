@@ -168,6 +168,7 @@ gh workflow run draft-release.yml -f tag=<tag> -f dry_run=true
 - `scripts/verify-release-assets.sh` 必须能一次校验插件 ZIP 和 Skill ZIP
 - `scripts/verify-ci-artifact.sh` 必须能下载并校验 GitHub Actions artifact
 - `scripts/print-release-summary.sh` 必须能基于 `MANIFEST.json` 输出 Release Markdown 表格
+- `scripts/generate-release-notes.sh` 必须能生成统一 Release 正文，并包含 `workbuddy / workbuddy --full` 重点
 - `.github/workflows/ci.yml` 和 `draft-release.yml` 必须使用 artifact 上传步骤，并包含插件 ZIP、Skill ZIP、`SHA256SUMS.txt`、`MANIFEST.json`
 - `draft-release.yml` 必须保留手动触发、`dry_run` 输入和创建 Draft Release 所需的 `contents: write` 权限
 - Markdown 文档中的本地相对链接必须存在

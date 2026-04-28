@@ -318,6 +318,7 @@ bash scripts/package-skills.sh
 bash scripts/verify-release-assets.sh dist >/dev/null
 bash scripts/print-release-summary.sh >/dev/null
 bash scripts/print-skill-release-summary.sh >/dev/null
+bash scripts/generate-release-notes.sh v0.0.0-dry-run | grep -q "workbuddy / workbuddy --full"
 bash scripts/create-draft-release.sh v0.0.0-dry-run --dry-run --skip-check >/dev/null
 
 echo "[6/6] 检查关键文件..."
@@ -327,6 +328,7 @@ test -f dist/SHA256SUMS.txt
 test -f dist/MANIFEST.json
 test -f dist/skills/SHA256SUMS.txt
 test -f dist/skills/MANIFEST.json
+test -f scripts/generate-release-notes.sh
 test -f plugins/airecoginzerforwarder/__init__.py
 test -f plugins/airecoginzerforwarder/requirements.txt
 test -f plugins.v2/airecoginzerforwarder/__init__.py
