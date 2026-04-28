@@ -413,7 +413,7 @@ python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py
 
 最新正式 Release 下载：
 
-- [v2026.04.28.1](https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v2026.04.28.1)
+- [v2026.04.28.2](https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v2026.04.28.2)
 
 发布和本地打包相关文档：
 
