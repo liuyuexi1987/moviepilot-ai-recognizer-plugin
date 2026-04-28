@@ -39,7 +39,7 @@
 
 - `AIRecoginzerForwarder`（AI 识别转发）：`2.0.1`
 - `AIRecognizerEnhancer`（AI识别增强）：`0.1.11`
-- `AgentResourceOfficer`：`0.1.114`
+- `AgentResourceOfficer`：`0.1.115`
 - `FeishuCommandBridgeLong`（飞书命令桥接）：`0.5.26`
 - `HdhiveOpenApi`（影巢 OpenAPI）：`0.3.0`
 - `HDHiveDailySign`（HDHive Daily Sign）：`1.0.0`
@@ -108,7 +108,7 @@
 
 也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
 
-当前 `AgentResourceOfficer 0.1.114` 已经具备 115 分享链接轻量直转层，并接入和 `P115StrmHelper` 同款的扫码登录能力：可以优先使用扫码得到的客户端会话，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
+当前 `AgentResourceOfficer 0.1.115` 已经具备 115 分享链接轻量直转层，并接入和 `P115StrmHelper` 同款的扫码登录能力：可以优先使用扫码得到的客户端会话，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
 
 如果升级 MoviePilot 后 `P115StrmHelper` 因旧事件导入失败无法加载，可以使用仓库里的兼容脚本恢复：
 

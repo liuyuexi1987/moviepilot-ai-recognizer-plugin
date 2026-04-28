@@ -94,7 +94,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.114"
+    plugin_version = "0.1.115"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -167,6 +167,10 @@ class AgentResourceOfficer(_PluginBase):
     def _normalize_search_prefix(text: str) -> Tuple[str, str]:
         raw = str(text or "").strip()
         mappings = [
+            ("MP搜索", "mp"),
+            ("原生搜索", "mp"),
+            ("搜索资源", "mp"),
+            ("搜索", "mp"),
             ("1搜索", "pansou"),
             ("2搜索", "hdhive"),
             ("影巢搜索", "hdhive"),
@@ -3708,7 +3712,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_entry": {
                 "supports_text": True,
                 "supports_structured_fields": True,
-                "modes": ["pansou", "hdhive"],
+                "modes": ["mp", "pansou", "hdhive"],
                 "actions": [
                     "assistant_help",
                     "p115_qrcode_start",
@@ -3988,7 +3992,7 @@ class AgentResourceOfficer(_PluginBase):
             "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用；compact=true 可减少嵌套回执",
             "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要；compact=true 可减少嵌套回执",
             "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
-            "smart_entry 结构化模式：pansou / hdhive",
+            "smart_entry 结构化模式：mp / pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
             "smart_entry 与 smart_pick 支持 compact=true，可减少搜索与选择链路嵌套回执",
             "smart_pick 字段：session / session_id / choice / action / path / compact",
@@ -5398,7 +5402,7 @@ class AgentResourceOfficer(_PluginBase):
         body = dict(body or {})
 
         mode = self._clean_text(body.get("mode"))
-        if mode in {"pansou", "hdhive"}:
+        if mode in {"mp", "pansou", "hdhive"}:
             merged["mode"] = mode
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
         if keyword:
@@ -7339,6 +7343,33 @@ class AgentResourceOfficer(_PluginBase):
         keyword = self._clean_text(parsed.get("keyword"))
         media_type = self._clean_text(parsed.get("type") or "movie").lower() or "movie"
         year = self._clean_text(parsed.get("year"))
+
+        if mode == "mp":
+            if not keyword:
+                return finish({
+                    "success": False,
+                    "message": "用法：MP搜索 片名",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "media_search",
+                        "ok": False,
+                    }),
+                })
+            message_text = self._ensure_feishu_channel()._execute_media_search(keyword, cache_key)
+            failed_prefixes = (
+                "MP 原生搜索失败",
+                "未识别到媒体信息",
+                "搜索资源失败",
+            )
+            route_ok = not any(message_text.startswith(prefix) for prefix in failed_prefixes)
+            return finish({
+                "success": route_ok,
+                "message": message_text,
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "media_search",
+                    "ok": route_ok,
+                    "keyword": keyword,
+                }),
+            })
 
         if mode == "pansou":
             search_ok, payload, search_message = self._call_pansou_search(keyword)

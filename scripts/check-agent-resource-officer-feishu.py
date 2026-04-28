@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "AgentResourceOfficer" / "feishu_channel.py"
+CORE_PATH = ROOT / "AgentResourceOfficer" / "__init__.py"
 FORM_PATHS = [
     ROOT / "AgentResourceOfficer" / "__init__.py",
     ROOT / "plugins" / "agentresourceofficer" / "__init__.py",
@@ -93,6 +94,15 @@ def main():
         text = path.read_text(encoding="utf-8")
         for needle in required_form_models:
             check(f"{path.relative_to(ROOT)} has {needle}", needle in text)
+
+    core_text = CORE_PATH.read_text(encoding="utf-8")
+    for needle in [
+        '("MP搜索", "mp")',
+        '("原生搜索", "mp")',
+        'if mode == "mp":',
+        '"action": "media_search"',
+    ]:
+        check(f"core assistant route supports {needle}", needle in core_text)
 
     print("agent_resource_officer_feishu_channel_check_ok")
 
