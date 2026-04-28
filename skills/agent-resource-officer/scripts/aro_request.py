@@ -9,7 +9,7 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.6"
+HELPER_VERSION = "0.1.7"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -101,6 +101,22 @@ def compact(data):
             "session_id",
             "plan_id",
             "workflow",
+            "plugin_version",
+            "plugin_enabled",
+            "enabled",
+            "running",
+            "sdk_available",
+            "app_id_configured",
+            "app_secret_configured",
+            "verification_token_configured",
+            "allow_all",
+            "reply_enabled",
+            "allowed_chat_count",
+            "allowed_user_count",
+            "command_mode",
+            "alias_count",
+            "legacy_bridge_running",
+            "conflict_warning",
             "plan_auto_selected",
             "execute_plan_body",
             "executed",
@@ -401,6 +417,19 @@ def selftest_result():
         },
     })
     check("compact_preserves_plan_clear_counts", compact_clear.get("removed") == 1 and compact_clear.get("remaining") == 0)
+    compact_feishu = compact({
+        "success": True,
+        "message": "feishu",
+        "data": {
+            "plugin_version": "0.1.110",
+            "enabled": False,
+            "running": False,
+            "sdk_available": True,
+            "legacy_bridge_running": True,
+            "conflict_warning": False,
+        },
+    })
+    check("compact_preserves_feishu_health", compact_feishu.get("plugin_version") == "0.1.110" and compact_feishu.get("legacy_bridge_running") is True)
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []
