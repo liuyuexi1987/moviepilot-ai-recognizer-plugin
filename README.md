@@ -408,6 +408,10 @@ python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py
 
 也就是说，既可以走自定义插件仓库，也可以按目录本地安装。
 
+最新正式 Release 下载：
+
+- [v2026.04.28](https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v2026.04.28)
+
 发布和本地打包相关文档：
 
 - [插件安装说明](./docs/PLUGIN_INSTALL.md)
