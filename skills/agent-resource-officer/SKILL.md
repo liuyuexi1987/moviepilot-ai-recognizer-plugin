@@ -109,6 +109,8 @@ Use `feishu-health` only when diagnosing the built-in AgentResourceOfficer Feish
 python3 scripts/aro_request.py feishu-health
 ```
 
+For MoviePilot's built-in Agent, use the native tool `agent_resource_officer_feishu_health` instead of calling the Feishu health API manually.
+
 ## Core Startup Flow
 
 Fast path:

@@ -72,6 +72,10 @@ class AssistantReadinessToolInput(BaseModel):
     compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
 
+class FeishuChannelHealthToolInput(BaseModel):
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
+
+
 class AssistantPulseToolInput(BaseModel):
     pass
 

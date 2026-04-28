@@ -55,6 +55,7 @@ from .agenttool import (
     AssistantStartupTool,
     AssistantToolboxTool,
     AssistantWorkflowTool,
+    FeishuChannelHealthTool,
     HDHiveSearchSessionTool,
     HDHiveSessionPickTool,
     P115CancelPendingTool,
@@ -93,7 +94,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.108"
+    plugin_version = "0.1.109"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -293,6 +294,7 @@ class AgentResourceOfficer(_PluginBase):
             AssistantRequestTemplatesTool,
             AssistantSelfcheckTool,
             AssistantReadinessTool,
+            FeishuChannelHealthTool,
             AssistantHistoryTool,
             AssistantHelpTool,
             AssistantRouteTool,
@@ -3859,6 +3861,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_request_templates",
                 "agent_resource_officer_selfcheck",
                 "agent_resource_officer_readiness",
+                "agent_resource_officer_feishu_health",
                 "agent_resource_officer_history",
                 "agent_resource_officer_execute_action",
                 "agent_resource_officer_execute_actions",
@@ -4061,6 +4064,7 @@ class AgentResourceOfficer(_PluginBase):
             "recommended_tools": [
                 "agent_resource_officer_startup",
                 "agent_resource_officer_readiness",
+                "agent_resource_officer_feishu_health",
                 "agent_resource_officer_run_workflow",
                 "agent_resource_officer_execute_actions",
                 "agent_resource_officer_execute_plan",
@@ -6156,6 +6160,26 @@ class AgentResourceOfficer(_PluginBase):
                 f"待计划：{data.get('saved_plans_pending') or 0}"
             )
         return self._format_assistant_readiness_text()
+
+    async def tool_feishu_health(self, compact: bool = True) -> str:
+        if not self._enabled:
+            return "Agent资源官 插件未启用"
+        channel = self._ensure_feishu_channel()
+        data = {
+            "plugin_version": self.plugin_version,
+            "plugin_enabled": self._enabled,
+            **channel.health(),
+        }
+        if not compact:
+            return json.dumps(data, ensure_ascii=False, indent=2)
+        return (
+            f"飞书入口：{'已开启' if data.get('enabled') else '未开启'}；"
+            f"长连接：{'运行中' if data.get('running') else '未运行'}；"
+            f"SDK：{'可用' if data.get('sdk_available') else '缺失'}；"
+            f"AppID：{'已填' if data.get('app_id_configured') else '未填'}；"
+            f"AppSecret：{'已填' if data.get('app_secret_configured') else '未填'}；"
+            f"白名单：chat {data.get('allowed_chat_count') or 0} / user {data.get('allowed_user_count') or 0}"
+        )
 
     async def tool_assistant_pulse(self) -> str:
         if not self._enabled:

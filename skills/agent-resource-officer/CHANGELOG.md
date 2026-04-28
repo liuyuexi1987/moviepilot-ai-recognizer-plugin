@@ -3,6 +3,7 @@
 ## 0.1.6
 
 - Added `feishu-health` for checking the built-in AgentResourceOfficer Feishu Channel status.
+- Documented the matching MoviePilot Agent Tool `agent_resource_officer_feishu_health`.
 
 ## 0.1.5
 
