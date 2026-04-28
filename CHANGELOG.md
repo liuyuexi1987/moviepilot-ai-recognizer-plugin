@@ -5,8 +5,8 @@
 - 仓库已经从单一 AI Gateway 插件，收拢为 MoviePilot 资源与智能体插件套件。
 - 当前发布前检查覆盖 8 个可本地安装插件：
   `AIRecoginzerForwarder`、`AIRecognizerEnhancer`、`AgentResourceOfficer`、`FeishuCommandBridgeLong`、`HdhiveOpenApi`、`HDHiveDailySign`、`QuarkShareSaver`、`ZspaceMediaFreshMix`。
-- `AgentResourceOfficer` 已作为新资源主入口，负责影巢、盘搜、115、夸克和智能体 Tool 的统一路由。
-- `FeishuCommandBridgeLong` 继续保留 legacy 快路径，同时可委托给 `AgentResourceOfficer` 的智能入口。
+- `AgentResourceOfficer` 已作为新资源主入口，负责影巢、盘搜、115、夸克、内置飞书入口和智能体 Tool 的统一路由。
+- `FeishuCommandBridgeLong` 继续保留为兼容/备份入口，新用户优先使用 `AgentResourceOfficer` 内置飞书 Channel。
 - `AIRecognizerEnhancer` 作为新识别增强线，逐步替代旧网关转发链路。
 - 发布流程已补齐 `plugins/`、`plugins.v2/` 同步、元数据校验、语法检查、ZIP 打包和 GitHub Actions CI。
 
@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.1.107`
+- `AgentResourceOfficer`: `0.1.110`
 - `FeishuCommandBridgeLong`: `0.5.25`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,8 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.1.110`：飞书健康检查新增旧桥接运行状态和冲突提示，避免内置飞书入口与 `FeishuCommandBridgeLong` 同时监听同一个飞书 App。
+- `AgentResourceOfficer 0.1.109` 新增 MP 原生 Tool `agent_resource_officer_feishu_health`，让内置智能助手可直接检查资源官内置飞书入口状态。
 - 新增完整发布前检查脚本：`scripts/pre-release-check.sh`。
 - 新增统一打包脚本：`scripts/package-plugin.sh`。
 - 新增仓库布局同步脚本：`scripts/sync-repo-layout.sh`。

@@ -66,6 +66,7 @@ if failed:
 print(f"syntax_ok files={count}")
 PY
 bash scripts/check-skills.sh
+python3 scripts/check-agent-resource-officer-feishu.py
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
 PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'

@@ -27,11 +27,11 @@
 - `Agent资源官`
   - 已支持影巢搜索、盘搜搜索、115 直链、夸克直链统一入口
   - 已支持影巢解锁后自动路由到 115 / 夸克执行层
-  - 已支持原生 Agent Tool、插件 API、智能体会话式调用
+  - 已支持原生 Agent Tool、插件 API、智能体会话式调用和可选内置飞书入口
 - `FeishuCommandBridgeLong`
   - 继续保留，不删除
-  - 当前默认保留 `legacy` 直连快路径，适合继续日常飞书使用
-  - 需要时也可以切换为 `auto`，把智能入口整条委托给 `Agent资源官`
+  - 当前定位为兼容/备份插件
+  - 新用户优先使用 `Agent资源官` 内置飞书入口，避免同一个飞书机器人被两个插件同时监听
 
 `AI识别增强` 已进入第一版可用阶段，方向是逐步替代旧版 AI Gateway 转发链路。
 
@@ -39,7 +39,7 @@
 
 - `AIRecoginzerForwarder`（AI 识别转发）：`2.0.1`
 - `AIRecognizerEnhancer`（AI识别增强）：`0.1.11`
-- `AgentResourceOfficer`：`0.1.107`
+- `AgentResourceOfficer`：`0.1.110`
 - `FeishuCommandBridgeLong`（飞书命令桥接）：`0.5.25`
 - `HdhiveOpenApi`（影巢 OpenAPI）：`0.3.0`
 - `HDHiveDailySign`（HDHive Daily Sign）：`1.0.0`
@@ -65,9 +65,9 @@
 
 - 想做“原生识别失败后的 AI 兜底”：
   用 `AIRecoginzerForwarder`
-- 想给智能体、原生 Agent Tool、后续飞书统一一个资源执行主线：
+- 想给智能体、原生 Agent Tool、飞书入口统一一个资源执行主线：
   用 `AgentResourceOfficer`
-- 想在飞书里直接操作 MoviePilot / 115 / STRM：
+- 老环境想继续使用独立飞书桥接：
   用 `FeishuCommandBridgeLong`
 - 想把影巢资源搜索、解锁、签到、115 转存整合进 MoviePilot：
   用 `HdhiveOpenApi`
@@ -87,7 +87,7 @@
   负责“统一接住智能体 / Agent Tool / API 的资源请求 -> 分流到影巢、115、夸克执行层”
   影巢候选已支持分页，以及按需 `详情` / `审查` 补主演
 - `FeishuCommandBridgeLong`
-  负责“在飞书里触发 115 整理、STRM 生成、命令桥接”
+  作为旧飞书桥接兼容入口保留；新飞书入口建议直接开启 `AgentResourceOfficer` 内置 Channel
 - `HdhiveOpenApi`
   负责“搜索影巢资源 -> 解锁 -> 判断是不是 115 分享链接 -> 调用 115 转存”
 - `QuarkShareSaver`
@@ -107,7 +107,7 @@
 
 也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
 
-当前 `AgentResourceOfficer 0.1.107` 已经具备 115 分享链接轻量直转层，并接入和 `P115StrmHelper` 同款的扫码登录能力：可以优先使用扫码得到的客户端会话，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
+当前 `AgentResourceOfficer 0.1.110` 已经具备 115 分享链接轻量直转层，并接入和 `P115StrmHelper` 同款的扫码登录能力：可以优先使用扫码得到的客户端会话，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
 
 如果升级 MoviePilot 后 `P115StrmHelper` 因旧事件导入失败无法加载，可以使用仓库里的兼容脚本恢复：
 
@@ -131,18 +131,19 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 5. 如果返回的是 `115` 分享链接，再交给现有 115 流程落到 `/待整理`
 6. 后续 MoviePilot / `P115StrmHelper` 继续整理、生成 STRM 或补充操作
 
-另一条常见链路是：
+飞书链路现在推荐直接走资源官内置 Channel：
 
 1. 智能体在飞书侧接收自然语言或命令
-2. `FeishuCommandBridgeLong` 把命令桥接进 MoviePilot / 115 流程
-3. 默认继续走 `legacy` 快路径，速度更稳
-4. 需要统一资源工作流时，可以切到 `auto`，把智能入口委托给 `AgentResourceOfficer`
-5. 如果媒体识别失败，再由 `AIRecoginzerForwarder` 做兜底识别
+2. `AgentResourceOfficer` 内置飞书入口把消息转成统一 `assistant/route` 或 `assistant/pick`
+3. 资源官判断是影巢、盘搜、115、夸克、MP 搜索还是 STRM 调度
+4. 插件执行后把结果回到飞书
+5. 老 `FeishuCommandBridgeLong` 只作为兼容/备份入口保留
 
 所以这几个插件不是平铺的独立小工具，更像一套配合关系：
 
 - `AgentResourceOfficer` 解决智能体 / Agent Tool 的统一资源入口
-- `FeishuCommandBridgeLong` 解决远程控制入口
+- `AgentResourceOfficer` 内置飞书 Channel 解决新远程控制入口
+- `FeishuCommandBridgeLong` 保留旧远程控制兼容入口
 - `HdhiveOpenApi` 继续保留旧影巢 OpenAPI 入口
 - `QuarkShareSaver` 解决夸克分享转存入口
 - `AIRecoginzerForwarder` 解决识别失败后的补救

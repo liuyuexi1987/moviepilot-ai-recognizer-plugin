@@ -29,6 +29,7 @@ from .schemas import (
     AssistantStartupToolInput,
     AssistantToolboxToolInput,
     AssistantWorkflowToolInput,
+    FeishuChannelHealthToolInput,
     HDHiveSearchSessionToolInput,
     HDHiveSessionPickToolInput,
     P115CancelPendingToolInput,
@@ -231,6 +232,21 @@ class AssistantReadinessTool(MoviePilotTool):
         if not plugin:
             return "Agent资源官 插件未运行"
         return await plugin.tool_assistant_readiness(compact=compact)
+
+
+class FeishuChannelHealthTool(MoviePilotTool):
+    name: str = "agent_resource_officer_feishu_health"
+    description: str = "Check Agent资源官 built-in Feishu Channel status, including whether it is enabled, running, and configured."
+    args_schema: Type[BaseModel] = FeishuChannelHealthToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        return "正在检查 Agent资源官 内置飞书入口状态"
+
+    async def run(self, compact: bool = True, **kwargs) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent资源官 插件未运行"
+        return await plugin.tool_feishu_health(compact=compact)
 
 
 class AssistantPulseTool(MoviePilotTool):

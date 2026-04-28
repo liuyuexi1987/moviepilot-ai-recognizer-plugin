@@ -1,5 +1,14 @@
 # agent-resource-officer changelog
 
+## 0.1.7
+
+- Compact `feishu-health` output now preserves key status fields such as `plugin_version`, `running`, `legacy_bridge_running`, and `conflict_warning`.
+
+## 0.1.6
+
+- Added `feishu-health` for checking the built-in AgentResourceOfficer Feishu Channel status.
+- Documented the matching MoviePilot Agent Tool `agent_resource_officer_feishu_health`.
+
 ## 0.1.5
 
 - Expanded local `selftest` coverage for maintain command generation and request-template summary parsing.

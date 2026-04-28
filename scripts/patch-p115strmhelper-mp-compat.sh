@@ -2,9 +2,11 @@
 set -euo pipefail
 
 container="${MP_CONTAINER:-moviepilot-v2}"
-plugin_file="/app/app/plugins/p115strmhelper/__init__.py"
+plugin_files=(
+  "/app/app/plugins/p115strmhelper/__init__.py"
+  "/config/plugins/p115strmhelper/__init__.py"
+)
 tmp_dir="$(mktemp -d)"
-local_file="${tmp_dir}/p115strmhelper_init.py"
 
 cleanup() {
   rm -rf "${tmp_dir}"
@@ -14,13 +16,23 @@ trap cleanup EXIT
 echo "P115StrmHelper compatibility patch"
 echo "container: ${container}"
 
-docker exec "${container}" test -f "${plugin_file}"
-docker cp "${container}:${plugin_file}" "${local_file}"
+patch_file() {
+  local plugin_file="$1"
+  local safe_name
+  safe_name="$(echo "${plugin_file}" | tr '/:' '__')"
+  local local_file="${tmp_dir}/${safe_name}"
 
-if grep -q "_optional_event_register(_TRANSFER_OVERWRITE_CHECK_EVENT)" "${local_file}"; then
-  echo "already patched"
-else
-  python3 - "${local_file}" <<'PY'
+  if ! docker exec "${container}" test -f "${plugin_file}"; then
+    echo "skip missing: ${plugin_file}"
+    return 0
+  fi
+
+  docker cp "${container}:${plugin_file}" "${local_file}"
+
+  if grep -q "_optional_event_register(_TRANSFER_OVERWRITE_CHECK_EVENT)" "${local_file}"; then
+    echo "already patched: ${plugin_file}"
+  else
+    python3 - "${local_file}" <<'PY'
 from pathlib import Path
 import sys
 
@@ -64,10 +76,15 @@ text = text.replace(old, new, 1)
 
 path.write_text(text)
 PY
-fi
+  fi
 
-docker cp "${local_file}" "${container}:${plugin_file}"
-docker exec "${container}" /opt/venv/bin/python -m py_compile "${plugin_file}"
+  docker cp "${local_file}" "${container}:${plugin_file}"
+  docker exec "${container}" /opt/venv/bin/python -m py_compile "${plugin_file}"
+  echo "patched and syntax check passed: ${plugin_file}"
+}
 
-echo "patched and syntax check passed"
+for plugin_file in "${plugin_files[@]}"; do
+  patch_file "${plugin_file}"
+done
+
 echo "restart MoviePilot, then verify AgentResourceOfficer /p115/health"

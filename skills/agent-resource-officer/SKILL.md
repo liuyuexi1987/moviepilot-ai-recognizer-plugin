@@ -54,6 +54,7 @@ python3 scripts/aro_request.py decide --summary-only
 python3 scripts/aro_request.py decide --command-only
 python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --limit 5 --summary-only
+python3 scripts/aro_request.py feishu-health
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
@@ -101,6 +102,14 @@ Use `readiness` after configuration to run config check, local selftest, and liv
 ```bash
 python3 scripts/aro_request.py readiness
 ```
+
+Use `feishu-health` only when diagnosing the built-in AgentResourceOfficer Feishu Channel:
+
+```bash
+python3 scripts/aro_request.py feishu-health
+```
+
+For MoviePilot's built-in Agent, use the native tool `agent_resource_officer_feishu_health` instead of calling the Feishu health API manually.
 
 ## Core Startup Flow
 
