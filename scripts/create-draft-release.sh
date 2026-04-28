@@ -72,6 +72,8 @@ trap cleanup EXIT
   echo "## 本次重点"
   echo
   echo "- AgentResourceOfficer 是推荐主入口，统一承接影巢、盘搜、115、夸克、飞书 Channel 和智能体 Tool。"
+  echo "- agent-resource-officer Skill 已内置 workbuddy / workbuddy --full，可直接生成外部智能体提示词和最小工具约定。"
+  echo "- live smoke 已覆盖 WorkBuddy request templates、MP搜索、盘搜、影巢别名和 115状态。"
   echo "- 内置飞书入口默认关闭；新用户可优先使用资源官内置飞书，旧 FeishuCommandBridgeLong 保留为兼容/备份插件。"
   echo "- 115 直转层支持扫码会话；STRM 生成、302、全量/增量同步仍建议继续交给 P115StrmHelper。"
   echo "- 附件已包含插件/Skill manifest 与 SHA256 校验文件，下载后可用 verify-release-download 校验。"

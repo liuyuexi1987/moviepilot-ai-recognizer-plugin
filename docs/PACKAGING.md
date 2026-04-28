@@ -147,6 +147,7 @@ gh workflow run draft-release.yml -f tag=<tag> -f dry_run=true
 - 仓库内发布脚本和 Skill shell helper 必须能通过 shell 语法检查
 - 插件代码和仓库内 Skill helper 脚本必须能通过 Python 语法检查
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill helper 的本地 `selftest` 必须通过
+- `AgentResourceOfficer` Skill 的 `workbuddy` 入口必须能输出 `workbuddy.v1`、3 个最小工具和有效 `WORKBUDDY.md`
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill helper 版本必须同步到 README 和 CHANGELOG
 - `AgentResourceOfficer` 和 `hdhive-search-unlock-to-115` Skill 安装脚本的 `--dry-run` 必须通过
 - 以上 Skill 检查可以单独运行 `bash scripts/check-skills.sh`
@@ -163,7 +164,7 @@ gh workflow run draft-release.yml -f tag=<tag> -f dry_run=true
 - `dist/MANIFEST.json` 必须随 ZIP 一起生成
 - `dist/skills/` 必须生成公开 Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`
 - `scripts/verify-dist.sh` 必须能验证 ZIP SHA256、MANIFEST、插件元数据、基础目录结构和不应发布的生成文件
-- `scripts/verify-skill-dist.sh` 必须能验证 Skill ZIP SHA256、MANIFEST、基础目录结构和不应发布的生成文件
+- `scripts/verify-skill-dist.sh` 必须能验证 Skill ZIP SHA256、MANIFEST、基础目录结构、不应发布的生成文件，以及 `agent-resource-officer` ZIP 解压后的 `workbuddy` 入口
 - `scripts/verify-release-assets.sh` 必须能一次校验插件 ZIP 和 Skill ZIP
 - `scripts/verify-ci-artifact.sh` 必须能下载并校验 GitHub Actions artifact
 - `scripts/print-release-summary.sh` 必须能基于 `MANIFEST.json` 输出 Release Markdown 表格
