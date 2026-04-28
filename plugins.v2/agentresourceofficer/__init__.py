@@ -94,7 +94,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.110"
+    plugin_version = "0.1.111"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -1401,6 +1401,25 @@ class AgentResourceOfficer(_PluginBase):
                             },
                             {
                                 "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VSelect",
+                                        "props": {
+                                            "model": "feishu_reply_receive_id_type",
+                                            "label": "回复 ID 类型",
+                                            "items": [
+                                                {"title": "群聊 chat_id", "value": "chat_id"},
+                                                {"title": "用户 open_id", "value": "open_id"},
+                                                {"title": "用户 union_id", "value": "union_id"},
+                                                {"title": "用户 user_id", "value": "user_id"},
+                                            ],
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
                                 "props": {"cols": 12, "md": 6},
                                 "content": [
                                     {
@@ -1425,6 +1444,21 @@ class AgentResourceOfficer(_PluginBase):
                                             "label": "允许的用户 Open ID",
                                             "rows": 3,
                                             "placeholder": "一个一行",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "feishu_command_whitelist",
+                                            "label": "飞书命令白名单",
+                                            "rows": 3,
+                                            "placeholder": "逗号或换行分隔；留空时会自动合并默认命令",
                                         },
                                     }
                                 ],
