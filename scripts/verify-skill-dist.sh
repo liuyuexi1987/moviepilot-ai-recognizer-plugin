@@ -9,6 +9,8 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import subprocess
+import tempfile
 import zipfile
 
 dist_dir = Path(os.environ["DIST_DIR"])
@@ -117,6 +119,31 @@ for zip_file in zip_files:
         print(f"{zip_file} 包含不应发布的生成文件:")
         print("\n".join(sorted(bad_entries)))
         raise SystemExit(1)
+    if skill_name == "agent-resource-officer":
+        workbuddy_required = {
+            f"{skill_name}/WORKBUDDY.md",
+            f"{skill_name}/scripts/aro_request.py",
+        }
+        missing_workbuddy = sorted(workbuddy_required - names)
+        if missing_workbuddy:
+            print(f"{zip_file} 缺少 WorkBuddy 入口文件:")
+            print("\n".join(missing_workbuddy))
+            raise SystemExit(1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with zipfile.ZipFile(zip_file) as zip_obj:
+                zip_obj.extractall(tmpdir)
+            helper = Path(tmpdir) / skill_name / "scripts" / "aro_request.py"
+            raw = subprocess.check_output(["python3", str(helper), "workbuddy"], text=True)
+            payload = json.loads(raw)
+            if payload.get("schema_version") != "workbuddy.v1":
+                print(f"{zip_file} WorkBuddy schema_version 无效")
+                raise SystemExit(1)
+            if not payload.get("guide_file_exists"):
+                print(f"{zip_file} WorkBuddy guide_file_exists=false")
+                raise SystemExit(1)
+            if len(payload.get("tools") or []) != 3:
+                print(f"{zip_file} WorkBuddy tools 数量无效")
+                raise SystemExit(1)
 
 print(f"skill_dist_verify_ok files={len(zip_files)}")
 PY
