@@ -36,6 +36,23 @@ done
 
 python3 skills/agent-resource-officer/scripts/aro_request.py selftest >/dev/null
 echo "agent_resource_officer_skill_selftest_ok"
+python3 - <<'PY'
+import json
+import subprocess
+
+raw = subprocess.check_output(
+    ["python3", "skills/agent-resource-officer/scripts/aro_request.py", "workbuddy"],
+    text=True,
+)
+payload = json.loads(raw)
+if payload.get("schema_version") != "workbuddy.v1":
+    raise SystemExit("agent-resource-officer workbuddy schema_version invalid")
+if not payload.get("guide_file_exists"):
+    raise SystemExit("agent-resource-officer workbuddy guide file missing")
+if len(payload.get("tools") or []) != 3:
+    raise SystemExit("agent-resource-officer workbuddy tool contract invalid")
+print("agent_resource_officer_workbuddy_entry_ok")
+PY
 skill_install_dry_run "agent-resource-officer"
 
 python3 skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest >/dev/null
