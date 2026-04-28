@@ -9,7 +9,9 @@ import urllib.request
 
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
-HELPER_VERSION = "0.1.11"
+SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WORKBUDDY_GUIDE_PATH = os.path.join(SKILL_DIR, "WORKBUDDY.md")
+HELPER_VERSION = "0.1.12"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -37,6 +39,7 @@ HELPER_COMMANDS = [
     "plans-clear",
     "raw",
     "version",
+    "workbuddy",
 ]
 
 
@@ -83,6 +86,49 @@ def load_json_arg(value):
             return data if isinstance(data, dict) else {}
     data = json.loads(value)
     return data if isinstance(data, dict) else {}
+
+
+def workbuddy_payload():
+    prompt = (
+        "你是外部智能体，通过 AgentResourceOfficer 控制 MoviePilot 资源工作流。"
+        "不要直接调用影巢、115、夸克或盘搜原始 API。"
+        "每个新会话先调用 startup 或 readiness；普通用户指令走 route；"
+        "编号选择走 pick；写入动作遵守 dry_run、plan_id、execute 的确认流程。"
+        "输出时只展示用户需要选择或执行的信息，不回显 API Key、Cookie、Token。"
+    )
+    return {
+        "success": True,
+        "schema_version": "workbuddy.v1",
+        "helper_version": HELPER_VERSION,
+        "guide_file": WORKBUDDY_GUIDE_PATH,
+        "guide_file_exists": os.path.exists(WORKBUDDY_GUIDE_PATH),
+        "recommended_recipe": "workbuddy_quickstart",
+        "recipe_command": "python3 scripts/aro_request.py templates --recipe workbuddy --compact",
+        "startup_command": "python3 scripts/aro_request.py startup",
+        "route_command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'workbuddy:<会话ID>'",
+        "pick_command": "python3 scripts/aro_request.py pick --choice <编号> --session 'workbuddy:<会话ID>'",
+        "prompt": prompt,
+        "tools": [
+            {
+                "name": "startup",
+                "purpose": "检查插件状态、恢复建议和低 token recipe。",
+                "command": "python3 scripts/aro_request.py startup",
+                "writes": False,
+            },
+            {
+                "name": "route_text",
+                "purpose": "处理自然语言资源指令、链接转存、搜索和登录状态查询。",
+                "command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'workbuddy:<会话ID>'",
+                "writes": "depends_on_route",
+            },
+            {
+                "name": "pick_continue",
+                "purpose": "继续编号选择、详情、审查、下一页等会话动作。",
+                "command": "python3 scripts/aro_request.py pick --choice <编号> --session 'workbuddy:<会话ID>'",
+                "writes": "depends_on_choice",
+            },
+        ],
+    }
 
 
 def compact(data):
@@ -451,12 +497,18 @@ def selftest_result():
     })
     check("compact_preserves_feishu_health", compact_feishu.get("plugin_version") == "0.1.110" and compact_feishu.get("legacy_bridge_running") is True)
 
+    workbuddy = workbuddy_payload()
+    check("workbuddy_payload_has_prompt", bool(workbuddy.get("prompt")))
+    check("workbuddy_payload_has_guide", workbuddy.get("guide_file_exists") is True)
+    check("workbuddy_payload_has_tools", len(workbuddy.get("tools") or []) == 3)
+
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []
     catalog_names = {item.get("name") for item in catalog_commands}
     check("helper_version_present", catalog.get("helper_version") == HELPER_VERSION)
     check("commands_schema_version", catalog.get("schema_version") == "commands.v1")
     check("commands_catalog_includes_version", "version" in catalog_names)
+    check("commands_catalog_includes_workbuddy", "workbuddy" in catalog_names)
     check("commands_catalog_complete", catalog_names == set(HELPER_COMMANDS))
     check("commands_writes_are_boolean", all(isinstance(item.get("writes"), bool) for item in catalog_commands))
     check("commands_have_write_condition", all("write_condition" in item for item in catalog_commands))
@@ -489,6 +541,7 @@ def commands_catalog():
         "recommended_start": "python3 scripts/aro_request.py decide --summary-only",
         "commands": [
             {"name": "version", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper version"},
+            {"name": "workbuddy", "network": False, "writes": False, "write_condition": "", "purpose": "print WorkBuddy connection prompt and minimal tool contract"},
             {"name": "commands", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper command catalog"},
             {"name": "config-check", "network": False, "writes": False, "write_condition": "", "purpose": "check local connection settings without printing secrets"},
             {"name": "selftest", "network": False, "writes": False, "write_condition": "", "purpose": "test local helper decision and command generation logic"},
@@ -575,6 +628,13 @@ def main():
         return 0
     if args.command == "version":
         print_json({"success": True, "helper_version": HELPER_VERSION})
+        return 0
+    if args.command == "workbuddy":
+        if args.full and os.path.exists(WORKBUDDY_GUIDE_PATH):
+            with open(WORKBUDDY_GUIDE_PATH, "r", encoding="utf-8") as file_obj:
+                print(file_obj.read())
+        else:
+            print_json(workbuddy_payload())
         return 0
 
     if args.command == "selftest":

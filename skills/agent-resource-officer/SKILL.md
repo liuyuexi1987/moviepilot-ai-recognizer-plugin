@@ -59,6 +59,8 @@ python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands
+python3 scripts/aro_request.py workbuddy
+python3 scripts/aro_request.py workbuddy --full
 python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py selfcheck
@@ -92,6 +94,15 @@ python3 scripts/aro_request.py commands
 ```
 
 The command catalog uses `schema_version=commands.v1`; `writes` is always boolean and details live in `write_condition`.
+
+Use `workbuddy` when handing this Skill to WorkBuddy, a WeChat-side agent, or another external agent:
+
+```bash
+python3 scripts/aro_request.py workbuddy
+python3 scripts/aro_request.py workbuddy --full
+```
+
+`workbuddy` prints the compact prompt and minimal tool contract. `workbuddy --full` prints the full bundled handoff guide.
 
 Use `config-check` to verify connection settings without printing secrets:
 

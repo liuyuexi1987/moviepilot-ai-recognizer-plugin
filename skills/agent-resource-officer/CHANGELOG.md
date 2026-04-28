@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.12
+
+- Added `workbuddy` helper command to print a compact external-agent prompt and minimal tool contract.
+- Added `workbuddy --full` to print the bundled WorkBuddy handoff guide directly from the Skill package.
+
 ## 0.1.11
 
 - Compact output now preserves Feishu migration fields such as `ready_to_start`, `safe_to_enable`, `missing_requirements`, and `migration_hint`.

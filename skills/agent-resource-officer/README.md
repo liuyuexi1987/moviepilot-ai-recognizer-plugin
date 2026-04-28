@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制资源工作流。
 
-当前 helper 版本：`0.1.11`
+当前 helper 版本：`0.1.12`
 
 ## 使用方式
 
@@ -49,6 +49,8 @@ python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands
+python3 scripts/aro_request.py workbuddy
+python3 scripts/aro_request.py workbuddy --full
 python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py startup
@@ -69,6 +71,8 @@ python3 scripts/aro_request.py pick --choice 1
 `version` 会输出当前 helper 版本。
 
 `commands` 会输出 helper 命令目录、是否联网、是否可能写入。`writes` 固定为布尔值，具体触发条件在 `write_condition`。
+
+`workbuddy` 会输出可直接交给 WorkBuddy、微信侧智能体或其他外部智能体的系统提示词和最小工具约定；`workbuddy --full` 会输出完整接入说明。
 
 注意：`workflow` 是 dry-run，不会解锁或转存资源，但会保存一个待确认执行的 plan，因此在命令目录里属于写入型命令。
 
