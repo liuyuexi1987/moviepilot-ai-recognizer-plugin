@@ -194,7 +194,7 @@ python3 scripts/smoke-agent-resource-officer.py
 python3 scripts/smoke-agent-resource-officer.py --include-search
 ```
 
-默认只测自检、飞书健康和 `115状态` 路由；加 `--include-search` 会额外测 `ps关键词` 与 `yc关键词`，并自动清理测试会话。
+默认只测自检、飞书健康、WorkBuddy request templates 和 `115状态` 路由；加 `--include-search` 会额外测 `MP搜索`、`ps关键词` 与 `yc关键词`，并自动清理测试会话。
 
 如果你是为了“把影巢搜索 -> 选择 -> 解锁 -> 115 落地”这条链路交给 AI 智能体，直接看这里：
 

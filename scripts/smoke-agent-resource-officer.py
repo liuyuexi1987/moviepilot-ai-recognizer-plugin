@@ -104,7 +104,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test AgentResourceOfficer live assistant endpoints")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
-    parser.add_argument("--include-search", action="store_true", help="Also test PanSou and HDHive alias searches")
+    parser.add_argument("--include-search", action="store_true", help="Also test MP native search, PanSou, and HDHive alias routes")
     parser.add_argument("--keyword", default="蜘蛛侠")
     parser.add_argument("--pansou-keyword", default="大君夫人")
     args = parser.parse_args()
