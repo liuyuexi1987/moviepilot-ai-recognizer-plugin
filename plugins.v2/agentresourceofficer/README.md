@@ -62,7 +62,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.2.06`
+- 当前版本：`0.2.07`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -262,12 +262,14 @@ GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode/check?uid=...&time=...&sign=
 POST /api/v1/plugin/AgentResourceOfficer/hdhive/search_by_keyword
 {
   "keyword": "蜘蛛侠",
-  "media_type": "movie",
+  "media_type": "auto",
   "candidate_limit": 10,
   "limit": 12,
   "apikey": "你的 MP API Token"
 }
 ```
+
+`media_type` 可以填 `auto`、`movie` 或 `tv`。不确定电影还是剧集时建议用 `auto`，避免新剧或国剧被默认按电影过滤掉。
 
 ### 5. 解锁影巢资源后自动落盘
 
@@ -289,7 +291,7 @@ POST /api/v1/plugin/AgentResourceOfficer/hdhive/unlock_and_route
 POST /api/v1/plugin/AgentResourceOfficer/session/hdhive/search
 {
   "keyword": "蜘蛛侠",
-  "media_type": "movie",
+  "media_type": "auto",
   "path": "/待整理",
   "apikey": "你的 MP API Token"
 }

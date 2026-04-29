@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.17
+
+- Changed HDHive search helper default to `media_type=auto`, so uncertain titles are not filtered as movies before TV candidates can be found.
+
 ## 0.1.16
 
 - Added `scoring-policy` helper command so external agents can explain plugin-owned scoring rules without re-scoring.

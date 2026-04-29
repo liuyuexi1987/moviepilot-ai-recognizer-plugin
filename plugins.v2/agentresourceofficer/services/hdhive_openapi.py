@@ -171,19 +171,20 @@ class HDHiveOpenApiService:
     async def resolve_candidates_by_keyword(
         self,
         keyword: str,
-        media_type: str = "movie",
+        media_type: str = "auto",
         year: str = "",
         candidate_limit: int = 10,
     ) -> Tuple[bool, Dict[str, Any], str]:
         keyword = self.normalize_text(keyword)
-        media_type = self.normalize_text(media_type).lower() or "movie"
+        media_type = self.normalize_text(media_type).lower() or "auto"
+        type_filter = "" if media_type in {"auto", "all", "*"} else media_type
         year = self.normalize_text(year)
         candidate_limit = min(50, max(1, self.safe_int(candidate_limit, 10)))
 
         if not keyword:
             return False, {"message": "keyword 不能为空", "query": {"keyword": "", "media_type": media_type}}, "keyword 不能为空"
-        if media_type not in {"movie", "tv"}:
-            return False, {"message": "媒体类型必须是 movie 或 tv", "query": {"keyword": keyword, "media_type": media_type}}, "媒体类型必须是 movie 或 tv"
+        if type_filter and type_filter not in {"movie", "tv"}:
+            return False, {"message": "媒体类型必须是 movie、tv 或 auto", "query": {"keyword": keyword, "media_type": media_type}}, "媒体类型必须是 movie、tv 或 auto"
         if MediaChain is None:
             return False, {"message": "MoviePilot MediaChain 不可用", "query": {"keyword": keyword, "media_type": media_type}}, "MoviePilot MediaChain 不可用"
 
@@ -196,7 +197,7 @@ class HDHiveOpenApiService:
         for media in medias or []:
             item_type = self.media_type_text(getattr(media, "type", ""))
             item_year = self.normalize_text(getattr(media, "year", ""))
-            if media_type and item_type and item_type != media_type:
+            if type_filter and item_type and item_type != type_filter:
                 continue
             if year and item_year and item_year != year:
                 continue
@@ -207,7 +208,7 @@ class HDHiveOpenApiService:
                 {
                     "title": getattr(media, "title", "") or getattr(media, "en_title", "") or "",
                     "year": item_year,
-                    "media_type": item_type or media_type,
+                    "media_type": item_type or type_filter or "movie",
                     "tmdb_id": tmdb_id,
                     "poster_path": getattr(media, "poster_path", "") or "",
                 }
@@ -249,7 +250,7 @@ class HDHiveOpenApiService:
     async def search_resources_by_keyword(
         self,
         keyword: str,
-        media_type: str = "movie",
+        media_type: str = "auto",
         year: str = "",
         candidate_limit: int = 10,
         result_limit: int = 12,

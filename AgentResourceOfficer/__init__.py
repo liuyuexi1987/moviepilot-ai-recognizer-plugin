@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.06"
+    plugin_version = "0.2.07"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -2397,7 +2397,7 @@ class AgentResourceOfficer(_PluginBase):
             return disabled
 
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
-        media_type = self._clean_text(body.get("media_type") or body.get("type") or "movie").lower()
+        media_type = self._clean_text(body.get("media_type") or body.get("type") or "auto").lower()
         year = self._clean_text(body.get("year"))
         candidate_limit = self._safe_int(body.get("candidate_limit"), self._hdhive_candidate_page_size)
         result_limit = self._safe_int(body.get("limit"), 12)
@@ -4537,7 +4537,7 @@ class AgentResourceOfficer(_PluginBase):
                     description="发起新的影巢候选搜索",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                     tool="agent_resource_officer_smart_entry",
-                    body={**base_route, "mode": "hdhive", "keyword": "<关键词>", "media_type": "movie"},
+                    body={**base_route, "mode": "hdhive", "keyword": "<关键词>", "media_type": "auto"},
                 ),
                 self._assistant_action_template(
                     name="start_mp_media_search",
@@ -6542,7 +6542,7 @@ class AgentResourceOfficer(_PluginBase):
                 "tool_args": {
                     "name": "hdhive_candidates",
                     "keyword": "蜘蛛侠",
-                    "media_type": "movie",
+                    "media_type": "auto",
                     "session": "assistant",
                     "dry_run": True,
                     "compact": True,
@@ -6550,7 +6550,7 @@ class AgentResourceOfficer(_PluginBase):
                 "body": {
                     "workflow": "hdhive_candidates",
                     "keyword": "蜘蛛侠",
-                    "media_type": "movie",
+                    "media_type": "auto",
                     "session": "assistant",
                     "dry_run": True,
                     "compact": True,
@@ -8175,7 +8175,7 @@ class AgentResourceOfficer(_PluginBase):
     async def tool_hdhive_search_session(
         self,
         keyword: str,
-        media_type: str = "movie",
+        media_type: str = "auto",
         year: str = "",
         target_path: str = "",
     ) -> str:
@@ -8188,7 +8188,7 @@ class AgentResourceOfficer(_PluginBase):
         service = self._ensure_hdhive_service()
         search_ok, result, search_message = await service.resolve_candidates_by_keyword(
             keyword=self._clean_text(keyword),
-            media_type=self._clean_text(media_type or "movie").lower(),
+            media_type=self._clean_text(media_type or "auto").lower(),
             year=self._clean_text(year),
             candidate_limit=max(30, self._hdhive_candidate_page_size),
         )
@@ -8203,7 +8203,7 @@ class AgentResourceOfficer(_PluginBase):
                 "kind": "hdhive",
                 "stage": "candidate",
                 "keyword": self._clean_text(keyword),
-                "media_type": self._clean_text(media_type or "movie").lower(),
+                "media_type": self._clean_text(media_type or "auto").lower(),
                 "year": self._clean_text(year),
                 "target_path": self._clean_text(target_path),
                 "candidates": candidates,
@@ -9717,7 +9717,7 @@ class AgentResourceOfficer(_PluginBase):
 
         mode = parsed.get("mode") or "hdhive"
         keyword = self._clean_text(parsed.get("keyword"))
-        media_type = self._clean_text(parsed.get("type") or "movie").lower() or "movie"
+        media_type = self._clean_text(parsed.get("type") or "auto").lower() or "auto"
         year = self._clean_text(parsed.get("year"))
 
         if mode == "mp":
@@ -9868,7 +9868,7 @@ class AgentResourceOfficer(_PluginBase):
             route_payload.update({
                 "mode": "hdhive",
                 "keyword": body.get("keyword"),
-                "media_type": body.get("media_type") or "movie",
+                "media_type": body.get("media_type") or "auto",
                 "year": body.get("year"),
             })
             return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
@@ -10222,7 +10222,7 @@ class AgentResourceOfficer(_PluginBase):
         session_id = self._clean_text(body.get("session_id"))
         path = self._clean_text(body.get("path") or body.get("target_path"))
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
-        media_type = self._clean_text(body.get("media_type") or "movie")
+        media_type = self._clean_text(body.get("media_type") or "auto")
         year = self._clean_text(body.get("year"))
         source = self._clean_text(body.get("source")) or "tmdb_trending"
         limit = self._safe_int(body.get("limit"), 20)
@@ -11307,7 +11307,7 @@ class AgentResourceOfficer(_PluginBase):
             return disabled
 
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
-        media_type = self._clean_text(body.get("media_type") or body.get("type") or "movie").lower()
+        media_type = self._clean_text(body.get("media_type") or body.get("type") or "auto").lower()
         year = self._clean_text(body.get("year"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
         service = self._ensure_hdhive_service()

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class HDHiveSearchSessionToolInput(BaseModel):
     keyword: str = Field(..., description="要搜索的影片或剧集名称")
-    media_type: str = Field(default="movie", description="媒体类型，movie 或 tv")
+    media_type: str = Field(default="auto", description="媒体类型，auto / movie / tv；不确定时用 auto")
     year: Optional[str] = Field(default=None, description="可选年份，用于缩小候选范围")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则使用默认目录")
 
@@ -32,7 +32,7 @@ class AssistantRouteToolInput(BaseModel):
     keyword: Optional[str] = Field(default=None, description="结构化搜索关键词")
     url: Optional[str] = Field(default=None, description="结构化分享链接，支持 115 / 夸克")
     access_code: Optional[str] = Field(default=None, description="结构化提取码")
-    media_type: Optional[str] = Field(default=None, description="结构化媒体类型：movie / tv")
+    media_type: Optional[str] = Field(default=None, description="结构化媒体类型：auto / movie / tv")
     year: Optional[str] = Field(default=None, description="结构化年份")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
     action: Optional[str] = Field(default=None, description="结构化动作：p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel / assistant_help")
@@ -154,7 +154,7 @@ class AssistantWorkflowToolInput(BaseModel):
     path: Optional[str] = Field(default=None, description="可选目标目录")
     url: Optional[str] = Field(default=None, description="分享链接")
     access_code: Optional[str] = Field(default=None, description="提取码")
-    media_type: Optional[str] = Field(default=None, description="媒体类型，movie 或 tv")
+    media_type: Optional[str] = Field(default=None, description="媒体类型，auto / movie / tv")
     year: Optional[str] = Field(default=None, description="年份")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
     source: Optional[str] = Field(default=None, description="MP 推荐来源，例如 tmdb_trending / douban_movie_hot / bangumi_calendar")

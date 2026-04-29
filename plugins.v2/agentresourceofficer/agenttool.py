@@ -56,7 +56,7 @@ class HDHiveSearchSessionTool(MoviePilotTool):
         keyword = kwargs.get("keyword", "")
         return f"正在通过 Agent云盘资源整合搜索影巢候选：{keyword}"
 
-    async def run(self, keyword: str, media_type: str = "movie", year: str = None, path: str = None, **kwargs) -> str:
+    async def run(self, keyword: str, media_type: str = "auto", year: str = None, path: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
             return "Agent云盘资源整合 插件未运行"
