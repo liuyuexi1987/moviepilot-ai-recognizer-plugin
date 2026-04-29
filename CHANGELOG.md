@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.22`
+- `AgentResourceOfficer`: `0.2.23`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.23`：新增偏好画像自然语言入口；可用“偏好”“保存偏好 ...”“重置偏好”查看、保存或重置智能体片源偏好。
 - `AgentResourceOfficer 0.2.22`：新增计划确认自然语言入口；可用“执行计划”或“执行 plan-xxx”确认执行已生成的下载、订阅或控制计划。
 - `AgentResourceOfficer 0.2.21`：新增“下载最佳”入口；在 MP 搜索会话中按最高评分 PT 候选生成下载计划，仍需用户确认 `plan_id` 后才会下载。
 - `AgentResourceOfficer 0.2.20`：新增 MP 搜索最佳候选详情入口；智能体可用“最佳片源”或 `mp_search_best` 直接查看当前评分最高 PT 候选。

@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.22"
+    plugin_version = "0.2.23"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -2954,6 +2954,83 @@ class AgentResourceOfficer(_PluginBase):
             "auto_ingest_enabled": prefs.get("auto_ingest_enabled"),
             "auto_ingest_score_threshold": prefs.get("auto_ingest_score_threshold"),
         }
+
+    def _parse_assistant_preferences_text(self, text: str) -> Dict[str, Any]:
+        raw = self._clean_text(text)
+        compact = re.sub(r"\s+", "", raw).lower()
+        payload: Dict[str, Any] = {}
+        if re.search(r"1080|fhd", raw, flags=re.IGNORECASE):
+            payload["prefer_resolution"] = "1080P"
+        elif re.search(r"4k|2160|uhd", raw, flags=re.IGNORECASE):
+            payload["prefer_resolution"] = "4K"
+
+        if re.search(r"(不要|不需要|关闭|禁用).{0,4}(杜比|dv)", raw, flags=re.IGNORECASE):
+            payload["prefer_dolby_vision"] = False
+        elif re.search(r"杜比|dv|dolby", raw, flags=re.IGNORECASE):
+            payload["prefer_dolby_vision"] = True
+
+        if re.search(r"(不要|不需要|关闭|禁用).{0,4}hdr", raw, flags=re.IGNORECASE):
+            payload["prefer_hdr"] = False
+        elif re.search(r"hdr", raw, flags=re.IGNORECASE):
+            payload["prefer_hdr"] = True
+
+        if re.search(r"(不要|不需要|关闭|禁用).{0,6}(中字|中文|字幕)", raw, flags=re.IGNORECASE) or re.search(r"无字幕也可|字幕无所谓", raw):
+            payload["prefer_chinese_subtitle"] = False
+        elif re.search(r"中字|中文|简中|繁中|双语字幕|字幕", raw, flags=re.IGNORECASE):
+            payload["prefer_chinese_subtitle"] = True
+
+        if re.search(r"不强求全集|不要全集|单集也可|更新也可", raw):
+            payload["prefer_complete_series"] = False
+        elif re.search(r"全集|完整季|整季|完结", raw):
+            payload["prefer_complete_series"] = True
+
+        if re.search(r"夸克优先|优先夸克|quark", raw, flags=re.IGNORECASE):
+            payload["prefer_cloud_provider"] = "quark"
+        elif re.search(r"115优先|优先115", raw):
+            payload["prefer_cloud_provider"] = "115"
+
+        if re.search(r"pt.{0,4}(只要|必须).{0,4}免费|只下免费|只要免费", raw, flags=re.IGNORECASE):
+            payload["pt_require_free"] = True
+        elif re.search(r"pt.{0,4}(不限|不强求).{0,4}免费|不只要免费|免费不强求", raw, flags=re.IGNORECASE):
+            payload["pt_require_free"] = False
+
+        seed_match = re.search(r"(?:做种|种子|seeders?|seeder)[^\d]{0,8}(\d+)", raw, flags=re.IGNORECASE)
+        if seed_match:
+            payload["pt_min_seeders"] = self._safe_int(seed_match.group(1), 3)
+
+        points_match = re.search(r"(?:影巢|积分|解锁)[^\d]{0,10}(\d+)", raw)
+        if points_match:
+            payload["hdhive_max_unlock_points"] = self._safe_int(points_match.group(1), self._hdhive_max_unlock_points)
+
+        if re.search(r"(不|不要|关闭|禁用).{0,4}自动入库", raw):
+            payload["auto_ingest_enabled"] = False
+        elif re.search(r"自动入库|自动下载|自动转存", raw):
+            payload["auto_ingest_enabled"] = True
+
+        threshold_match = re.search(r"(?:自动入库(?:评分|分数|阈值)|评分阈值|分数阈值|阈值)[^\d]{0,10}(\d{2,3})", raw)
+        if threshold_match:
+            payload["auto_ingest_score_threshold"] = self._safe_int(threshold_match.group(1), 90)
+
+        for key, target in [
+            ("115目录", "p115_default_path"),
+            ("p115目录", "p115_default_path"),
+            ("夸克目录", "quark_default_path"),
+            ("quark目录", "quark_default_path"),
+            ("云盘目录", "cloud_default_path"),
+        ]:
+            match = re.search(rf"{re.escape(key)}\s*=\s*([^\s，,]+)", raw, flags=re.IGNORECASE)
+            if match:
+                payload[target] = self._normalize_path(match.group(1))
+
+        if "initialized" not in payload and payload:
+            payload["initialized"] = True
+        if "auto_ingest_score_threshold" in payload:
+            payload["auto_ingest_score_threshold"] = max(1, min(100, self._safe_int(payload["auto_ingest_score_threshold"], 90)))
+        if "pt_min_seeders" in payload:
+            payload["pt_min_seeders"] = max(0, self._safe_int(payload["pt_min_seeders"], 3))
+        if "hdhive_max_unlock_points" in payload:
+            payload["hdhive_max_unlock_points"] = max(0, self._safe_int(payload["hdhive_max_unlock_points"], self._hdhive_max_unlock_points))
+        return payload
 
     @staticmethod
     def _score_text_blob(item: Any) -> str:
@@ -6569,6 +6646,7 @@ class AgentResourceOfficer(_PluginBase):
             "13. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
             "14. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
             "15. text=执行计划 执行当前会话最近待执行计划；text=执行 plan-xxxx 精确执行指定计划",
+            "16. text=偏好 / 保存偏好 4K 杜比 HDR 中字 全集 做种>=3 影巢积分20 不自动入库 / 重置偏好",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -6634,6 +6712,9 @@ class AgentResourceOfficer(_PluginBase):
                     "execute_plan",
                     "plans_list",
                     "plans_clear",
+                    "preferences_get",
+                    "preferences_save",
+                    "preferences_reset",
                 ],
                 "structured_fields": [
                     "session",
@@ -8693,6 +8774,28 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
+            "偏好",
+            "片源偏好",
+            "查看偏好",
+            "偏好设置",
+            "智能体偏好",
+            "preferences",
+            "getpreferences",
+        }:
+            options["action"] = "preferences_get"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "重置偏好",
+            "清除偏好",
+            "重设偏好",
+            "恢复默认偏好",
+            "resetpreferences",
+        }:
+            options["action"] = "preferences_reset"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "取消计划",
             "清理计划",
             "删除计划",
@@ -8950,10 +9053,19 @@ class AgentResourceOfficer(_PluginBase):
                 ("取消计划", "plans_clear"),
                 ("清理计划", "plans_clear"),
                 ("删除计划", "plans_clear"),
+                ("保存偏好", "preferences_save"),
+                ("设置偏好", "preferences_save"),
+                ("更新偏好", "preferences_save"),
+                ("偏好设置", "preferences_save"),
+                ("偏好", "preferences_save"),
+                ("查看偏好", "preferences_get"),
+                ("片源偏好", "preferences_get"),
+                ("重置偏好", "preferences_reset"),
+                ("清除偏好", "preferences_reset"),
             ]:
                 if raw.startswith(prefix + " ") or raw.startswith(prefix + "：") or raw.startswith(prefix + ":"):
                     remain_text = raw[len(prefix):].lstrip(" ：:").strip()
-                    if action == "plans_list" or options.get("plan_id") or remain_text:
+                    if action in {"plans_list", "preferences_get", "preferences_reset"} or options.get("plan_id") or remain_text:
                         options["action"] = action
                         options["mode"] = ""
                         options["keyword"] = ""
@@ -10971,6 +11083,43 @@ class AgentResourceOfficer(_PluginBase):
                     **clear_result,
                 }),
             })
+        if assistant_action in {"preferences_get", "preferences_save", "preferences_reset"}:
+            if assistant_action == "preferences_save":
+                preferences = body.get("preferences") if isinstance(body.get("preferences"), dict) else self._parse_assistant_preferences_text(text)
+                if not preferences:
+                    return finish({
+                        "success": False,
+                        "message": (
+                            "保存偏好缺少可识别内容。示例：保存偏好 4K 杜比 HDR 中字 全集 "
+                            "做种>=3 影巢积分20 不自动入库"
+                        ),
+                        "data": self._assistant_response_data(session=session, data={
+                            "action": "preferences_save",
+                            "ok": False,
+                            "error_code": "missing_preferences",
+                        }),
+                    })
+                payload = {
+                    "session": session,
+                    "user_key": self._clean_text(body.get("user_key")),
+                    "preferences": preferences,
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                }
+                return finish(await self.api_assistant_preferences(_JsonRequestShim(request, payload, method="POST")))
+            if assistant_action == "preferences_reset":
+                return finish(await self.api_assistant_preferences(_JsonRequestShim(request, {
+                    "session": session,
+                    "user_key": self._clean_text(body.get("user_key")),
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                }, method="DELETE")))
+            return finish(await self.api_assistant_preferences(_JsonRequestShim(request, {
+                "session": session,
+                "user_key": self._clean_text(body.get("user_key")),
+                "compact": compact,
+                "apikey": self._extract_apikey(request, body),
+            }, method="GET")))
         if assistant_action == "hdhive_checkin":
             is_gambler = self._parse_bool_value(parsed.get("is_gambler"), self._hdhive_checkin_gambler_mode)
             result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent云盘资源整合 智能入口")

@@ -308,6 +308,14 @@ If `needs_onboarding=true`, ask the user for a compact preference profile and sa
 python3 scripts/aro_request.py preferences --session agent:<用户ID> --preferences-json '{"prefer_resolution":"4K","prefer_dolby_vision":true,"prefer_hdr":true,"prefer_chinese_subtitle":true,"prefer_complete_series":true,"prefer_cloud_provider":"115","pt_require_free":false,"pt_min_seeders":3,"hdhive_max_unlock_points":20,"p115_default_path":"/待整理","quark_default_path":"/飞书","auto_ingest_enabled":false,"auto_ingest_score_threshold":90}'
 ```
 
+You may also manage preferences through the main natural-language route:
+
+```bash
+python3 scripts/aro_request.py route --text "偏好" --session agent:<用户ID>
+python3 scripts/aro_request.py route --text "保存偏好 4K 杜比 HDR 中字 全集 做种>=3 影巢积分20 不自动入库" --session agent:<用户ID>
+python3 scripts/aro_request.py route --text "重置偏好" --session agent:<用户ID>
+```
+
 Scoring rules are source-specific and plugin-owned. Use `scoring-policy` or `capabilities` to read the current policy when you need to explain the rules to the user. Do not invent a separate score in the agent.
 
 - Cloud resources: HDHive, PanSou 115, PanSou Quark, direct 115/Quark links. Score quality, Dolby Vision/HDR, subtitles, completeness, file size, drive preference, and target directory. HDHive also checks point cost.
