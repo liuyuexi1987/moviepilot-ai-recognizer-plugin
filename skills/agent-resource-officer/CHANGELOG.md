@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.18
+
+- Added `--mode` to the workflow helper so `mp_recommend_search` can continue a recommended title into MP, HDHive, or PanSou.
+- Documented the recommendation-to-search chain for external agents.
+
 ## 0.1.17
 
 - Changed HDHive search helper default to `media_type=auto`, so uncertain titles are not filtered as movies before TV candidates can be found.

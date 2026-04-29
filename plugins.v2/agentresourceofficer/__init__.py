@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.07"
+    plugin_version = "0.2.08"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3427,6 +3427,7 @@ class AgentResourceOfficer(_PluginBase):
         media_type: str = "all",
         limit: int = 20,
         session: str = "default",
+        cache_key: str = "",
     ) -> Dict[str, Any]:
         try:
             from app.chain.recommend import RecommendChain
@@ -3492,7 +3493,17 @@ class AgentResourceOfficer(_PluginBase):
             lines = [f"MP 热门推荐：{source_name}，共 {len(items)} 条"]
             for item in items[:10]:
                 lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
-            lines.append("下一步：可选择片名继续执行 MP 搜索、盘搜或影巢搜索。")
+            lines.append("下一步：回复“选择 1”进入 MP 原生搜索；也可结构化传 mode=hdhive 或 mode=pansou。")
+            if cache_key:
+                self._save_session(cache_key, {
+                    "kind": "assistant_mp_recommend",
+                    "stage": "result",
+                    "source": source_name,
+                    "media_type": media_type_name,
+                    "keyword": "",
+                    "items": items,
+                    "target_path": "",
+                })
             return {
                 "success": True,
                 "message": "\n".join(lines),
@@ -4132,6 +4143,10 @@ class AgentResourceOfficer(_PluginBase):
             mode = "continue_mp_search"
             reason = "当前会话停留在 MP 原生搜索结果列表"
             template = self._assistant_find_action_template(templates, ["pick_mp_download"])
+        elif has_session and kind == "assistant_mp_recommend":
+            mode = "continue_mp_recommend"
+            reason = "当前会话停留在 MP 热门推荐列表"
+            template = self._assistant_find_action_template(templates, ["pick_recommend_mp_search"])
         elif has_session and kind == "assistant_hdhive" and stage == "candidate":
             mode = "continue_hdhive_candidate"
             reason = "当前会话停留在影巢候选列表"
@@ -4244,6 +4259,31 @@ class AgentResourceOfficer(_PluginBase):
                 "score_summary": self._score_summary(items, limit=5),
                 "suggested_actions": ["mp_download.choice", "mp_subscribe.keyword", "session_clear"],
             })
+        elif kind == "assistant_mp_recommend":
+            items = state.get("items") or []
+            payload.update({
+                "source": self._clean_text(state.get("source")),
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(item.get("title")),
+                        "year": self._clean_text(item.get("year")),
+                        "type": self._clean_text(item.get("type")),
+                        "tmdb_id": self._clean_text(item.get("tmdb_id")),
+                        "douban_id": self._clean_text(item.get("douban_id")),
+                        "vote_average": item.get("vote_average"),
+                    }
+                    for idx, item in enumerate(items[:10])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": [
+                    "smart_pick.choice",
+                    "smart_pick.choice mode=hdhive",
+                    "smart_pick.choice mode=pansou",
+                    "session_clear",
+                ],
+            })
         elif kind == "assistant_hdhive":
             if stage == "candidate":
                 candidates = state.get("candidates") or []
@@ -4344,6 +4384,9 @@ class AgentResourceOfficer(_PluginBase):
         }
         if result["kind"] == "assistant_pansou":
             result["result_count"] = len(payload.get("items") or [])
+        elif result["kind"] == "assistant_mp_recommend":
+            result["result_count"] = len(payload.get("items") or [])
+            result["source"] = self._clean_text(payload.get("source"))
         elif result["kind"] == "assistant_hdhive":
             if result["stage"] == "candidate":
                 candidates = payload.get("candidates") or []
@@ -4469,6 +4512,8 @@ class AgentResourceOfficer(_PluginBase):
             "prefer_unexecuted",
             "preferences",
             "compact",
+            "mode",
+            "source",
         ]:
             if key in body_payload:
                 action_body[key] = body_payload.get(key)
@@ -4617,6 +4662,30 @@ class AgentResourceOfficer(_PluginBase):
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
                     body={**base_state, "name": "start_mp_subscribe", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_recommend":
+            templates.extend([
+                self._assistant_action_template(
+                    name="pick_recommend_mp_search",
+                    description="按编号选择推荐条目并进入 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "mp"},
+                ),
+                self._assistant_action_template(
+                    name="pick_recommend_hdhive_search",
+                    description="按编号选择推荐条目并进入影巢候选搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "hdhive"},
+                ),
+                self._assistant_action_template(
+                    name="pick_recommend_pansou_search",
+                    description="按编号选择推荐条目并进入盘搜搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "pansou"},
                 ),
             ])
         elif kind == "assistant_hdhive" and stage == "candidate":
@@ -9446,6 +9515,7 @@ class AgentResourceOfficer(_PluginBase):
                 media_type=self._clean_text(body.get("media_type") or body.get("type") or "all"),
                 limit=self._safe_int(body.get("limit"), 20),
                 session=session,
+                cache_key=cache_key,
             ))
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()
@@ -9905,12 +9975,23 @@ class AgentResourceOfficer(_PluginBase):
                 immediate_search=name == "start_mp_subscribe_search",
             ))
         if name == "start_mp_recommendations":
+            recommend_session, recommend_cache_key = self._normalize_assistant_session_ref(
+                session=self._clean_text(body.get("session")) or "default",
+                session_id=body.get("session_id"),
+            )
             return await finish(self._assistant_mp_recommendations(
                 source=self._clean_text(body.get("source")) or "tmdb_trending",
                 media_type=self._clean_text(body.get("media_type") or body.get("type")) or "all",
                 limit=self._safe_int(body.get("limit"), 20),
-                session=self._clean_text(body.get("session")) or "default",
+                session=recommend_session,
+                cache_key=recommend_cache_key,
             ))
+        if name == "pick_recommend_search":
+            pick_payload.update({
+                "choice": body.get("choice") or body.get("index"),
+                "mode": body.get("mode") or body.get("search_mode") or "mp",
+            })
+            return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
         if name in {"preferences_get", "preferences_save", "preferences_reset"}:
             method = "GET" if name == "preferences_get" else "DELETE" if name == "preferences_reset" else "POST"
             payload = {
@@ -10195,8 +10276,8 @@ class AgentResourceOfficer(_PluginBase):
                 },
                 {
                     "name": "mp_recommend_search",
-                    "description": "从推荐或指定关键词进入 MP 原生搜索；传 keyword 时直接搜索",
-                    "fields": ["session", "source", "keyword", "media_type", "limit", "compact"],
+                    "description": "读取 MP 推荐并按编号继续搜索；mode 可选 mp / hdhive / pansou，传 keyword 时直接 MP 搜索",
+                    "fields": ["session", "source", "keyword", "choice", "mode", "media_type", "limit", "compact"],
                 },
                 {
                     "name": "share_transfer",
@@ -10317,14 +10398,22 @@ class AgentResourceOfficer(_PluginBase):
         if workflow_name == "mp_recommend_search":
             if keyword:
                 return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
-            return [
+            actions = [
                 base({
                     "name": "start_mp_recommendations",
                     "source": source,
                     "media_type": self._clean_text(body.get("media_type")) or "all",
                     "limit": max(1, min(50, limit)),
                 })
-            ], ""
+            ]
+            choice = self._safe_int(body.get("choice"), 0)
+            if choice > 0:
+                actions.append(base({
+                    "name": "pick_recommend_search",
+                    "choice": choice,
+                    "mode": self._clean_text(body.get("mode")) or "mp",
+                }))
+            return actions, ""
 
         if workflow_name == "share_transfer":
             share_url = self._clean_text(body.get("url") or body.get("share_url"))
@@ -10635,6 +10724,57 @@ class AgentResourceOfficer(_PluginBase):
                 "message": text_message,
                 "data": self._assistant_response_data(session=session, data={"action": "share_route", "ok": True}),
             })
+
+        if kind == "assistant_mp_recommend":
+            items = state.get("items") or []
+            if index > len(items):
+                return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
+            selected = dict(items[index - 1])
+            title = self._clean_text(selected.get("title"))
+            if not title:
+                return {"success": False, "message": "选中的推荐条目缺少标题，无法继续搜索。"}
+            next_mode = self._clean_text(
+                body.get("mode")
+                or body.get("search_mode")
+                or body.get("target")
+                or "mp"
+            ).lower()
+            mode_aliases = {
+                "原生": "mp",
+                "mp搜索": "mp",
+                "影巢": "hdhive",
+                "yc": "hdhive",
+                "盘搜": "pansou",
+                "ps": "pansou",
+            }
+            next_mode = mode_aliases.get(next_mode, next_mode)
+            if next_mode not in {"mp", "hdhive", "pansou"}:
+                return {"success": False, "message": "推荐选择只支持 mode=mp、mode=hdhive 或 mode=pansou。"}
+            selected_media_type = self._clean_text(selected.get("type") or state.get("media_type") or "auto").lower()
+            media_type_aliases = {
+                "电影": "movie",
+                "movie": "movie",
+                "movies": "movie",
+                "电视剧": "tv",
+                "剧集": "tv",
+                "番剧": "tv",
+                "tv": "tv",
+                "series": "tv",
+                "all": "auto",
+                "全部": "auto",
+            }
+            selected_media_type = media_type_aliases.get(selected_media_type, "auto")
+            return finish(await self.api_assistant_route(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "session_id": cache_key,
+                    "mode": next_mode,
+                    "keyword": title,
+                    "media_type": selected_media_type,
+                    "path": target_path,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            ))
 
         if kind == "assistant_hdhive":
             allowed, disabled = self._ensure_hdhive_resource_enabled()

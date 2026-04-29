@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.07`
+- `AgentResourceOfficer`: `0.2.08`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.08`：MP 热门推荐列表支持保存会话并按编号继续搜索，智能体可把推荐条目直接转入 MP 原生搜索、影巢或盘搜。
 - `AgentResourceOfficer 0.2.07`：影巢搜索默认使用自动媒体类型识别，未指定电影/剧集时不再提前按电影过滤，修复新剧搜索被误判无结果的问题。
 - `AgentResourceOfficer 0.2.06`：新增 `scoring_policy` 能力，结构化暴露插件内置云盘/PT 评分规则与硬门槛，方便智能体解释但不重打分。
 - `AgentResourceOfficer 0.2.05`：新增低 token `score_summary`，让智能体直接读取云盘和 PT 评分推荐、风险与确认建议。

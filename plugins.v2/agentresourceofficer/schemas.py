@@ -144,7 +144,7 @@ class AssistantExecuteActionsToolInput(BaseModel):
 
 
 class AssistantWorkflowToolInput(BaseModel):
-    name: str = Field(..., description="预设工作流名，例如 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / mp_search / mp_search_download / mp_subscribe / mp_recommend / share_transfer / p115_status")
+    name: str = Field(..., description="预设工作流名，例如 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / mp_search / mp_search_download / mp_subscribe / mp_recommend / mp_recommend_search / share_transfer / p115_status")
     session: Optional[str] = Field(default="default", description="工作流会话名")
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
     keyword: Optional[str] = Field(default=None, description="搜索关键词")
@@ -155,6 +155,7 @@ class AssistantWorkflowToolInput(BaseModel):
     url: Optional[str] = Field(default=None, description="分享链接")
     access_code: Optional[str] = Field(default=None, description="提取码")
     media_type: Optional[str] = Field(default=None, description="媒体类型，auto / movie / tv")
+    mode: Optional[str] = Field(default=None, description="推荐后续搜索方式，mp / hdhive / pansou")
     year: Optional[str] = Field(default=None, description="年份")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
     source: Optional[str] = Field(default=None, description="MP 推荐来源，例如 tmdb_trending / douban_movie_hot / bangumi_calendar")

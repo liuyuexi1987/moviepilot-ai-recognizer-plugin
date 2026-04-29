@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.17"
+HELPER_VERSION = "0.1.18"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -620,6 +620,7 @@ def main():
     parser.add_argument("--workflow", default="hdhive_candidates")
     parser.add_argument("--keyword")
     parser.add_argument("--media-type", default="auto")
+    parser.add_argument("--mode", default="")
     parser.add_argument("--source", default="")
     parser.add_argument("--preferences-json")
     parser.add_argument("--reset", action="store_true")
@@ -964,6 +965,8 @@ def main():
             body["choice"] = args.choice
         if args.action:
             body["action"] = args.action
+        if args.mode:
+            body["mode"] = args.mode
         if args.target_path:
             body["path"] = args.target_path
     elif args.command == "preferences":
@@ -991,6 +994,7 @@ def main():
             "name": args.workflow,
             "keyword": args.keyword or "",
             "media_type": args.media_type,
+            "mode": args.mode or "",
             "choice": args.choice,
             "path": args.target_path or "",
             "source": args.source or "",
