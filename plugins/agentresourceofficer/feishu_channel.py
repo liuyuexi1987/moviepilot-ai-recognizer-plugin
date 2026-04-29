@@ -38,6 +38,7 @@ try:
     from app.core.event import eventmanager
     from app.core.metainfo import MetaInfo
     from app.db.downloadhistory_oper import DownloadHistoryOper
+    from app.db.models.downloadhistory import DownloadHistory
     from app.db.models.transferhistory import TransferHistory
     from app.db.site_oper import SiteOper
     from app.db.subscribe_oper import SubscribeOper
@@ -52,6 +53,7 @@ try:
 except Exception:
     DownloadChain = None
     DownloadHistoryOper = None
+    DownloadHistory = None
     TransferHistory = None
     MediaChain = None
     SearchChain = None
@@ -1039,6 +1041,146 @@ class FeishuChannel:
         if name in {"failed", "fail", "error", "false", "失败", "错误"}:
             return False
         return None
+
+    def _query_download_history(
+        self,
+        *,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        if DownloadHistory is None or DownloadHistoryOper is None:
+            return {"success": False, "message": "查询下载历史失败：当前环境缺少 MoviePilot 下载历史依赖。", "items": []}
+        try:
+            page_num = max(1, int(page or 1))
+            page_size = max(1, min(50, int(limit or 10)))
+            title_text = str(title or "").strip()
+            hash_text = str(hash_value or "").strip()
+            oper = DownloadHistoryOper()
+            db = getattr(oper, "_db", None)
+            if db is None:
+                records = oper.list_by_page(page=1, count=500) or []
+                if title_text:
+                    title_lower = title_text.lower()
+                    records = [
+                        item for item in records
+                        if title_lower in str(getattr(item, "title", "") or "").lower()
+                        or title_lower in str(getattr(item, "torrent_name", "") or "").lower()
+                        or title_lower in str(getattr(item, "path", "") or "").lower()
+                    ]
+                if hash_text:
+                    records = [
+                        item for item in records
+                        if str(getattr(item, "download_hash", "") or "").lower().startswith(hash_text.lower())
+                    ]
+                total = len(records)
+                selected_records = records[(page_num - 1) * page_size:(page_num - 1) * page_size + page_size]
+            else:
+                query = db.query(DownloadHistory)
+                if title_text:
+                    like = f"%{title_text}%"
+                    query = query.filter(
+                        DownloadHistory.title.like(like)
+                        | DownloadHistory.torrent_name.like(like)
+                        | DownloadHistory.path.like(like)
+                    )
+                if hash_text:
+                    query = query.filter(DownloadHistory.download_hash.like(f"{hash_text}%"))
+                query = query.order_by(DownloadHistory.date.desc(), DownloadHistory.id.desc())
+                total = query.count()
+                selected_records = query.offset((page_num - 1) * page_size).limit(page_size).all()
+
+            items: List[Dict[str, Any]] = []
+            for index, record in enumerate(selected_records, start=(page_num - 1) * page_size + 1):
+                task_hash = str(getattr(record, "download_hash", "") or "")
+                transfer_records = TransferHistory.list_by_hash(download_hash=task_hash) if TransferHistory is not None and task_hash else []
+                transfer_success = any(bool(getattr(item, "status", False)) for item in transfer_records or [])
+                transfer_failed = any(not bool(getattr(item, "status", False)) for item in transfer_records or [])
+                if transfer_success:
+                    transfer_status = "success"
+                    transfer_status_text = "已入库"
+                elif transfer_failed:
+                    transfer_status = "failed"
+                    transfer_status_text = "整理失败"
+                else:
+                    transfer_status = "none"
+                    transfer_status_text = "未见整理记录"
+                transfer_dest = ""
+                transfer_error = ""
+                if transfer_records:
+                    first_transfer = transfer_records[0]
+                    transfer_dest = self._path_preview(getattr(first_transfer, "dest", ""))
+                    transfer_error = str(getattr(first_transfer, "errmsg", "") or "")[:300]
+                item = {
+                    "index": index,
+                    "id": getattr(record, "id", None),
+                    "title": str(getattr(record, "title", "") or "未命名媒体"),
+                    "year": str(getattr(record, "year", "") or ""),
+                    "type": str(getattr(record, "type", "") or ""),
+                    "season": str(getattr(record, "seasons", "") or ""),
+                    "episode": str(getattr(record, "episodes", "") or ""),
+                    "date": str(getattr(record, "date", "") or ""),
+                    "downloader": str(getattr(record, "downloader", "") or ""),
+                    "download_hash": task_hash,
+                    "download_hash_short": task_hash[:8],
+                    "torrent_name": str(getattr(record, "torrent_name", "") or ""),
+                    "torrent_site": str(getattr(record, "torrent_site", "") or ""),
+                    "username": str(getattr(record, "username", "") or ""),
+                    "channel": str(getattr(record, "channel", "") or ""),
+                    "path_preview": self._path_preview(getattr(record, "path", "")),
+                    "tmdbid": getattr(record, "tmdbid", None),
+                    "doubanid": str(getattr(record, "doubanid", "") or ""),
+                    "transfer_status": transfer_status,
+                    "transfer_status_text": transfer_status_text,
+                    "transfer_count": len(transfer_records or []),
+                    "transfer_dest_preview": transfer_dest,
+                }
+                if transfer_error and transfer_status == "failed":
+                    item["transfer_error"] = transfer_error
+                items.append(item)
+
+            title_label = f"：{title_text or hash_text}" if title_text or hash_text else ""
+            if not items:
+                return {
+                    "success": True,
+                    "message": f"未找到下载历史{title_label}。",
+                    "items": [],
+                    "total": total,
+                    "page": page_num,
+                    "limit": page_size,
+                }
+            total_pages = (total + page_size - 1) // page_size if total else 1
+            lines = [f"下载历史{title_label}：第 {page_num}/{total_pages} 页，共 {total} 条，展示 {len(items)} 条："]
+            for item in items:
+                season_episode = " ".join(value for value in [item.get("season"), item.get("episode")] if value)
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) {season_episode}".rstrip())
+                details = [
+                    item.get("date") or "-",
+                    f"站点:{item.get('torrent_site') or '-'}",
+                    f"下载器:{item.get('downloader') or '默认'}",
+                    f"Hash:{item.get('download_hash_short') or '-'}",
+                    f"整理:{item.get('transfer_status_text')}",
+                ]
+                lines.append("   " + " | ".join(details))
+                if item.get("path_preview"):
+                    lines.append(f"   保存：{item.get('path_preview')}")
+                if item.get("transfer_dest_preview"):
+                    lines.append(f"   入库：{item.get('transfer_dest_preview')}")
+                if item.get("transfer_error"):
+                    lines.append(f"   整理错误：{item.get('transfer_error')}")
+            lines.append("说明：这是只读查询，用于追踪下载提交后是否进入整理流程。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": total,
+                "page": page_num,
+                "limit": page_size,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询下载历史失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询下载历史失败：{exc}", "items": []}
 
     def _query_transfer_history(
         self,

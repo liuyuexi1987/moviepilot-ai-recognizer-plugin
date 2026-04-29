@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.15"
+    plugin_version = "0.2.16"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3651,6 +3651,46 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    async def _assistant_mp_download_history(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_download_history(
+            title=title,
+            hash_value=hash_value,
+            limit=max(1, min(50, self._safe_int(limit, 10))),
+            page=max(1, self._safe_int(page, 1)),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_download_history",
+            "stage": "download_history",
+            "keyword": title or hash_value or "all",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载历史查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download_history",
+                "ok": bool(result.get("success")),
+                "source_type": "moviepilot_download_history",
+                "title": title,
+                "hash": hash_value,
+                "items": items,
+                "total": self._safe_int(result.get("total"), len(items)),
+                "page": self._safe_int(result.get("page"), page),
+                "limit": self._safe_int(result.get("limit"), limit),
+            }),
+        }
+
     async def _assistant_mp_downloaders(self, *, session: str) -> Dict[str, Any]:
         result = self._ensure_feishu_channel()._query_downloaders()
         return {
@@ -5057,6 +5097,13 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "name": "query_mp_download_tasks", "status": "downloading"},
                 ),
                 self._assistant_action_template(
+                    name="query_mp_download_history",
+                    description="查看 MP 下载历史，并关联整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_download_history", "limit": 10},
+                ),
+                self._assistant_action_template(
                     name="query_mp_downloaders",
                     description="查看 MP 下载器配置摘要",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
@@ -6137,8 +6184,9 @@ class AgentResourceOfficer(_PluginBase):
             "7. text=MP搜索 蜘蛛侠；下载1 会先生成计划",
             "8. text=下载任务；暂停下载 1 / 恢复下载 1 / 删除下载 1 会先生成计划",
             "9. text=站点状态；下载器状态 用于排查 PT 搜索/下载环境",
-            "10. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
-            "11. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
+            "10. text=下载历史 片名 用于判断资源是否提交过下载并进入整理流程",
+            "11. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
+            "12. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -6184,6 +6232,7 @@ class AgentResourceOfficer(_PluginBase):
                     "hdhive_checkin",
                     "hdhive_checkin_history",
                     "mp_download_tasks",
+                    "mp_download_history",
                     "mp_download_control",
                     "mp_downloaders",
                     "mp_sites",
@@ -7062,6 +7111,7 @@ class AgentResourceOfficer(_PluginBase):
                 "execute_latest_plan",
                 "execute_session_latest_plan",
                 "query_mp_download_tasks",
+                "query_mp_download_history",
                 "query_mp_downloaders",
                 "query_mp_sites",
                 "query_mp_subscribes",
@@ -7229,6 +7279,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
                 "body": {"workflow": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_download_history": {
+                "description": "查询 MP 下载历史，并按 hash 关联整理/入库状态；只返回摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_download_history", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_download_history", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
             },
             "mp_transfer_history": {
                 "description": "查询 MP 最近整理/入库历史，判断下载后是否已经落库；只返回摘要。",
@@ -8120,6 +8182,7 @@ class AgentResourceOfficer(_PluginBase):
             "action": "",
             "client_type": "",
             "status": "",
+            "hash": "",
         }
         if compact in {
             "帮助",
@@ -8263,6 +8326,16 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
+            "下载历史",
+            "下载记录",
+            "最近下载",
+            "历史下载",
+            "downloadhistory",
+        }:
+            options["action"] = "mp_download_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "下载器",
             "下载器状态",
             "下载器列表",
@@ -8348,6 +8421,13 @@ class AgentResourceOfficer(_PluginBase):
                 for prefix in ["下载任务", "下载状态", "下载列表", "查看下载", "下载进度"]:
                     if raw.startswith(prefix + " "):
                         options["action"] = "mp_download_tasks"
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
+            if not options.get("action"):
+                for prefix in ["下载历史", "下载记录", "最近下载", "历史下载"]:
+                    if raw.startswith(prefix + " "):
+                        options["action"] = "mp_download_history"
                         options["mode"] = ""
                         options["keyword"] = raw[len(prefix):].strip()
                         break
@@ -8488,6 +8568,9 @@ class AgentResourceOfficer(_PluginBase):
                     continue
                 if key in {"client_type", "client", "客户端"} and value:
                     options["client_type"] = P115TransferService.normalize_qrcode_client_type(value)
+                    continue
+                if key in {"hash", "download_hash", "任务hash"} and value:
+                    options["hash"] = value.strip()
                     continue
             if item.startswith("/") and not options["path"]:
                 options["path"] = AgentResourceOfficer._resolve_pan_path_value(item)
@@ -10408,6 +10491,15 @@ class AgentResourceOfficer(_PluginBase):
                 downloader=self._clean_text(body.get("downloader")),
                 limit=self._safe_int(body.get("limit"), 10),
             ))
+        if assistant_action == "mp_download_history":
+            return finish(await self._assistant_mp_download_history(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value") or parsed.get("hash")),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
         if assistant_action == "mp_download_control":
             control = self._clean_text(parsed.get("download_control") or body.get("download_control") or body.get("control") or body.get("operation")).lower()
             control_aliases = {
@@ -11073,6 +11165,19 @@ class AgentResourceOfficer(_PluginBase):
                 downloader=self._clean_text(body.get("downloader")),
                 limit=self._safe_int(body.get("limit"), 10),
             ))
+        if name == "query_mp_download_history":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_download_history(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
         if name == "query_mp_downloaders":
             session_name, _ = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -11448,6 +11553,11 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "status", "title", "hash", "downloader", "limit", "compact"],
                 },
                 {
+                    "name": "mp_download_history",
+                    "description": "查询 MP 下载历史，并按 hash 关联整理/入库状态，只读",
+                    "fields": ["session", "keyword", "hash", "limit", "page", "compact"],
+                },
+                {
                     "name": "mp_downloaders",
                     "description": "查询 MP 下载器配置摘要，不返回敏感字段",
                     "fields": ["session", "compact"],
@@ -11601,6 +11711,15 @@ class AgentResourceOfficer(_PluginBase):
                 "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
                 "downloader": self._clean_text(body.get("downloader")),
                 "limit": self._safe_int(body.get("limit"), 10),
+            })], ""
+
+        if workflow_name == "mp_download_history":
+            return [base({
+                "name": "query_mp_download_history",
+                "keyword": keyword,
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "limit": self._safe_int(body.get("limit"), 10),
+                "page": self._safe_int(body.get("page"), 1),
             })], ""
 
         if workflow_name == "mp_downloaders":

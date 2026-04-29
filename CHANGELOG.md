@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.15`
+- `AgentResourceOfficer`: `0.2.16`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.16`：新增 MP 下载历史查询，并按 hash 关联整理/入库状态；智能体可用“下载历史 片名”追踪资源是否已提交下载和是否落库。
 - `AgentResourceOfficer 0.2.15`：新增 MP 整理/入库历史查询；智能体可用“入库历史”“入库失败 片名”判断下载后是否已落库，接口只返回脱敏摘要。
 - `AgentResourceOfficer 0.2.14`：新增 MP 订阅列表查询与订阅控制计划；智能体可查看订阅规则，并对搜索、暂停、恢复、删除订阅生成 `plan_id` 后确认执行。
 - `AgentResourceOfficer 0.2.13`：新增 MP 下载器与 PT 站点环境诊断入口；只返回启用状态、优先级、绑定下载器和 Cookie 是否存在，不暴露 Cookie 明文。
