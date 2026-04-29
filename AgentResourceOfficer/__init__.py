@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.21"
+    plugin_version = "0.2.22"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -6236,7 +6236,7 @@ class AgentResourceOfficer(_PluginBase):
             payload["score_summary"] = data.get("score_summary")
         elif isinstance(session_state.get("score_summary"), dict):
             payload["score_summary"] = session_state.get("score_summary")
-        for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource"]:
+        for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource", "plan_id", "workflow"]:
             if key in data:
                 payload[key] = data.get(key)
         if isinstance(data.get("preference_status"), dict):
@@ -6568,6 +6568,7 @@ class AgentResourceOfficer(_PluginBase):
             "12. text=识别 片名 使用 MoviePilot 原生识别确认 TMDB/Douban/IMDB 信息",
             "13. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
             "14. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
+            "15. text=执行计划 执行当前会话最近待执行计划；text=执行 plan-xxxx 精确执行指定计划",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -6630,6 +6631,9 @@ class AgentResourceOfficer(_PluginBase):
                     "mp_subscribe",
                     "mp_subscribe_search",
                     "mp_recommendations",
+                    "execute_plan",
+                    "plans_list",
+                    "plans_clear",
                 ],
                 "structured_fields": [
                     "session",
@@ -6644,6 +6648,7 @@ class AgentResourceOfficer(_PluginBase):
                     "client_type",
                     "is_gambler",
                     "action",
+                    "plan_id",
                     "status",
                     "hash",
                     "name",
@@ -6934,7 +6939,7 @@ class AgentResourceOfficer(_PluginBase):
             "轻量协议自检：assistant/selfcheck，返回 compact 模板、布尔解析和低 token 入口健康状态",
             "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用；compact=true 可减少嵌套回执",
             "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要；compact=true 可减少嵌套回执",
-            "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
+            "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action / plan_id",
             "smart_entry 结构化模式：mp / pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
             "smart_entry 与 smart_pick 支持 compact=true，可减少搜索与选择链路嵌套回执",
@@ -6944,6 +6949,7 @@ class AgentResourceOfficer(_PluginBase):
             "批量动作入口：assistant/actions，可一次执行多步 action_body；compact=true 可减少嵌套回执",
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景；compact=true 可减少嵌套回执",
             "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id；compact=true 可减少嵌套回执",
+            "自然语言计划确认：smart_entry 支持“执行计划”和“执行 plan-xxxx”，用于确认已生成的下载、订阅或控制计划",
             "计划管理入口：assistant/plans 与 assistant/plans/clear，可查询或清理 dry_run 保存的计划；compact=true 可减少嵌套回执",
             "单入口恢复：assistant/recover，可自动选择最值得恢复的会话或计划；execute=true 时直接执行推荐动作；compact=true 可减少回执字段",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
@@ -8608,6 +8614,9 @@ class AgentResourceOfficer(_PluginBase):
         action = self._clean_text(body.get("action"))
         if action:
             merged["action"] = action
+        plan_id = self._clean_text(body.get("plan_id") or body.get("plan"))
+        if plan_id:
+            merged["plan_id"] = plan_id
         download_control = self._clean_text(body.get("download_control") or body.get("control") or body.get("operation"))
         if download_control:
             merged["download_control"] = download_control
@@ -8623,6 +8632,7 @@ class AgentResourceOfficer(_PluginBase):
         share_url = AgentResourceOfficer._extract_first_url(raw)
         remain = raw.replace(share_url, " ").strip() if share_url else raw
         mode, query = AgentResourceOfficer._normalize_search_prefix(remain)
+        plan_match = re.search(r"\bplan-[a-zA-Z0-9]+\b", raw)
         options: Dict[str, str] = {
             "text": raw,
             "url": share_url,
@@ -8636,8 +8646,17 @@ class AgentResourceOfficer(_PluginBase):
             "client_type": "",
             "status": "",
             "hash": "",
+            "plan_id": plan_match.group(0) if plan_match else "",
         }
-        if compact in {
+        if options.get("plan_id") and compact.startswith(("执行plan-", "确认plan-", "executeplan-")):
+            options["action"] = "execute_plan"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif options.get("plan_id") and compact.startswith(("取消plan-", "清理plan-", "删除plan-", "clearplan-", "cancelplan-")):
+            options["action"] = "plans_clear"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "帮助",
             "使用帮助",
             "命令帮助",
@@ -8647,6 +8666,41 @@ class AgentResourceOfficer(_PluginBase):
             "插件帮助",
         }:
             options["action"] = "assistant_help"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "执行计划",
+            "执行最新计划",
+            "确认计划",
+            "确认执行计划",
+            "执行plan",
+            "执行最新plan",
+            "executeplan",
+            "executelatestplan",
+        }:
+            options["action"] = "execute_plan"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "计划列表",
+            "查看计划",
+            "待执行计划",
+            "保存计划",
+            "plans",
+            "listplans",
+        }:
+            options["action"] = "plans_list"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "取消计划",
+            "清理计划",
+            "删除计划",
+            "cancelplan",
+            "clearplan",
+            "deleteplan",
+        }:
+            options["action"] = "plans_clear"
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
@@ -8886,6 +8940,28 @@ class AgentResourceOfficer(_PluginBase):
             options["keyword"] = ""
             options["status"] = "success"
         else:
+            for prefix, action in [
+                ("执行计划", "execute_plan"),
+                ("执行", "execute_plan"),
+                ("确认计划", "execute_plan"),
+                ("确认", "execute_plan"),
+                ("查看计划", "plans_list"),
+                ("计划列表", "plans_list"),
+                ("取消计划", "plans_clear"),
+                ("清理计划", "plans_clear"),
+                ("删除计划", "plans_clear"),
+            ]:
+                if raw.startswith(prefix + " ") or raw.startswith(prefix + "：") or raw.startswith(prefix + ":"):
+                    remain_text = raw[len(prefix):].lstrip(" ：:").strip()
+                    if action == "plans_list" or options.get("plan_id") or remain_text:
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = ""
+                        if remain_text and not options.get("plan_id"):
+                            match = re.search(r"\bplan-[a-zA-Z0-9]+\b", remain_text)
+                            if match:
+                                options["plan_id"] = match.group(0)
+                        break
             for prefix, control in [
                 ("暂停下载", "pause"),
                 ("停止下载", "pause"),
@@ -10834,6 +10910,67 @@ class AgentResourceOfficer(_PluginBase):
                     "status_summary": summary,
                 }),
             })
+        if assistant_action == "execute_plan":
+            return finish(await self.api_assistant_plan_execute(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "session_id": cache_key,
+                    "plan_id": self._clean_text(parsed.get("plan_id")),
+                    "prefer_unexecuted": True,
+                    "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
+                    "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            ))
+        if assistant_action == "plans_list":
+            include_actions = self._parse_bool_value(body.get("include_actions"), False)
+            executed = self._parse_optional_bool(body.get("executed"))
+            limit = self._safe_int(body.get("limit"), 10)
+            plans_data = self._assistant_plans_public_data(
+                session=session,
+                session_id=cache_key,
+                executed=executed,
+                include_actions=include_actions,
+                limit=limit,
+            )
+            return finish({
+                "success": True,
+                "message": self._format_assistant_plans_text(
+                    session=session,
+                    session_id=cache_key,
+                    executed=executed,
+                    include_actions=include_actions,
+                    limit=limit,
+                ),
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "plans_list",
+                    "ok": True,
+                    **plans_data,
+                }),
+            })
+        if assistant_action == "plans_clear":
+            plan_id = self._clean_text(parsed.get("plan_id"))
+            if not plan_id:
+                return finish({
+                    "success": False,
+                    "message": "取消或清理计划需要指定 plan_id，例如：取消计划 plan-xxxx。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "plans_clear",
+                        "ok": False,
+                        "error_code": "missing_plan_id",
+                    }),
+                })
+            clear_result = self._clear_workflow_plans(plan_id=plan_id, limit=1)
+            return finish({
+                "success": bool(clear_result.get("ok")),
+                "message": str(clear_result.get("message") or "计划清理完成"),
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "plans_clear",
+                    "ok": bool(clear_result.get("ok")),
+                    **clear_result,
+                }),
+            })
         if assistant_action == "hdhive_checkin":
             is_gambler = self._parse_bool_value(parsed.get("is_gambler"), self._hdhive_checkin_gambler_mode)
             result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent云盘资源整合 智能入口")
@@ -12619,13 +12756,39 @@ class AgentResourceOfficer(_PluginBase):
             )
         if not plan:
             if plan_id:
-                return {"success": False, "message": f"计划不存在或已过期：{plan_id}"}
-            return {"success": False, "message": "没有匹配到可执行计划，请先生成 dry_run 计划或改传 plan_id。"}
+                return {
+                    "success": False,
+                    "message": f"计划不存在或已过期：{plan_id}",
+                    "data": self._assistant_response_data(session=session or "default", data={
+                        "action": "execute_plan",
+                        "ok": False,
+                        "plan_id": plan_id,
+                        "error_code": "plan_not_found",
+                    }),
+                }
+            return {
+                "success": False,
+                "message": "没有匹配到可执行计划，请先生成 dry_run 计划或改传 plan_id。",
+                "data": self._assistant_response_data(session=session or "default", data={
+                    "action": "execute_plan",
+                    "ok": False,
+                    "error_code": "plan_not_found",
+                }),
+            }
         plan_id = self._clean_text(plan.get("plan_id"))
 
         actions = plan.get("actions") or []
         if not isinstance(actions, list) or not actions:
-            return {"success": False, "message": f"计划没有可执行动作：{plan_id}"}
+            return {
+                "success": False,
+                "message": f"计划没有可执行动作：{plan_id}",
+                "data": self._assistant_response_data(session=session or "default", data={
+                    "action": "execute_plan",
+                    "ok": False,
+                    "plan_id": plan_id,
+                    "error_code": "plan_has_no_actions",
+                }),
+            }
 
         workflow_name = self._clean_text(plan.get("workflow")) or "saved_plan"
         session = self._clean_text(plan.get("session")) or "default"
