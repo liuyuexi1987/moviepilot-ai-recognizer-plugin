@@ -1688,27 +1688,137 @@ AI 识别增强结果：
         llm_ready = bool(getattr(settings, "LLM_API_KEY", None))
         failed_samples_count = len(self._read_failed_samples(limit=200))
         custom_identifiers_count = len(self._get_custom_identifiers())
+        llm_provider = getattr(settings, "LLM_PROVIDER", "—")
+        llm_model = getattr(settings, "LLM_MODEL", "—")
+
+        def stat_card(title: str, value: Any, subtitle: str = "") -> dict:
+            content = [
+                {
+                    "component": "div",
+                    "props": {"class": "text-caption text-medium-emphasis mb-1"},
+                    "text": title,
+                },
+                {
+                    "component": "div",
+                    "props": {"class": "text-h6 font-weight-bold"},
+                    "text": str(value),
+                },
+            ]
+            if subtitle:
+                content.append(
+                    {
+                        "component": "div",
+                        "props": {"class": "text-caption text-medium-emphasis mt-1"},
+                        "text": subtitle,
+                    }
+                )
+            return {
+                "component": "VCard",
+                "props": {"variant": "tonal", "class": "pa-4 h-100"},
+                "content": content,
+            }
+
         return [
             {
-                "component": "VCard",
+                "component": "VContainer",
+                "props": {"fluid": True, "class": "pa-0"},
                 "content": [
                     {
-                        "component": "VCardText",
-                        "text": (
-                            "AI识别增强第一版已经切到本地 LLM 方案，不再把外部 Gateway 当作必经链路。"
-                            f"\n当前状态：{'已启用' if self._enabled else '未启用'}"
-                            f"\nLLM：{getattr(settings, 'LLM_PROVIDER', '—')} / {getattr(settings, 'LLM_MODEL', '—')}"
-                            f"\nLLM 可用：{'是' if llm_ready else '否'}"
-                            f"\n置信度阈值：{self._confidence_threshold}"
-                            f"\n请求超时：{self._request_timeout} 秒"
-                            f"\n失败样本上限：{self._max_failed_samples} 条"
-                            f"\n失败样本：{failed_samples_count} 条"
-                            f"\n写入后自动移除样本：{'是' if self._auto_remove_applied_sample else '否'}"
-                            f"\n系统自定义识别词：{custom_identifiers_count} 条"
-                            "\n\n当前会在 Chain NameRecognize 阶段回写 name/year/season/episode，供 MoviePilot 继续原生二次识别。"
-                            "\n并且已经支持把失败样本进一步生成为 CustomIdentifiers 建议，再按需追加写入系统配置。"
-                        ),
-                    }
+                        "component": "VAlert",
+                        "props": {
+                            "type": "info",
+                            "variant": "tonal",
+                            "class": "mb-4",
+                            "title": "本地 LLM 识别兜底",
+                            "text": "复用 MoviePilot 当前 LLM 配置，在原生识别失败时做结构化兜底，并把结果交回 MoviePilot 继续二次识别。",
+                        },
+                    },
+                    {
+                        "component": "VRow",
+                        "props": {"dense": True, "class": "mb-2"},
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [stat_card("当前状态", "已启用" if self._enabled else "未启用")],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [stat_card("LLM 可用", "是" if llm_ready else "否", f"{llm_provider} / {llm_model}")],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [stat_card("失败样本", f"{failed_samples_count} 条", f"上限 {self._max_failed_samples} 条")],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [stat_card("自定义识别词", f"{custom_identifiers_count} 条", "系统 CustomIdentifiers")],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "props": {"dense": True},
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
+                                    {
+                                        "component": "VCard",
+                                        "props": {"variant": "outlined", "class": "pa-4 h-100"},
+                                        "content": [
+                                            {
+                                                "component": "div",
+                                                "props": {"class": "text-subtitle-1 font-weight-bold mb-2"},
+                                                "text": "识别兜底",
+                                            },
+                                            {
+                                                "component": "div",
+                                                "props": {"class": "text-body-2 text-medium-emphasis"},
+                                                "text": "在 Chain NameRecognize 阶段回写 name / year / season / episode，供 MoviePilot 继续原生二次识别。",
+                                            },
+                                            {
+                                                "component": "div",
+                                                "props": {"class": "text-caption text-medium-emphasis mt-3"},
+                                                "text": f"置信度阈值：{self._confidence_threshold}；请求超时：{self._request_timeout} 秒",
+                                            },
+                                        ],
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
+                                    {
+                                        "component": "VCard",
+                                        "props": {"variant": "outlined", "class": "pa-4 h-100"},
+                                        "content": [
+                                            {
+                                                "component": "div",
+                                                "props": {"class": "text-subtitle-1 font-weight-bold mb-2"},
+                                                "text": "识别词闭环",
+                                            },
+                                            {
+                                                "component": "div",
+                                                "props": {"class": "text-body-2 text-medium-emphasis"},
+                                                "text": "失败样本可生成 CustomIdentifiers 建议，并按需追加写入系统配置。",
+                                            },
+                                            {
+                                                "component": "div",
+                                                "props": {"class": "text-caption text-medium-emphasis mt-3"},
+                                                "text": f"写入后自动移除样本：{'是' if self._auto_remove_applied_sample else '否'}",
+                                            },
+                                        ],
+                                    }
+                                ],
+                            },
+                        ],
+                    },
                 ],
             }
         ]
