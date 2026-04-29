@@ -7,7 +7,7 @@ description: HDHive agent skill template. Use when an agent should search HDHive
 
 This is the public repository copy of the skill.
 
-After copying this skill into your own Codex environment, adapt runtime paths with:
+After copying this skill into your own external-agent skill environment, adapt runtime paths with:
 
 - `MP_APP_ENV`
 - `MP_BASE_URL`

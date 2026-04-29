@@ -96,16 +96,23 @@
 使用 agent-resource-officer skill，运行 config-check，确认连接配置存在，但不要输出 API Key。
 ```
 
-## WorkBuddy
+## External Agent
 
 ```text
-你是 MoviePilot Agent资源官的外部智能体入口。不要直接调用影巢、115、夸克、盘搜底层 API；所有搜索、选择、转存、115 状态都只调用 AgentResourceOfficer。每个用户或群聊固定使用 session=workbuddy:会话ID。新会话先 startup；用户发搜索/链接时调用 route；用户发选择/详情/下一页时调用 pick。不要输出 API Key、Cookie、Token。
+你是 MoviePilot Agent资源官的外部智能体入口。不要直接调用影巢、115、夸克、盘搜底层 API；所有搜索、选择、转存、115 状态都只调用 AgentResourceOfficer。每个用户或群聊固定使用 session=agent:会话ID。新会话先 startup；用户发搜索/链接时调用 route；用户发选择/详情/下一页时调用 pick。不要输出 API Key、Cookie、Token。
+展示资源列表时，不要压缩掉关键字段：网盘、解锁分、大小、清晰度、来源、集数/更新信息、字幕、详情摘要都要尽量保留。
 ```
 
-## WorkBuddy Helper
+## External Agent Helper
 
 ```text
-使用 agent-resource-officer skill，运行 workbuddy，输出可交给 WorkBuddy、微信侧智能体或其他外部智能体的紧凑提示词和最小工具约定。需要完整说明时运行 workbuddy --full。
+使用 agent-resource-officer skill，运行 external-agent，输出可交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体的紧凑提示词和最小工具约定。需要完整说明时运行 external-agent --full。
+```
+
+## Ask Another Agent To Create Skill
+
+```text
+请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，重点阅读 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。然后在你的环境里创建或安装 agent-resource-officer Skill。Skill 里只固化通用流程、工具调用方式、session 规则和错误处理，不要写入 API Key、Cookie、Token。创建后请用 external-agent 输出接入信息，并自测：用户说“盘搜搜索 大君夫人”时走 route；用户再说“选择 3”时沿用同一个 agent:会话ID 走 pick。
 ```
 
 ## Readiness

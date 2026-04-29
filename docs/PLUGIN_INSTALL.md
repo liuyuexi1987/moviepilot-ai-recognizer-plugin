@@ -40,7 +40,7 @@ dist/
 
 - `AIRecoginzerForwarder-2.0.1.zip`
 - `AIRecognizerEnhancer-0.1.11.zip`
-- `AgentResourceOfficer-0.1.116.zip`
+- `AgentResourceOfficer-0.1.120.zip`
 - `FeishuCommandBridgeLong-0.5.26.zip`
 - `HDHiveDailySign-1.0.0.zip`
 - `HdhiveOpenApi-0.3.0.zip`
@@ -71,9 +71,11 @@ bash skills/hdhive-search-unlock-to-115/install.sh
 安装后可先跑本地自测：
 
 ```bash
-python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py selftest
-python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest
+python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
+python3 <SKILL_HOME>/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest
 ```
+
+这里的 `<SKILL_HOME>` 指你的智能体 Skill 根目录，例如某些客户端会使用自己的 `skills/` 目录。
 
 ## 推荐安装组合
 
@@ -95,6 +97,7 @@ AI 识别线：
 
 - 只需要轻量签到时用 `HDHiveDailySign`
 - OpenAPI 签到如果要求付费接口，普通用户优先保留轻量签到插件
+- 已安装资源官时，也可以在 `AgentResourceOfficer` 内启用影巢签到，由资源官统一承接签到、搜索、解锁和智能入口。
 
 极影视刷新：
 

@@ -1,15 +1,28 @@
 # agent-resource-officer
 
-公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制资源工作流。
+公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
 当前 helper 版本：`0.1.12`
 
-## 使用方式
-
-1. 把整个目录复制到自己的 Skill 搜索路径，例如：
+公开仓库：
 
 ```text
-~/.codex/skills/agent-resource-officer
+https://github.com/liuyuexi1987/MoviePilot-Plugins
+```
+
+## 使用方式
+
+1. 获取仓库：
+
+```bash
+git clone https://github.com/liuyuexi1987/MoviePilot-Plugins.git
+cd MoviePilot-Plugins
+```
+
+2. 把整个目录复制到自己的 Skill 搜索路径，例如：
+
+```text
+<SKILL_HOME>/agent-resource-officer
 ```
 
 也可以直接运行安装脚本：
@@ -20,7 +33,7 @@ bash install.sh
 bash install.sh --target /path/to/skills/agent-resource-officer
 ```
 
-2. 配置本机连接信息：
+3. 配置连接信息：
 
 ```text
 ~/.config/agent-resource-officer/config
@@ -33,7 +46,9 @@ ARO_BASE_URL=http://127.0.0.1:3000
 ARO_API_KEY=your_moviepilot_api_token
 ```
 
-3. 让外部智能体使用本 Skill。
+`ARO_BASE_URL` 按实际部署填写：同机可以用 `http://127.0.0.1:3000`，局域网可以用 `http://你的局域网IP:3000`，公网反代可以用自己的 HTTPS 域名。
+
+4. 让外部智能体使用本 Skill。
 
 ## 推荐入口
 
@@ -49,8 +64,8 @@ python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands
-python3 scripts/aro_request.py workbuddy
-python3 scripts/aro_request.py workbuddy --full
+python3 scripts/aro_request.py external-agent
+python3 scripts/aro_request.py external-agent --full
 python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py startup
@@ -72,7 +87,7 @@ python3 scripts/aro_request.py pick --choice 1
 
 `commands` 会输出 helper 命令目录、是否联网、是否可能写入。`writes` 固定为布尔值，具体触发条件在 `write_condition`。
 
-`workbuddy` 会输出可直接交给 WorkBuddy、微信侧智能体或其他外部智能体的系统提示词和最小工具约定；`workbuddy --full` 会输出完整接入说明。
+`external-agent` 会输出可直接交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体的系统提示词和最小工具约定；`external-agent --full` 会输出完整接入说明。旧命令 `workbuddy` 仍保留为兼容别名。
 
 注意：`workflow` 是 dry-run，不会解锁或转存资源，但会保存一个待确认执行的 plan，因此在命令目录里属于写入型命令。
 
@@ -80,11 +95,11 @@ python3 scripts/aro_request.py pick --choice 1
 
 `readiness` 会一次运行配置检查、本地 selftest 和 MoviePilot 插件 selfcheck。
 
-WorkBuddy、微信侧智能体或其他外部智能体接入时，可以直接复用：
+WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体接入时，可以直接复用：
 
-- [WorkBuddy 接入 Agent资源官](../../docs/WORKBUDDY_AGENT_RESOURCE_OFFICER.md)
-- [Skill 包内 WorkBuddy 接入文件](./WORKBUDDY.md)
-- `PROMPTS.md` 里的 `WorkBuddy` 提示词段落
+- [外部智能体接入 Agent资源官](../../docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
+- [Skill 包内外部智能体接入文件](./EXTERNAL_AGENTS.md)
+- `PROMPTS.md` 里的外部智能体提示词段落
 
 `decide` 是单次决策入口：
 
@@ -153,5 +168,5 @@ python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
 - 重点使用 `AgentResourceOfficer` 的 `assistant/startup` 和 `assistant/request_templates`。
 - HTTP 调用使用 `?apikey=MP_API_TOKEN`。
 - 不包含个人路径、API Key、Cookie 或 Token。
-- 推荐搭配支持 Skill 和工具调度的外部智能体使用，例如腾讯 WorkBuddy，或兼容 Codex Skill 工作流的客户端。
+- 推荐搭配支持 Skill 和工具调度的外部智能体使用，例如腾讯 WorkBuddy、Hermes、OpenClaw（小龙虾），或其他兼容 Skill 工作流的客户端。
 - 版本记录见 [CHANGELOG.md](./CHANGELOG.md)。

@@ -2,458 +2,535 @@
 
 [![CI](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml)
 
-这个仓库现在的方向不是“插件越多越好”，而是把关键能力收拢成更清楚的两条线：
+这是一个面向 MoviePilot 的云盘资源整合插件仓库，重点解决 115 云盘、夸克云盘等资源从搜索、解锁、转存到固定目录的流程。资源来源主要围绕两类：`盘搜` 和 `影巢`。盘搜是独立的聚合搜索项目，需要用户自行部署 PanSou 服务并在插件里填写 API 地址；影巢通过 OpenAPI 提供影视资源搜索、解锁、签到和配额查询，填写自己的影巢 OpenAPI Key 后即可使用。当前主线不是堆很多独立小插件，而是把常用能力收拢成两类：
 
-- `MoviePilot` 负责搜索、订阅、整理、入库
-- `P115StrmHelper` 负责 115 落地、整理目录、STRM 等底层能力
-- 这个仓库里的插件负责把影巢、飞书、夸克转存、AI 识别、极影视刷新这些能力接进现有流程
-- 智能体负责调用稳定入口，不直接硬拼站点接口
+这个项目也为外部智能体做了大量适配工作。它不是让智能体直接拼接影巢、盘搜、115 或夸克的底层接口，而是提供统一入口、低 token 摘要、会话续接、编号选择、计划确认和错误恢复，让 WorkBuddy、Hermes、OpenClaw（小龙虾）等智能体可以用更少上下文完成搜索、展示、选择和转存流程。
 
-如果你只想先理解“这几个插件分别干什么、怎么配合”，先看下面这段就够了。
+- 新主线：`Agent资源官`、`AI识别增强`，形成云盘资源搜索、转存到固定目录、识别增强和智能体入口流程；如果还需要 STRM、302 播放或媒体库全量/增量同步，再配合 `P115StrmHelper`。
+- 旧插件区：保留飞书桥接、影巢 OpenAPI、影巢签到、夸克转存、极影视刷新等独立插件，方便老环境继续使用。
 
-## 重构状态
+如果你是第一次使用，建议先看“新用户推荐方案”，不用一开始就装所有插件。
 
-这个仓库已经进入下一阶段重构：
+## 快速开始
 
-- 旧插件目录继续保留，作为当前可运行版本
-- 新能力逐步收拢到两套新插件
-  - `Agent资源官`
-  - `AI识别增强`
-- 重构说明见：
-  [docs/REBUILD_AGENT_SUITE.md](./docs/REBUILD_AGENT_SUITE.md)
+1. 在 MoviePilot 插件市场添加这个仓库：
 
-当前已经进入第一阶段可用状态的新插件是：
+```text
+https://github.com/liuyuexi1987/MoviePilot-Plugins
+```
 
-- `Agent资源官`
-  - 已支持影巢搜索、盘搜搜索、115 直链、夸克直链统一入口
-  - 已支持影巢解锁后自动路由到 115 / 夸克执行层
-  - 已支持原生 Agent Tool、插件 API、智能体会话式调用和可选内置飞书入口
-- `FeishuCommandBridgeLong`
-  - 继续保留，不删除
-  - 当前定位为兼容/备份插件
-  - 新用户优先使用 `Agent资源官` 内置飞书入口，避免同一个飞书机器人被两个插件同时监听
+2. 新用户优先安装这两个插件：
 
-`AI识别增强` 已进入第一版可用阶段，方向是逐步替代旧版 AI Gateway 转发链路。
+```text
+Agent资源官
+AI识别增强
+```
 
-当前发布版本：
+3. `Agent资源官` 可以独立完成搜索、解锁和转存到配置好的固定目录。如果你还需要 115 STRM、302 播放、媒体库整理或全量/增量同步，继续保留或安装 `P115StrmHelper`。
 
-- `AIRecoginzerForwarder`（AI 识别转发）：`2.0.1`
-- `AIRecognizerEnhancer`（AI识别增强）：`0.1.11`
-- `AgentResourceOfficer`：`0.1.116`
-- `FeishuCommandBridgeLong`（飞书命令桥接）：`0.5.26`
-- `HdhiveOpenApi`（影巢 OpenAPI）：`0.3.0`
-- `HDHiveDailySign`（HDHive Daily Sign）：`1.0.0`
-- `QuarkShareSaver`（夸克分享转存）：`0.1.0`
-- `ZspaceMediaFreshMix`（极影视刷新（自用魔改））：`1.0.0`
+4. 在 `Agent资源官` 里按需配置：
 
-## 插件分工
+```text
+影巢 OpenAPI Key
+盘搜 API 地址
+115 默认目录
+夸克 Cookie 或 CookieCloud
+飞书 App 信息（可选）
+```
 
-当前线上主插件仍然是这些：
+5. 如果要接 WorkBuddy、OpenClaw（小龙虾）、Hermes 或其他外部智能体，把下面文档发给它，让它创建或安装自己的 Skill：
 
-1. `AIRecoginzerForwarder`：AI 识别转发
-2. `AIRecognizerEnhancer`：AI识别增强
-3. `AgentResourceOfficer`：Agent资源官
-4. `FeishuCommandBridgeLong`：飞书命令桥接
-5. `HdhiveOpenApi`：影巢 OpenAPI
-6. `HDHiveDailySign`：HDHive Daily Sign
-7. `QuarkShareSaver`：夸克分享转存
-8. `ZspaceMediaFreshMix`：极影视刷新（自用魔改）
+```text
+docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
+skills/agent-resource-officer/SKILL.md
+skills/agent-resource-officer/EXTERNAL_AGENTS.md
+```
 
-其中 `AIRecognizerEnhancer` 是新识别线的固定落点，当前已经能接住 `NameRecognize` 并回写结构化识别结果；旧 `AIRecoginzerForwarder` 暂时继续保留。
+## 新用户推荐方案
 
-它们各自更像这样：
+### 方案 A：外部智能体配合
 
-- 想做“原生识别失败后的 AI 兜底”：
-  用 `AIRecoginzerForwarder`
-- 想给智能体、原生 Agent Tool、飞书入口统一一个资源执行主线：
-  用 `AgentResourceOfficer`
-- 老环境想继续使用独立飞书桥接：
-  用 `FeishuCommandBridgeLong`
-- 想把影巢资源搜索、解锁、签到、115 转存整合进 MoviePilot：
-  用 `HdhiveOpenApi`
-- 想只保留一个更轻量的影巢签到插件：
-  用 `HDHiveDailySign`
-  `HdhiveOpenApi` 里的 OpenAPI 签到需要付费用户时，这个轻量签到插件会更合适
-- 想把夸克分享链接直接转存到自己的夸克网盘目录：
-  用 `QuarkShareSaver`
-- 想让极影视按 MP 最近入库自动刷新，而且电影/电视剧共用一个分类：
-  用 `ZspaceMediaFreshMix`
+推荐安装：
 
-## 和 115 的关系
+- `AgentResourceOfficer`：Agent资源官
+- `AIRecognizerEnhancer`：AI识别增强
+- `P115StrmHelper`：115 STRM、302、全量/增量同步和媒体库底层能力，来自你的 MoviePilot 插件环境或对应插件仓库
 
-这几个插件里，和 `115` 关系最直接的是四块：
+适合场景：
+
+- 你主要使用 WorkBuddy、OpenClaw（小龙虾）、Hermes 或其他更强的外部智能体。
+- 希望智能体理解自然语言、展示候选、让你选编号，再调用 MoviePilot 执行。
+- 希望能力可以复现到其他机器，而不是只靠聊天记录。
+
+推荐做法：
+
+- 让外部智能体阅读 [外部智能体接入范式](./docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)。
+- 让它创建或安装自己的 `agent-resource-officer` Skill。
+- 外部智能体只负责理解需求和展示结果，不直接调用影巢、盘搜、115、夸克底层接口。
+- 所有资源动作统一调用 `Agent资源官` 的 `route` / `pick` / `startup`。
+
+典型链路：
+
+```text
+用户 -> 外部智能体 -> Agent资源官 -> 影巢/盘搜/115/夸克 -> MoviePilot/P115StrmHelper
+```
+
+### 方案 B：MP 内置智能体配合
+
+推荐安装：
 
 - `AgentResourceOfficer`
-  负责“统一接住智能体 / Agent Tool / API 的资源请求 -> 分流到影巢、115、夸克执行层”
-  影巢候选已支持分页，以及按需 `详情` / `审查` 补主演
-- `FeishuCommandBridgeLong`
-  作为旧飞书桥接兼容入口保留；新飞书入口建议直接开启 `AgentResourceOfficer` 内置 Channel
-- `HdhiveOpenApi`
-  负责“搜索影巢资源 -> 解锁 -> 判断是不是 115 分享链接 -> 调用 115 转存”
-- `QuarkShareSaver`
-  负责“把夸克分享链接稳定转存到自己的夸克目录”
-
-但真正落到 `115` 目录、`/待整理`、STRM 生成这层，通常还是依赖你现有环境里的：
-
+- `AIRecognizerEnhancer`
 - `P115StrmHelper`
 
-可以把它理解成：
+适合场景：
 
-- `AgentResourceOfficer` 是新的资源中枢入口
-- `AgentResourceOfficer` 内置飞书 Channel 是新的远程操作入口
-- `FeishuCommandBridgeLong` 是旧飞书兼容/备份入口
-- `HdhiveOpenApi` 是旧影巢能力入口
-- `QuarkShareSaver` 是夸克分享落盘入口
-- `P115StrmHelper` 是 115 文件落地和整理能力
+- 你想尽量留在 MoviePilot 内部生态。
+- 你已经把 TG、企业微信、微信、通知渠道或其他消息入口接到了 MoviePilot。
+- 你希望通过 MP 内置智能助手 / Agent Tool 调用插件能力。
 
-也就是说，这个仓库不是替代 `P115StrmHelper`，而是和它配合。
+工作方式：
 
-当前 `AgentResourceOfficer 0.1.116` 已经具备 115 分享链接轻量直转层，并接入和 `P115StrmHelper` 同款的扫码登录能力：可以优先使用扫码得到的客户端会话，也可以复用当前已加载的 115 客户端，直转失败时再回退 `P115StrmHelper`。但 STRM 生成、302、全量/增量同步和媒体库整理仍建议继续由 `P115StrmHelper` 负责。
+- 先在 MoviePilot 设置里开启智能助手 / Agent 相关功能。
+- 在 MoviePilot 的智能设置里填写可用的 LLM API 信息，包括接口地址、API Key 和模型名。
+- 确认 MP 智能助手能正常对话或调用工具后，再启用 `Agent资源官`。
+- `Agent资源官` 会注册 MoviePilot 原生 Agent Tool。
+- MP 内置智能体可以直接调用资源官的搜索、选择、115 登录、待任务、飞书健康检查等工具。
+- TG / 企业微信这类入口本质上是把消息送进 MoviePilot，再由 MP 内置智能体或插件工具执行。
+- 这种方式不需要外部智能体自己维护 Skill，但智能理解能力取决于 MP 当前配置的 LLM 和 Agent 能力。
 
-如果升级 MoviePilot 后 `P115StrmHelper` 因旧事件导入失败无法加载，可以使用仓库里的兼容脚本恢复：
+适合命令：
+
+```text
+搜索 蜘蛛侠
+盘搜搜索 大君夫人
+影巢搜索 蜘蛛侠
+115状态
+115登录
+链接 https://pan.quark.cn/s/xxxx path=/飞书
+```
+
+注意：
+
+- 如果你已经有 WorkBuddy、OpenClaw（小龙虾）这类更强的外部智能体，方案 A 通常更灵活。
+- 如果你只想用 MP 自带入口，不想维护外部 Skill，方案 B 更省心。
+
+### 方案 C：不用智能体，直接用飞书 Channel
+
+推荐安装：
+
+- `AgentResourceOfficer`
+- 可选：`P115StrmHelper`
+
+适合场景：
+
+- 你不想接外部智能体，也不想依赖 MP 内置智能体。
+- 你只想在飞书里发固定命令，让插件直接回复结果。
+- 家庭或个人使用场景里，飞书就是一个远程控制面板。
+
+工作方式：
+
+- 在 `Agent资源官` 设置页开启内置飞书 Channel。
+- 填入飞书 App ID、App Secret、白名单和回复 ID 类型。
+- 飞书消息直接进入资源官，由资源官解析命令并回复。
+- 老 `FeishuCommandBridgeLong` 不必同时开启，避免同一个飞书 App 被两个长连接入口监听。
+
+适合命令：
+
+```text
+MP搜索 蜘蛛侠
+ps大君夫人
+yc蜘蛛侠
+选择 1
+详情
+下一页
+115登录
+检查115登录
+链接 https://115cdn.com/s/xxxx path=/待整理
+链接 https://pan.quark.cn/s/xxxx path=/飞书
+```
+
+### 基础分工
+
+不管选 A、B 还是 C，底层分工都一样：
+
+- `Agent资源官` 负责资源入口和执行编排。
+- `AI识别增强` 负责识别失败后的本地 LLM 兜底和规则建议。
+- `P115StrmHelper` 是可选的媒体库基础设施，负责 115 STRM、302、全量/增量同步、失效清理等能力。
+
+`Agent资源官` 和 `P115StrmHelper` 不是强绑定关系。更准确的理解是：
+
+```text
+Agent资源官 = 资源入口和智能体/飞书/工具调度层
+AI识别增强 = 识别失败后的兜底和规则建议层
+P115StrmHelper = 115 媒体库基础设施层
+```
+
+资源官脱离 `P115StrmHelper` 也可以使用。它的核心职责是把资源保存到你配置的固定目录；只有当你希望这些资源继续生成 STRM、走 302 播放、进入媒体库整理或执行全量/增量同步时，才需要配合 `P115StrmHelper`。
+
+### 轻量单点方案
+
+只想做影巢签到：
+
+- 安装 `HDHiveDailySign`
+- 不需要安装资源官
+
+只想独立转存夸克分享：
+
+- 安装 `QuarkShareSaver`
+- 如果已经使用资源官，优先让资源官统一调用夸克转存能力
+
+已经有旧飞书桥接并且不想迁移：
+
+- 可以继续保留 `FeishuCommandBridgeLong`
+- 新用户建议优先用 `Agent资源官` 内置飞书 Channel
+- 同一个飞书 App 不建议同时开启两个长连接入口
+
+## 第一块：新主线插件
+
+### Agent资源官
+
+插件 ID：
+
+- `AgentResourceOfficer`
+
+当前版本：
+
+- `0.1.120`
+
+它是这个仓库当前最推荐的新入口。它负责把资源相关请求统一收口：
+
+- 影巢搜索、候选选片、资源解锁、签到和配额查询
+- 盘搜搜索，115 和夸克分组展示
+- 115 分享链接识别、扫码登录、直转、待任务恢复
+- 夸克分享链接识别与转存
+- MP 原生搜索入口
+- 可选内置飞书 Channel
+- 给 MP 智能助手、外部智能体、WorkBuddy、OpenClaw（小龙虾）、Hermes 使用的统一 API 和 Skill 范式
+
+典型用法：
+
+```text
+2蜘蛛侠
+yc蜘蛛侠
+1大君夫人
+ps大君夫人
+链接 https://pan.quark.cn/s/xxxx path=/飞书
+链接 https://115cdn.com/s/xxxx path=/待整理
+选择 1
+详情
+下一页
+115登录
+115状态
+```
+
+推荐目录约定：
+
+- 115 默认转存目录：`/待整理`
+- 夸克默认转存目录：`/飞书`
+- 也可以在指令里写 `path=/目录` 或 `位置=目录`
+
+和 `P115StrmHelper` 的关系：
+
+- 资源官可以处理 115 分享链接、发起扫码登录、尝试轻量直转。
+- 资源官脱离 `P115StrmHelper` 也能把资源保存到配置好的固定目录。
+- 资源官不负责 STRM 生成、302 播放、媒体库全量/增量同步。
+- 如果需要 STRM、302 播放或媒体库同步，这些底层工作仍建议交给 `P115StrmHelper`。
+
+如果升级 MoviePilot 后 `P115StrmHelper` 因旧事件导入失败无法加载，可以尝试仓库里的兼容脚本：
 
 ```bash
 MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 ```
 
-## 和智能体怎么配合
+详细说明：
 
-这套仓库现在更推荐的做法不是让智能体自己写临时脚本、自己拼接口，而是：
+- [AgentResourceOfficer/README.md](./AgentResourceOfficer/README.md)
+- [外部智能体接入范式](./docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
+- [agent-resource-officer Skill](./skills/agent-resource-officer/README.md)
 
-- 插件做能力
-- 智能体做调度
+### AI识别增强
 
-最典型的一条链路是：
+插件 ID：
 
-1. 智能体把自然语言、片名或分享链接发给 `AgentResourceOfficer`
-2. `AgentResourceOfficer` 负责判断是影巢搜索、盘搜搜索，还是 115 / 夸克直链路由
-3. 智能体只展示前几条结果，让用户按编号选
-4. 插件执行解锁或转存
-5. 如果返回的是 `115` 分享链接，再交给现有 115 流程落到 `/待整理`
-6. 后续 MoviePilot / `P115StrmHelper` 继续整理、生成 STRM 或补充操作
+- `AIRecognizerEnhancer`
 
-飞书链路现在推荐直接走资源官内置 Channel：
+当前版本：
 
-1. 智能体在飞书侧接收自然语言或命令
-2. `AgentResourceOfficer` 内置飞书入口把消息转成统一 `assistant/route` 或 `assistant/pick`
-3. 资源官判断是影巢、盘搜、115、夸克、MP 搜索还是 STRM 调度
-4. 插件执行后把结果回到飞书
-5. 老 `FeishuCommandBridgeLong` 只作为兼容/备份入口保留
+- `0.1.11`
 
-所以这几个插件不是平铺的独立小工具，更像一套配合关系：
+它负责 MoviePilot 原生识别失败后的兜底。和旧版 AI Gateway 不同，它更偏向直接复用 MoviePilot 当前 LLM 配置，在 MP 内部完成结构化识别。
 
-- `AgentResourceOfficer` 解决智能体 / Agent Tool 的统一资源入口
-- `AgentResourceOfficer` 内置飞书 Channel 解决新远程控制入口
-- `FeishuCommandBridgeLong` 保留旧远程控制兼容入口
-- `HdhiveOpenApi` 继续保留旧影巢 OpenAPI 入口
-- `QuarkShareSaver` 解决夸克分享转存入口
-- `AIRecoginzerForwarder` 解决识别失败后的补救
-- `ZspaceMediaFreshMix` 解决入库后的极影视刷新
-- `HDHiveDailySign` 解决签到这种独立轻量任务
+主要能力：
 
----
+- 原生识别失败后结构化推断标题、年份、类型、季集
+- 失败样本记录、摘要、洞察、清理
+- 按失败样本生成自定义识别词建议
+- 批量复查、批量建议、批量写入
+- 模型异常时尽量退回精确规则兜底
 
-## 智能体 Skill 模板
+适合场景：
 
-GitHub Actions artifact 和正式 Release 附件会同时附带公开 Skill ZIP：
+- 动画、冷门剧、长篇连载识别不稳
+- 发布组把季集写错
+- 标题拼写或干扰词导致 TMDB 误识别
+- 想把 AI 识别和 MoviePilot 原生 CustomIdentifiers 闭环起来
 
-- `agent-resource-officer-<version>.zip`
-- `hdhive-search-unlock-to-115-<version>.zip`
+详细说明：
 
-如果你从源码仓库安装，也可以直接运行下面的 `install.sh`。
+- [AIRecognizerEnhancer/README.md](./AIRecognizerEnhancer/README.md)
 
-如果你是为了让外部智能体直接控制 `AgentResourceOfficer` 这条新主线，优先看这里：
+### 外部智能体和 Skill
 
-- AgentResourceOfficer Skill 模板：
-  [skills/agent-resource-officer/README.md](./skills/agent-resource-officer/README.md)
-- Skill 主说明：
-  [skills/agent-resource-officer/SKILL.md](./skills/agent-resource-officer/SKILL.md)
-- 推荐提示词：
-  [skills/agent-resource-officer/PROMPTS.md](./skills/agent-resource-officer/PROMPTS.md)
-- WorkBuddy / 微信侧智能体接入模板：
-  [docs/WORKBUDDY_AGENT_RESOURCE_OFFICER.md](./docs/WORKBUDDY_AGENT_RESOURCE_OFFICER.md)
+如果你想让 WorkBuddy、OpenClaw（小龙虾）、Hermes、微信侧智能体或其他外部智能体来控制资源官，推荐不要只发一段聊天提示词，而是让它读仓库后创建或安装自己的 `agent-resource-officer` Skill。
 
-外部智能体优先从这几个 helper 命令开始：
+最小复现流程：
 
 ```bash
+git clone https://github.com/liuyuexi1987/MoviePilot-Plugins.git
+cd MoviePilot-Plugins
 bash skills/agent-resource-officer/install.sh --dry-run
 bash skills/agent-resource-officer/install.sh
-python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py readiness
-python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py workbuddy
-python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py decide --summary-only
-python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py decide --command-only
-python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py decide --command-only --confirmed
 ```
 
-其中 `readiness` 用来确认配置、本地 helper 和插件接口都正常；`workbuddy` 会直接输出可交给 WorkBuddy、微信侧智能体或其他外部智能体的提示词和最小工具约定；`decide --summary-only` 用来判断继续旧会话还是开始新流程；`--command-only` 只输出下一步 helper 命令，遇到需要确认的动作时，只有加 `--confirmed` 才会输出执行命令。
+配置连接信息：
 
-如果已经在本机 MoviePilot 部署了 `AgentResourceOfficer`，可以跑 live smoke 验证真实入口：
+```text
+~/.config/agent-resource-officer/config
+```
+
+示例：
+
+```text
+ARO_BASE_URL=http://127.0.0.1:3000
+ARO_API_KEY=your_moviepilot_api_token
+```
+
+注意：
+
+- `ARO_BASE_URL` 必须是外部智能体所在环境能访问到的 MoviePilot 地址。
+- 同机可以用 `http://127.0.0.1:3000`。
+- 容器、局域网或公网部署时，要换成对应可访问地址。
+- 不要把 API Key、Cookie、Token 写进普通聊天或公开 Skill 文档。
+
+验证：
 
 ```bash
-python3 scripts/smoke-agent-resource-officer.py
-python3 scripts/smoke-agent-resource-officer.py --include-search
+python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py readiness
+python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agent
+python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
 ```
 
-默认只测自检、飞书健康、WorkBuddy request templates 和 `115状态` 路由；加 `--include-search` 会额外测 `MP搜索`、`ps关键词` 与 `yc关键词`，并自动清理测试会话。
+给外部智能体的核心原则：
 
-如果你是为了“把影巢搜索 -> 选择 -> 解锁 -> 115 落地”这条链路交给 AI 智能体，直接看这里：
-
-- 公开版 Skill 模板：
-  [skills/hdhive-search-unlock-to-115/README.md](./skills/hdhive-search-unlock-to-115/README.md)
-- Skill 主说明：
-  [skills/hdhive-search-unlock-to-115/SKILL.md](./skills/hdhive-search-unlock-to-115/SKILL.md)
-- 推荐提示词：
-  [skills/hdhive-search-unlock-to-115/PROMPTS.md](./skills/hdhive-search-unlock-to-115/PROMPTS.md)
-- 推荐搭配支持技能和工作流调度的智能体工作台使用，例如腾讯 WorkBuddy 或兼容 Codex Skill 工作流的客户端。
-- 如果你已经接入 MP 原生 Agent / MCP，更推荐直接调用 `AgentResourceOfficer` 的统一 API / Agent Tool，而不是让智能体自己拼影巢或夸克接口。
-
-快速安装和本地验证：
-
-```bash
-bash skills/hdhive-search-unlock-to-115/install.sh --dry-run
-bash skills/hdhive-search-unlock-to-115/install.sh
-python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py version
-python3 ~/.codex/skills/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest
+```text
+资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent资源官。
+不要直接调用影巢、盘搜、115、夸克底层 API。
+搜索走 route，编号选择走 pick，同一个用户或群聊固定使用 agent:会话ID。
 ```
 
----
+## 第二块：旧插件和兼容插件
 
-## 1. AI 识别转发
+这些插件仍然保留，适合已有环境、单点能力或兼容需求。新用户不一定都要安装。
 
-插件名：
+### AI 识别转发
+
+插件 ID：
 
 - `AIRecoginzerForwarder`
 
+当前版本：
+
+- `2.0.1`
+
 作用：
 
-- MoviePilot 原生 TMDB 识别失败
-- 插件把标题和路径转发给 AI Gateway
-- Gateway 识别完成后回调 MoviePilot
+- MoviePilot 原生识别失败后，把标题和路径转发给外部 AI Gateway
+- Gateway 完成识别后回调 MoviePilot
 - 插件继续触发二次整理
 
 适合场景：
 
-- PT / 网盘资源命名很乱
-- 115 挂载文件名不规范
-- 原生识别失败率比较高
+- 已经部署了外部 AI Gateway
+- 暂时不想切换到 `AIRecognizerEnhancer`
 
-相关说明：
+相关仓库：
+
+- [moviepilot-ai-recognizer-gateway](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway)
+
+详细说明：
 
 - [AIRecoginzerForwarder/README.md](./AIRecoginzerForwarder/README.md)
-- 配套网关仓库：[moviepilot-ai-recognizer-gateway](https://github.com/liuyuexi1987/moviepilot-ai-recognizer-gateway)
 
----
+### 飞书命令桥接
 
-## 1.1 AI 识别增强
-
-插件名：
-
-- `AIRecognizerEnhancer`
-
-作用：
-
-- MoviePilot 原生识别失败时，在本机直接复用当前已启用的 LLM 配置
-- 结构化推断作品名、年份、类型、季集
-- 把结果回写给 MoviePilot，继续原生二次识别
-
-适合场景：
-
-- 不想再维护额外 AI Gateway
-- 想先把 AI 识别增强收口到 MP 容器内
-- 想逐步替代旧版外部回调链路
-
-当前状态：
-
-- `0.1.11` 已可用
-- 已提供健康检查、手动识别、失败样本摘要、失败样本洞察、失败样本精简摘要、失败样本查看、按样本移除、按样本复查、批量复查、批量建议、批量写入、识别词建议、按样本直出建议和按样本直写规则 API，并在建议模型退化时自动走精确规则兜底
-- 后续继续补提示词、失败样本分析与自定义识别词建议质量
-
----
-
-## 2. 飞书命令桥接
-
-插件名：
+插件 ID：
 
 - `FeishuCommandBridgeLong`
 
-作用：
+当前版本：
 
-- 作为旧飞书长连接桥接的兼容/备份入口
-- 保留老环境里已经习惯的飞书命令体验
-- 新资源动作建议逐步切到 `AgentResourceOfficer` 内置飞书入口
+- `0.5.26`
+
+定位：
+
+- 旧飞书长连接兼容入口
+- 保留已有用户熟悉的飞书命令体验
+- 新用户优先使用 `Agent资源官` 内置飞书 Channel
 
 适合场景：
 
-- 已经装好旧飞书桥接，暂时不想迁移
-- 只需要旧命令快路径，例如 `刮削`、`生成STRM`、`全量STRM`、`版本`
-- 需要保留一个和 `AgentResourceOfficer` 内置飞书入口相互独立的备份入口
-- 不想折腾公网 webhook 和 HTTPS 回调
+- 已经装好旧飞书桥接
+- 暂时不想迁移到资源官内置飞书
+- 需要保留一个独立备份入口
 
-新用户如果只想装一个入口，优先开启 `AgentResourceOfficer` 内置飞书 Channel；同一个飞书 App 不建议同时开启两个长连接入口。
+注意：
 
----
+- 同一个飞书 App 不建议同时被 `FeishuCommandBridgeLong` 和 `Agent资源官` 内置飞书入口监听。
+- 如果你是新环境，建议只开资源官内置飞书入口。
 
-## 3. 影巢 OpenAPI
+详细说明：
 
-插件名：
+- [FeishuCommandBridgeLong/README.md](./FeishuCommandBridgeLong/README.md)
+
+### 影巢 OpenAPI
+
+插件 ID：
 
 - `HdhiveOpenApi`
 
+当前版本：
+
+- `0.3.0`
+
 作用：
 
-- 对接影巢 Open API
-- 在 MoviePilot 内完成签到、用户信息、资源搜索、资源解锁、115 转存、分享管理、用量与配额查询
+- 对接影巢 OpenAPI
+- 支持用户信息、签到、资源搜索、资源解锁、115 转存、分享管理、配额查询
 
-当前版本重点能力：
+当前建议：
 
-- 通过关键词或 TMDB ID 搜索资源
-- 自动走 MoviePilot 媒体搜索，把片名转换成影巢可用的 TMDB 候选
-- 解锁资源
-- 解锁 115 资源后自动转存到 `/待整理`
-- 支持分享创建、更新、删除、详情和列表
-- 支持普通签到 / 赌狗签到
-- 支持查询配额和今日用量
-
-适合场景：
-
-- 想在 MoviePilot 里直接用影巢 OpenAPI
-- 想做“搜索 -> 选资源 -> 解锁 -> 落 115 `/待整理`”这条链路
-- 想给 AI 智能体一个稳定入口，不让它自己拼影巢 API
+- 新的智能体和飞书主线优先使用 `Agent资源官`。
+- 如果你只想单独使用影巢 OpenAPI 插件，也可以继续安装 `HdhiveOpenApi`。
 
 详细说明：
 
 - [HdhiveOpenApi/README.md](./HdhiveOpenApi/README.md)
-- 对应的公开智能体 Skill 模板：
-  [skills/hdhive-search-unlock-to-115/README.md](./skills/hdhive-search-unlock-to-115/README.md)
+- [hdhive-search-unlock-to-115 Skill](./skills/hdhive-search-unlock-to-115/README.md)
 
----
+### HDHive Daily Sign
 
-## 4. 影巢签到
-
-插件名：
+插件 ID：
 
 - `HDHiveDailySign`
+
+当前版本：
+
+- `1.0.0`
 
 作用：
 
 - 自动完成影巢每日签到
-- 支持普通签到 / 赌狗签到
-- 支持失败重试、自动登录和历史记录
+- 支持普通签到、赌狗签到、失败重试、自动登录、历史记录
 
-说明：
+当前建议：
+
+- 只想轻量签到：用 `HDHiveDailySign`
+- 已经使用资源官：也可以直接在 `Agent资源官` 内开启影巢签到
+- OpenAPI 签到需要 Premium 时，网页 Cookie / 账号密码兜底更适合放在签到插件或资源官签到页配置
+
+来源说明：
 
 - 这是基于原作者 `madrays` 的影巢签到插件整理出来的自用魔改版
-- 如果你更想跟进原版更新，推荐优先关注原作者仓库：
-  [madrays/MoviePilot-Plugins](https://github.com/madrays/MoviePilot-Plugins)
-
-适合场景：
-
-- 只想做影巢签到
-- 不需要资源搜索和解锁
-- 想保留一个更轻量的独立插件
+- 如果更想跟进原版更新，推荐关注原作者仓库：[madrays/MoviePilot-Plugins](https://github.com/madrays/MoviePilot-Plugins)
 
 详细说明：
 
 - [HDHiveDailySign/README.md](./HDHiveDailySign/README.md)
 
----
+### 夸克分享转存
 
-## 5. 夸克分享转存
-
-插件名：
+插件 ID：
 
 - `QuarkShareSaver`
 
+当前版本：
+
+- `0.1.0`
+
 作用：
 
-- 把夸克分享链接直接转存到自己的夸克网盘目录
+- 把夸克分享链接转存到自己的夸克网盘目录
 - 目录不存在时自动创建
-- 提供稳定 API 给智能体和飞书桥接调用
+- 给智能体、飞书桥接或其他插件提供稳定执行入口
 
-适合场景：
+当前建议：
 
-- 智能体拿到夸克分享链接后，需要一个稳定落盘入口
-- 想把“搜索”和“转存”拆开，避免智能体自己硬拼夸克接口
-- 想在飞书里直接发命令完成夸克转存
+- 新主线优先通过 `Agent资源官` 调用夸克转存
+- 如果只需要单独转存夸克分享，可以独立使用 `QuarkShareSaver`
 
 详细说明：
 
 - [QuarkShareSaver/README.md](./QuarkShareSaver/README.md)
 
----
+### 极影视刷新（自用魔改）
 
-## 6. 极影视刷新（自用魔改）
-
-插件名：
+插件 ID：
 
 - `ZspaceMediaFreshMix`
 
+当前版本：
+
+- `1.0.0`
+
 作用：
 
-- 按 MoviePilot 最近入库记录刷新极影视分类
-- 兼容电影和电视剧共用一个极影视分类
+- 根据 MoviePilot 最近入库记录刷新极影视分类
+- 兼容电影和电视剧混在同一个极影视分类
 - 兼容新版极空间 Cookie 字段
 
-说明：
+来源说明：
 
 - 这是基于原作者 `gxterry` 刷新极影视插件整理出来的自用魔改版
-- 如果你更想跟进原版更新，推荐优先关注原作者仓库：
-  [gxterry/MoviePilot-Plugins](https://github.com/gxterry/MoviePilot-Plugins)
-
-适合场景：
-
-- 极影视里电影和电视剧混放在同一个分类
-- 官方原版在你当前极空间 Cookie 形态下无法直接工作
-- 想保留一个独立插件身份，避免和原版配置、统计互相影响
+- 如果更想跟进原版更新，推荐关注原作者仓库：[gxterry/MoviePilot-Plugins](https://github.com/gxterry/MoviePilot-Plugins)
 
 详细说明：
 
 - [ZspaceMediaFreshMix/README.md](./ZspaceMediaFreshMix/README.md)
 
----
-
 ## 安装方式
 
-这个仓库已经补齐 MoviePilot 自定义仓库所需结构：
+这个仓库支持 MoviePilot 自定义插件仓库结构：
 
 - `package.json`
 - `package.v2.json`
-- `plugins/...`
-- `plugins.v2/...`
+- `plugins/`
+- `plugins.v2/`
 
-也就是说，既可以走自定义插件仓库，也可以按目录本地安装。
-
-最新正式 Release 下载：
+最新 Release：
 
 - [v2026.04.28.2](https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v2026.04.28.2)
 
-发布和本地打包相关文档：
+常用文档：
 
 - [插件安装说明](./docs/PLUGIN_INSTALL.md)
 - [GitHub 发布说明](./docs/GITHUB_PUBLISH.md)
-- [Release Checklist](./docs/RELEASE_CHECKLIST.md)
 - [ZIP 打包说明](./docs/PACKAGING.md)
+- [Release Checklist](./docs/RELEASE_CHECKLIST.md)
 
-当前已经包含：
+本地验证：
 
-- `plugins/airecoginzerforwarder`
-- `plugins.v2/airecoginzerforwarder`
-- `plugins/airecognizerenhancer`
-- `plugins.v2/airecognizerenhancer`
-- `plugins/agentresourceofficer`
-- `plugins.v2/agentresourceofficer`
-- `plugins/feishucommandbridgelong`
-- `plugins.v2/feishucommandbridgelong`
-- `plugins/hdhiveopenapi`
-- `plugins.v2/hdhiveopenapi`
-- `plugins/hdhivedailysign`
-- `plugins.v2/hdhivedailysign`
-- `plugins/quarksharesaver`
-- `plugins.v2/quarksharesaver`
-- `plugins/zspacemediafreshmix`
-- `plugins.v2/zspacemediafreshmix`
+```bash
+python3 scripts/smoke-agent-resource-officer.py
+bash scripts/check-skills.sh
+bash scripts/verify-skill-dist.sh
+```
 
----
+如果要连真实搜索链路：
+
+```bash
+python3 scripts/smoke-agent-resource-officer.py --include-search
+```
 
 ## 仓库结构
 
@@ -473,24 +550,21 @@ HDHiveDailySign/
 QuarkShareSaver/
 ZspaceMediaFreshMix/
 docs/
+scripts/
 ```
 
-其中：
+说明：
 
-- `plugins` 和 `plugins.v2` 是 MoviePilot 实际读取的插件目录
-- 根目录下的同名插件目录主要放主源码、README 和补充说明；部分旧插件代码仍以 `plugins/`、`plugins.v2/` 为准
+- `plugins/` 和 `plugins.v2/` 是 MoviePilot 插件仓库实际读取目录。
+- 根目录同名插件目录用于主源码、README 和补充文档。
+- `skills/` 放公开 Skill 模板，主要给外部智能体复现工作流。
 
----
+## 一句话总结
 
-## 当前推荐理解
+新用户优先从这三个能力开始：
 
-如果你只记一句话，可以记这个：
+- `Agent资源官`：资源和智能体统一入口
+- `AI识别增强`：识别失败后的本地 LLM 兜底
+- `P115StrmHelper`：115 STRM、302 和媒体库基础设施
 
-- `AIRecoginzerForwarder` 解决“识别失败后的兜底”
-- `AIRecognizerEnhancer` 解决“新识别增强线的结构化识别”
-- `AgentResourceOfficer` 解决“智能体统一资源入口和执行编排”
-- `FeishuCommandBridgeLong` 解决“旧飞书远程控制兼容/备份”
-- `HdhiveOpenApi` 解决“影巢资源搜索、解锁和 115 落地”
-- `HDHiveDailySign` 解决“影巢每日签到”
-- `QuarkShareSaver` 解决“夸克分享链接稳定转存”
-- `ZspaceMediaFreshMix` 解决“极影视混合分类刷新不稳定”
+旧插件继续保留，但更多是兼容、轻量单点能力或已有环境迁移使用。

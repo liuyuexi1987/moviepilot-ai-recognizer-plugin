@@ -1,2 +1,3 @@
 requests
+cloudscraper
 lark-oapi==1.5.3

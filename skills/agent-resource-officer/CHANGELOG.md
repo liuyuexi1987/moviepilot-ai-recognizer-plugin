@@ -2,8 +2,9 @@
 
 ## 0.1.12
 
-- Added `workbuddy` helper command to print a compact external-agent prompt and minimal tool contract.
-- Added `workbuddy --full` to print the bundled WorkBuddy handoff guide directly from the Skill package.
+- Added `external-agent` helper command to print a compact external-agent prompt and minimal tool contract.
+- Added `external-agent --full` to print the bundled external-agent handoff guide directly from the Skill package.
+- Kept `workbuddy` as a compatibility alias for existing setups.
 
 ## 0.1.11
 
@@ -59,7 +60,7 @@
 
 ## 0.1.0
 
-- Added `install.sh` with dry-run and custom target support for installing the skill into Codex skill paths.
+- Added `install.sh` with dry-run and custom target support for installing the skill into configurable skill paths.
 - Added installer target guards to prevent accidental overwrites of unsafe or non-skill directories.
 - Added `commands` catalog with stable `commands.v1` schema.
 - Added `readiness` for config, local selftest, and live plugin selfcheck.

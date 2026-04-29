@@ -10,7 +10,8 @@ import urllib.request
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WORKBUDDY_GUIDE_PATH = os.path.join(SKILL_DIR, "WORKBUDDY.md")
+EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
+WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
 HELPER_VERSION = "0.1.12"
 HELPER_COMMANDS = [
     "auto",
@@ -39,6 +40,7 @@ HELPER_COMMANDS = [
     "plans-clear",
     "raw",
     "version",
+    "external-agent",
     "workbuddy",
 ]
 
@@ -88,7 +90,7 @@ def load_json_arg(value):
     return data if isinstance(data, dict) else {}
 
 
-def workbuddy_payload():
+def external_agent_payload():
     prompt = (
         "你是外部智能体，通过 AgentResourceOfficer 控制 MoviePilot 资源工作流。"
         "不要直接调用影巢、115、夸克或盘搜原始 API。"
@@ -98,15 +100,16 @@ def workbuddy_payload():
     )
     return {
         "success": True,
-        "schema_version": "workbuddy.v1",
+        "schema_version": "external_agent.v1",
         "helper_version": HELPER_VERSION,
-        "guide_file": WORKBUDDY_GUIDE_PATH,
-        "guide_file_exists": os.path.exists(WORKBUDDY_GUIDE_PATH),
-        "recommended_recipe": "workbuddy_quickstart",
-        "recipe_command": "python3 scripts/aro_request.py templates --recipe workbuddy --compact",
+        "guide_file": EXTERNAL_AGENT_GUIDE_PATH,
+        "guide_file_exists": os.path.exists(EXTERNAL_AGENT_GUIDE_PATH),
+        "recommended_recipe": "external_agent",
+        "recipe_command": "python3 scripts/aro_request.py templates --recipe external_agent --compact",
         "startup_command": "python3 scripts/aro_request.py startup",
-        "route_command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'workbuddy:<会话ID>'",
-        "pick_command": "python3 scripts/aro_request.py pick --choice <编号> --session 'workbuddy:<会话ID>'",
+        "route_command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'agent:<会话ID>'",
+        "pick_command": "python3 scripts/aro_request.py pick --choice <编号> --session 'agent:<会话ID>'",
+        "compat_aliases": ["workbuddy"],
         "prompt": prompt,
         "tools": [
             {
@@ -118,13 +121,13 @@ def workbuddy_payload():
             {
                 "name": "route_text",
                 "purpose": "处理自然语言资源指令、链接转存、搜索和登录状态查询。",
-                "command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'workbuddy:<会话ID>'",
+                "command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'agent:<会话ID>'",
                 "writes": "depends_on_route",
             },
             {
                 "name": "pick_continue",
                 "purpose": "继续编号选择、详情、审查、下一页等会话动作。",
-                "command": "python3 scripts/aro_request.py pick --choice <编号> --session 'workbuddy:<会话ID>'",
+                "command": "python3 scripts/aro_request.py pick --choice <编号> --session 'agent:<会话ID>'",
                 "writes": "depends_on_choice",
             },
         ],
@@ -497,10 +500,10 @@ def selftest_result():
     })
     check("compact_preserves_feishu_health", compact_feishu.get("plugin_version") == "0.1.110" and compact_feishu.get("legacy_bridge_running") is True)
 
-    workbuddy = workbuddy_payload()
-    check("workbuddy_payload_has_prompt", bool(workbuddy.get("prompt")))
-    check("workbuddy_payload_has_guide", workbuddy.get("guide_file_exists") is True)
-    check("workbuddy_payload_has_tools", len(workbuddy.get("tools") or []) == 3)
+    external_agent = external_agent_payload()
+    check("external_agent_payload_has_prompt", bool(external_agent.get("prompt")))
+    check("external_agent_payload_has_guide", external_agent.get("guide_file_exists") is True)
+    check("external_agent_payload_has_tools", len(external_agent.get("tools") or []) == 3)
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []
@@ -508,7 +511,8 @@ def selftest_result():
     check("helper_version_present", catalog.get("helper_version") == HELPER_VERSION)
     check("commands_schema_version", catalog.get("schema_version") == "commands.v1")
     check("commands_catalog_includes_version", "version" in catalog_names)
-    check("commands_catalog_includes_workbuddy", "workbuddy" in catalog_names)
+    check("commands_catalog_includes_external_agent", "external-agent" in catalog_names)
+    check("commands_catalog_includes_workbuddy_alias", "workbuddy" in catalog_names)
     check("commands_catalog_complete", catalog_names == set(HELPER_COMMANDS))
     check("commands_writes_are_boolean", all(isinstance(item.get("writes"), bool) for item in catalog_commands))
     check("commands_have_write_condition", all("write_condition" in item for item in catalog_commands))
@@ -541,7 +545,8 @@ def commands_catalog():
         "recommended_start": "python3 scripts/aro_request.py decide --summary-only",
         "commands": [
             {"name": "version", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper version"},
-            {"name": "workbuddy", "network": False, "writes": False, "write_condition": "", "purpose": "print WorkBuddy connection prompt and minimal tool contract"},
+            {"name": "external-agent", "network": False, "writes": False, "write_condition": "", "purpose": "print external agent connection prompt and minimal tool contract"},
+            {"name": "workbuddy", "network": False, "writes": False, "write_condition": "", "purpose": "compatibility alias for external-agent"},
             {"name": "commands", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper command catalog"},
             {"name": "config-check", "network": False, "writes": False, "write_condition": "", "purpose": "check local connection settings without printing secrets"},
             {"name": "selftest", "network": False, "writes": False, "write_condition": "", "purpose": "test local helper decision and command generation logic"},
@@ -629,12 +634,12 @@ def main():
     if args.command == "version":
         print_json({"success": True, "helper_version": HELPER_VERSION})
         return 0
-    if args.command == "workbuddy":
-        if args.full and os.path.exists(WORKBUDDY_GUIDE_PATH):
-            with open(WORKBUDDY_GUIDE_PATH, "r", encoding="utf-8") as file_obj:
+    if args.command in {"external-agent", "workbuddy"}:
+        if args.full and os.path.exists(EXTERNAL_AGENT_GUIDE_PATH):
+            with open(EXTERNAL_AGENT_GUIDE_PATH, "r", encoding="utf-8") as file_obj:
                 print(file_obj.read())
         else:
-            print_json(workbuddy_payload())
+            print_json(external_agent_payload())
         return 0
 
     if args.command == "selftest":

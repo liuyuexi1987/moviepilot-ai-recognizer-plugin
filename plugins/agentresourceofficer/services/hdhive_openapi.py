@@ -24,6 +24,13 @@ class HDHiveOpenApiService:
 
     _signin_action_name = "checkIn"
     _signin_router_tree = ["", {"children": ["(app)", {"children": ["__PAGE__", {}, None, None]}, None, None]}, None, None, True]
+    _login_api_candidates = [
+        "/api/customer/user/login",
+        "/api/customer/auth/login",
+    ]
+    _login_page = "/login"
+    _login_action_router_state = '%5B%22%22%2C%7B%22children%22%3A%5B%22(auth)%22%2C%7B%22children%22%3A%5B%22login%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2C%22%2Flogin%22%2C%22refresh%22%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D%7D%2Cnull%2Cnull%2Ctrue%5D'
+    _login_action_fallback = "602b5a3af7ab2e93be6a14001ca83c1be491ccecea"
 
     def __init__(
         self,
@@ -35,6 +42,7 @@ class HDHiveOpenApiService:
         self.api_key = self.normalize_text(api_key)
         self.base_url = (self.normalize_text(base_url) or "https://hdhive.com").rstrip("/")
         self.timeout = self.safe_int(timeout, 30)
+        self._login_action_id = ""
 
     @staticmethod
     def safe_int(value: Any, default: int) -> int:
@@ -407,6 +415,266 @@ class HDHiveOpenApiService:
         except Exception:
             return ""
 
+    @staticmethod
+    def _cookie_string_from_mapping(cookies: Dict[str, str]) -> str:
+        token_cookie = str((cookies or {}).get("token") or "").strip()
+        csrf_cookie = str((cookies or {}).get("csrf_access_token") or "").strip()
+        if not token_cookie:
+            return ""
+        cookie_items = [f"token={token_cookie}"]
+        if csrf_cookie:
+            cookie_items.append(f"csrf_access_token={csrf_cookie}")
+        return "; ".join(cookie_items)
+
+    @classmethod
+    def _extract_login_action_id_from_text(cls, text: str) -> str:
+        patterns = [
+            r'next-action"\s*:\s*"([a-fA-F0-9]{16,64})"',
+            r'name="next-action"\s+value="([a-fA-F0-9]{16,64})"',
+            r'createServerReference\("([a-f0-9]{40,})"[^\\n]+?"login"\)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text or "")
+            if match:
+                return str(match.group(1) or "").strip()
+        return ""
+
+    def _discover_login_action_id(self, warm_text: str, scraper: Any) -> str:
+        if self._login_action_id:
+            return self._login_action_id
+
+        action_id = self._extract_login_action_id_from_text(warm_text)
+        if action_id:
+            self._login_action_id = action_id
+            return action_id
+
+        script_paths = re.findall(
+            r'<script[^>]+src="([^"]+/app/\(auth\)/login/page-[^"]+\.js)"',
+            warm_text or "",
+        )
+        for script_path in script_paths:
+            script_url = script_path if script_path.startswith("http") else f"{self.base_url}{script_path}"
+            try:
+                resp = scraper.get(
+                    script_url,
+                    headers={
+                        "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
+                        "Referer": f"{self.base_url}{self._login_page}",
+                        "Accept": "*/*",
+                    },
+                    timeout=self.timeout,
+                    proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+                )
+            except Exception:
+                continue
+            action_id = self._extract_login_action_id_from_text(getattr(resp, "text", "") or "")
+            if action_id:
+                self._login_action_id = action_id
+                return action_id
+
+        self._login_action_id = self._login_action_fallback
+        return self._login_action_id
+
+    @staticmethod
+    def _parse_server_action_error(response_text: str) -> str:
+        if not response_text:
+            return ""
+        try:
+            for line in response_text.splitlines():
+                line = line.strip()
+                if not line.startswith("1:"):
+                    continue
+                payload = json.loads(line[2:])
+                error = payload.get("error") or {}
+                message = str(error.get("message") or "").strip()
+                description = str(error.get("description") or "").strip()
+                if message or description:
+                    return f"{message} ({description})" if description and description != message else (message or description)
+        except Exception:
+            return ""
+        return ""
+
+    def login_for_cookie(self, *, username: str, password: str) -> Tuple[bool, str, str]:
+        username = self.normalize_text(username)
+        password = self.normalize_text(password)
+        if not username or not password:
+            return False, "", "未配置影巢用户名或密码，无法自动刷新 Cookie"
+
+        try:
+            import cloudscraper
+            scraper = cloudscraper.create_scraper()
+        except Exception:
+            scraper = requests
+
+        login_url = f"{self.base_url}{self._login_page}"
+        warm_text = ""
+        try:
+            resp_warm = scraper.get(
+                login_url,
+                timeout=self.timeout,
+                proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+            )
+            warm_text = getattr(resp_warm, "text", "") or ""
+        except Exception:
+            pass
+        if "系统维护中" in warm_text or "maintenance" in warm_text.lower():
+            return False, "", "影巢站点当前处于维护页，暂时无法自动登录刷新 Cookie"
+
+        for path in self._login_api_candidates:
+            url = f"{self.base_url}{path}"
+            headers = {
+                "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
+                "Accept": "application/json, text/plain, */*",
+                "Origin": self.base_url,
+                "Referer": login_url,
+                "Content-Type": "application/json",
+            }
+            payload = {"username": username, "password": password}
+            try:
+                resp = scraper.post(
+                    url,
+                    headers=headers,
+                    json=payload,
+                    timeout=self.timeout,
+                    proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+                )
+            except Exception:
+                continue
+
+            cookies_dict: Dict[str, str] = {}
+            try:
+                cookies_dict = getattr(resp, "cookies", None).get_dict() if getattr(resp, "cookies", None) else {}
+            except Exception:
+                cookies_dict = {}
+
+            cookie_string = self._cookie_string_from_mapping(cookies_dict)
+            if cookie_string:
+                return True, cookie_string, "API 登录成功"
+
+            try:
+                data = resp.json()
+            except Exception:
+                data = {}
+            meta = (data.get("meta") or {}) if isinstance(data, dict) else {}
+            access_token = str(meta.get("access_token") or "").strip()
+            refresh_token = str(meta.get("refresh_token") or "").strip()
+            if access_token:
+                cookie_items = [f"token={access_token}"]
+                if refresh_token:
+                    cookie_items.append(f"refresh_token={refresh_token}")
+                return True, "; ".join(cookie_items), "API 登录成功"
+
+        action_id = self._discover_login_action_id(warm_text, scraper)
+        if action_id:
+            headers = {
+                "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
+                "Accept": "text/x-component",
+                "Origin": self.base_url,
+                "Referer": login_url,
+                "Content-Type": "text/plain;charset=UTF-8",
+                "next-action": action_id,
+                "next-router-state-tree": self._login_action_router_state,
+            }
+            body = json.dumps([{"username": username, "password": password}, "/"], separators=(",", ":"))
+            try:
+                resp = scraper.post(
+                    login_url,
+                    headers=headers,
+                    data=body,
+                    timeout=self.timeout,
+                    proxies=getattr(settings, "PROXY", None) if settings is not None else None,
+                )
+            except Exception as exc:
+                resp = None
+                server_action_message = f"Server Action 登录请求异常: {exc}"
+            else:
+                server_action_message = ""
+            if resp is not None:
+                try:
+                    cookies_dict = getattr(resp, "cookies", None).get_dict() if getattr(resp, "cookies", None) else {}
+                except Exception:
+                    cookies_dict = {}
+                cookie_string = self._cookie_string_from_mapping(cookies_dict)
+                if cookie_string:
+                    return True, cookie_string, "Server Action 登录成功"
+                action_error = self._parse_server_action_error(getattr(resp, "text", "") or "")
+                if action_error:
+                    server_action_message = action_error
+        else:
+            server_action_message = "未解析到登录 Action"
+
+        try:
+            from playwright.sync_api import sync_playwright
+        except Exception:
+            return False, "", server_action_message or "自动登录失败，且 Playwright 不可用"
+
+        try:
+            proxy = None
+            try:
+                proxy_config = getattr(settings, "PROXY", None) if settings is not None else None
+                server = (proxy_config or {}).get("http") or (proxy_config or {}).get("https")
+                if server:
+                    proxy = {"server": server}
+            except Exception:
+                proxy = None
+            with sync_playwright() as pw:
+                browser = pw.chromium.launch(headless=True, proxy=proxy) if proxy else pw.chromium.launch(headless=True)
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto(login_url, wait_until="domcontentloaded", timeout=self.timeout * 1000)
+                for selector in [
+                    "input[name='username']",
+                    "input[name='email']",
+                    "input[type='email']",
+                    "input[placeholder*='邮箱']",
+                    "input[placeholder*='email']",
+                    "input[placeholder*='用户名']",
+                ]:
+                    try:
+                        if page.query_selector(selector):
+                            page.fill(selector, username)
+                            break
+                    except Exception:
+                        continue
+                for selector in [
+                    "input[name='password']",
+                    "input[type='password']",
+                    "input[placeholder*='密码']",
+                ]:
+                    try:
+                        if page.query_selector(selector):
+                            page.fill(selector, password)
+                            break
+                    except Exception:
+                        continue
+                try:
+                    button = (
+                        page.query_selector("button[type='submit']")
+                        or page.query_selector("button:has-text('登录')")
+                        or page.query_selector("button:has-text('Login')")
+                    )
+                    if button:
+                        button.click()
+                    else:
+                        page.keyboard.press("Enter")
+                except Exception:
+                    page.keyboard.press("Enter")
+                try:
+                    page.wait_for_load_state("networkidle", timeout=10000)
+                except Exception:
+                    pass
+                cookies = context.cookies()
+                context.close()
+                browser.close()
+        except Exception as exc:
+            return False, "", f"Playwright 自动登录失败: {exc}"
+
+        cookie_map = {str(item.get("name") or ""): str(item.get("value") or "") for item in cookies or []}
+        cookie_string = self._cookie_string_from_mapping(cookie_map)
+        if cookie_string:
+            return True, cookie_string, "Playwright 登录成功"
+        return False, "", server_action_message or "自动登录失败，未获取到有效 Cookie"
+
     @classmethod
     def _build_signin_tree_header(cls) -> str:
         return quote(json.dumps(cls._signin_router_tree, separators=(",", ":")))
@@ -637,7 +905,11 @@ class HDHiveOpenApiService:
         referer = f"{self.base_url}/user/{user_id}" if user_id else f"{self.base_url}/"
         action_id = self._discover_signin_action_id(cookies, token, referer)
         if not action_id:
-            return legacy_ok, legacy_result, legacy_message
+            message = "旧版网页签到接口不可用，且未能解析当前站点签到 Action；请更新影巢网页 Cookie 后重试"
+            legacy_result["message"] = message
+            legacy_result["status"] = "签到失败"
+            legacy_result["source"] = "hdhive_web_next_action"
+            return False, legacy_result, message
 
         headers = {
             "User-Agent": getattr(settings, "USER_AGENT", "MoviePilot") if settings is not None else "MoviePilot",
@@ -687,6 +959,20 @@ class HDHiveOpenApiService:
                 "status": "签到失败",
                 "message": message,
                 "data": {"redirect": redirect_target},
+                "source": "hdhive_web_next_action",
+            }
+            return False, result, message
+        if response.status_code in (404, 405):
+            message = f"影巢网页签到入口暂不可用或 Cookie 已失效（HTTP {response.status_code}），请更新资源官里的影巢网页 Cookie 后重试"
+            result = {
+                "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
+                "ok": False,
+                "status_code": response.status_code,
+                "trigger": trigger,
+                "is_gambler": bool(is_gambler),
+                "status": "签到失败",
+                "message": message,
+                "data": {},
                 "source": "hdhive_web_next_action",
             }
             return False, result, message

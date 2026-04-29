@@ -136,18 +136,18 @@ def main() -> int:
         feishu_data = data(feishu)
         assert_ok("feishu_health", bool(feishu.get("success") and "sdk_available" in feishu_data), str(feishu.get("message") or ""))
 
-        workbuddy_templates = request_templates(base_url, api_key, "workbuddy")
-        workbuddy_templates_data = data(workbuddy_templates)
-        selected_names = workbuddy_templates_data.get("selected_names") or []
+        external_agent_templates = request_templates(base_url, api_key, "external_agent")
+        external_agent_templates_data = data(external_agent_templates)
+        selected_names = external_agent_templates_data.get("selected_names") or []
         assert_ok(
-            "workbuddy_request_templates",
+            "external_agent_request_templates",
             bool(
-                workbuddy_templates.get("success")
-                and workbuddy_templates_data.get("ok")
-                and workbuddy_templates_data.get("selected_recipe") == "workbuddy_quickstart"
+                external_agent_templates.get("success")
+                and external_agent_templates_data.get("ok")
+                and external_agent_templates_data.get("selected_recipe") == "external_agent_quickstart"
                 and selected_names == ["startup_probe", "route_text", "pick_continue"]
             ),
-            str(workbuddy_templates.get("message") or ""),
+            str(external_agent_templates.get("message") or ""),
         )
 
         status = route(base_url, api_key, sessions[0], "115状态")

@@ -319,8 +319,8 @@ bash scripts/verify-release-assets.sh dist >/dev/null
 bash scripts/print-release-summary.sh >/dev/null
 bash scripts/print-skill-release-summary.sh >/dev/null
 release_notes="$(bash scripts/generate-release-notes.sh v0.0.0-dry-run)"
-if [[ "$release_notes" != *"workbuddy / workbuddy --full"* ]]; then
-  echo "generate-release-notes.sh 缺少 workbuddy 重点说明" >&2
+if [[ "$release_notes" != *"external-agent / external-agent --full"* ]]; then
+  echo "generate-release-notes.sh 缺少 external-agent 重点说明" >&2
   exit 1
 fi
 bash scripts/create-draft-release.sh v0.0.0-dry-run --dry-run --skip-check >/dev/null

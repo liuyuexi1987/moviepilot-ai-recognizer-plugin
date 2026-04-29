@@ -1,15 +1,30 @@
 ---
 name: agent-resource-officer
-description: Control AgentResourceOfficer, the MoviePilot resource workflow hub, from an external agent. Use when an agent should route natural-language resource requests, inspect startup/recovery state, fetch low-token request templates by recipe, continue numbered choices, or execute saved plans through AgentResourceOfficer instead of calling HDHive, 115, Quark, or PanSou APIs directly.
+description: Control AgentResourceOfficer, the MoviePilot cloud-drive resource workflow hub, from an external agent. Use when an agent should route natural-language 115/Quark cloud-drive resource requests, inspect startup/recovery state, fetch low-token request templates by recipe, continue numbered choices, or execute saved plans through AgentResourceOfficer instead of calling HDHive, 115, Quark, or PanSou APIs directly.
 ---
 
 # AgentResourceOfficer Skill
 
-Use this skill when the user wants an external agent to operate the MoviePilot resource workflow through `AgentResourceOfficer`.
+Use this skill when the user wants an external agent to operate the MoviePilot 115/Quark cloud-drive resource workflow through `AgentResourceOfficer`.
 
 The plugin is the capability layer. The agent should orchestrate, display choices, ask for confirmation when required, and call the stable assistant endpoints.
 
 ## Configuration
+
+Public repository:
+
+```text
+https://github.com/liuyuexi1987/MoviePilot-Plugins
+```
+
+To reproduce this skill on another machine, clone the repository and install the bundled skill:
+
+```bash
+git clone https://github.com/liuyuexi1987/MoviePilot-Plugins.git
+cd MoviePilot-Plugins
+bash skills/agent-resource-officer/install.sh --dry-run
+bash skills/agent-resource-officer/install.sh
+```
 
 Preferred local config:
 
@@ -23,6 +38,8 @@ Format:
 ARO_BASE_URL=http://127.0.0.1:3000
 ARO_API_KEY=your_moviepilot_api_token
 ```
+
+Set `ARO_BASE_URL` to the MoviePilot address reachable from the machine running the external agent. Use `http://127.0.0.1:3000` only when MoviePilot is on the same machine.
 
 Environment overrides:
 
@@ -59,8 +76,8 @@ python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands
-python3 scripts/aro_request.py workbuddy
-python3 scripts/aro_request.py workbuddy --full
+python3 scripts/aro_request.py external-agent
+python3 scripts/aro_request.py external-agent --full
 python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py selfcheck
@@ -95,14 +112,14 @@ python3 scripts/aro_request.py commands
 
 The command catalog uses `schema_version=commands.v1`; `writes` is always boolean and details live in `write_condition`.
 
-Use `workbuddy` when handing this Skill to WorkBuddy, a WeChat-side agent, or another external agent:
+Use `external-agent` when handing this Skill to WorkBuddy, Hermes, OpenClaw（小龙虾）, a WeChat-side agent, or another external agent:
 
 ```bash
-python3 scripts/aro_request.py workbuddy
-python3 scripts/aro_request.py workbuddy --full
+python3 scripts/aro_request.py external-agent
+python3 scripts/aro_request.py external-agent --full
 ```
 
-`workbuddy` prints the compact prompt and minimal tool contract. `workbuddy --full` prints the full bundled handoff guide.
+`external-agent` prints the compact prompt and minimal tool contract. `external-agent --full` prints the full bundled handoff guide. `workbuddy` remains a compatibility alias only; new integrations should use `external-agent`.
 
 Use `config-check` to verify connection settings without printing secrets:
 

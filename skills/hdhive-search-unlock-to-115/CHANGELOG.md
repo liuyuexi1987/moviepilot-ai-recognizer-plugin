@@ -2,7 +2,7 @@
 
 ## 0.1.1
 
-- Added `install.sh` with dry-run and custom target support for installing the skill into Codex skill paths.
+- Added `install.sh` with dry-run and custom target support for installing the skill into configurable skill paths.
 - Added installer target guards to prevent accidental overwrites of unsafe or non-skill directories.
 
 ## 0.1.0

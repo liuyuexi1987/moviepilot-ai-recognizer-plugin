@@ -14,9 +14,30 @@ from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import Request
 try:
+    from apscheduler.triggers.cron import CronTrigger
+except Exception:
+    CronTrigger = None
+try:
     from app.core.config import settings
 except Exception:
     settings = None
+try:
+    from app.log import logger
+except Exception:
+    class _FallbackLogger:
+        @staticmethod
+        def info(message: str) -> None:
+            print(message)
+
+        @staticmethod
+        def warning(message: str) -> None:
+            print(message)
+
+        @staticmethod
+        def error(message: str) -> None:
+            print(message)
+
+    logger = _FallbackLogger()
 try:
     from app.utils.crypto import CryptoJsUtils
 except Exception:
@@ -93,8 +114,8 @@ class _RequestContextShim:
 class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent资源官"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
-    plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
-    plugin_version = "0.1.116"
+    plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
+    plugin_version = "0.1.120"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -109,11 +130,20 @@ class AgentResourceOfficer(_PluginBase):
     _quark_default_path = "/飞书"
     _quark_timeout = 30
     _quark_auto_import_cookiecloud = True
+    _pansou_base_url = "http://127.0.0.1:805"
+    _pansou_timeout = 20
     _hdhive_api_key = ""
     _hdhive_base_url = "https://hdhive.com"
     _hdhive_timeout = 30
     _hdhive_default_path = "/待整理"
     _hdhive_candidate_page_size = 10
+    _hdhive_checkin_enabled = False
+    _hdhive_checkin_gambler_mode = False
+    _hdhive_checkin_cron = "0 8 * * *"
+    _hdhive_checkin_cookie = ""
+    _hdhive_checkin_auto_login = True
+    _hdhive_checkin_username = ""
+    _hdhive_checkin_password = ""
     _p115_default_path = "/待整理"
     _p115_client_type = "alipaymini"
     _p115_cookie = ""
@@ -147,6 +177,12 @@ class AgentResourceOfficer(_PluginBase):
     _workflow_plan_store_key = "assistant_workflow_plans"
     _workflow_plan_limit = 50
     _workflow_plans: Dict[str, Dict[str, Any]] = {}
+    _hdhive_checkin_history_store_key = "hdhive_checkin_history"
+    _hdhive_checkin_history_limit = 60
+    _hdhive_checkin_history: List[Dict[str, Any]] = []
+    _agent_tools_reload_lock = threading.Lock()
+    _agent_tools_reload_version = ""
+    _agent_tools_reload_at = 0.0
 
     @staticmethod
     def _extract_first_url(text: str) -> str:
@@ -224,11 +260,20 @@ class AgentResourceOfficer(_PluginBase):
         self._quark_default_path = self._normalize_path(config.get("quark_default_path") or "/飞书")
         self._quark_timeout = self._safe_int(config.get("quark_timeout"), 30)
         self._quark_auto_import_cookiecloud = bool(config.get("quark_auto_import_cookiecloud", True))
+        self._pansou_base_url = self._clean_text(config.get("pansou_base_url") or "http://127.0.0.1:805").rstrip("/")
+        self._pansou_timeout = max(3, min(120, self._safe_int(config.get("pansou_timeout"), 20)))
         self._hdhive_api_key = self._clean_text(config.get("hdhive_api_key"))
         self._hdhive_base_url = self._clean_text(config.get("hdhive_base_url") or "https://hdhive.com").rstrip("/")
         self._hdhive_timeout = self._safe_int(config.get("hdhive_timeout"), 30)
         self._hdhive_default_path = self._normalize_path(config.get("hdhive_default_path") or "/待整理")
         self._hdhive_candidate_page_size = max(5, min(20, self._safe_int(config.get("hdhive_candidate_page_size"), 10)))
+        self._hdhive_checkin_enabled = bool(config.get("hdhive_checkin_enabled", False))
+        self._hdhive_checkin_gambler_mode = bool(config.get("hdhive_checkin_gambler_mode", False))
+        self._hdhive_checkin_cron = self._clean_text(config.get("hdhive_checkin_cron") or "0 8 * * *")
+        self._hdhive_checkin_cookie = self._clean_text(config.get("hdhive_checkin_cookie"))
+        self._hdhive_checkin_auto_login = bool(config.get("hdhive_checkin_auto_login", True))
+        self._hdhive_checkin_username = self._clean_text(config.get("hdhive_checkin_username"))
+        self._hdhive_checkin_password = self._clean_text(config.get("hdhive_checkin_password"))
         self._p115_default_path = self._normalize_path(config.get("p115_default_path") or "/待整理")
         self._p115_client_type = P115TransferService.normalize_qrcode_client_type(config.get("p115_client_type"))
         self._p115_cookie = self._clean_text(config.get("p115_cookie"))
@@ -268,6 +313,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         self._restore_persisted_sessions()
         self._restore_execution_history()
+        self._restore_hdhive_checkin_history()
         self._restore_workflow_plans()
         self._agent_tools_reloaded = False
         self._ensure_feishu_channel().configure(self._build_config())
@@ -277,9 +323,8 @@ class AgentResourceOfficer(_PluginBase):
             self._feishu_channel.stop()
 
     def get_state(self) -> bool:
-        if self._enabled and not self._agent_tools_reloaded:
-            self._reload_agent_tools()
-            self._agent_tools_reloaded = True
+        if self._enabled:
+            self._maybe_reload_agent_tools_once()
         return self._enabled
 
     def get_agent_tools(self) -> List[type]:
@@ -328,6 +373,21 @@ class AgentResourceOfficer(_PluginBase):
         except Exception:
             return
 
+    def _maybe_reload_agent_tools_once(self) -> None:
+        if moviepilot_tool_manager is None:
+            return
+        now = time.time()
+        with self.__class__._agent_tools_reload_lock:
+            if (
+                self.__class__._agent_tools_reload_version == self.plugin_version
+                and now - self.__class__._agent_tools_reload_at < 600
+            ):
+                return
+            # Mark before reloading, because tool loading can query plugin states recursively.
+            self.__class__._agent_tools_reload_version = self.plugin_version
+            self.__class__._agent_tools_reload_at = now
+        self._reload_agent_tools()
+
     @staticmethod
     def _clean_text(value: Any) -> str:
         if value is None:
@@ -369,7 +429,7 @@ class AgentResourceOfficer(_PluginBase):
         lowered = text.lower()
         if "premium" in lowered or "仅对 premium 用户开放" in text:
             if capability == "checkin":
-                return "影巢 OpenAPI 签到当前需要 Premium 用户；非 Premium 用户仍建议继续使用 HDHiveDailySign 网页签到链路。"
+                return "影巢 OpenAPI 签到当前需要 Premium 用户；普通用户可配置网页 Cookie 或账号密码启用网页签到兜底。"
             return f"影巢 OpenAPI 的{capability}接口当前需要 Premium 用户。"
         return text or f"影巢 {capability} 接口调用失败"
 
@@ -452,8 +512,199 @@ class AgentResourceOfficer(_PluginBase):
         }
 
     def _get_hdhive_fallback_cookie(self) -> str:
+        own_cookie = self._clean_text(self._hdhive_checkin_cookie)
+        if own_cookie:
+            return own_cookie
         config = self._load_hdhive_daily_sign_config()
         return self._clean_text(config.get("cookie"))
+
+    def _refresh_hdhive_checkin_cookie(self) -> Tuple[bool, str, str]:
+        if not self._hdhive_checkin_auto_login:
+            return False, "", "未启用影巢自动登录刷新 Cookie"
+        service = self._ensure_hdhive_service()
+        # Playwright sync API cannot run inside MoviePilot's asyncio loop; keep login isolated.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(
+                service.login_for_cookie,
+                username=self._hdhive_checkin_username,
+                password=self._hdhive_checkin_password,
+            )
+            try:
+                login_ok, cookie_string, login_message = future.result(timeout=max(60, self._hdhive_timeout * 4))
+            except Exception as exc:
+                return False, "", f"影巢自动登录超时或异常: {exc}"
+        if not login_ok or not cookie_string:
+            return False, "", login_message or "影巢自动登录失败"
+        self._hdhive_checkin_cookie = cookie_string
+        try:
+            self.update_config(self._build_config())
+        except Exception as exc:
+            logger.warning(f"[Agent资源官] 影巢自动登录已获取 Cookie，但保存配置失败：{exc}")
+        return True, cookie_string, login_message or "影巢自动登录成功"
+
+    def _run_hdhive_checkin(self, *, is_gambler: Optional[bool] = None, trigger: str = "Agent资源官") -> Dict[str, Any]:
+        service = self._ensure_hdhive_service()
+        final_gambler_mode = self._hdhive_checkin_gambler_mode if is_gambler is None else bool(is_gambler)
+        checkin_ok, result, checkin_message = service.perform_checkin(
+            is_gambler=final_gambler_mode,
+            trigger=trigger,
+        )
+        if checkin_ok:
+            final_result = {"success": True, "message": result.get("message") or "success", "data": result}
+            self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+            return final_result
+
+        raw_message = result.get("message") or checkin_message
+        checkin_status_code = self._safe_int(result.get("status_code"), 0) if isinstance(result, dict) else 0
+        should_try_web_fallback = (
+            self._is_hdhive_premium_limited(raw_message)
+            or checkin_status_code in (404, 405)
+            or "405 not allowed" in self._clean_text(raw_message).lower()
+            or "<html" in self._clean_text(raw_message).lower()
+        )
+        if should_try_web_fallback:
+            fallback_cookie = self._get_hdhive_fallback_cookie()
+            if fallback_cookie:
+                fallback_ok, fallback_result, fallback_message = service.perform_web_checkin_with_fallback(
+                    cookie_string=fallback_cookie,
+                    is_gambler=final_gambler_mode,
+                    trigger=f"{trigger} 网页兜底",
+                )
+                if fallback_ok:
+                    final_result = {
+                        "success": True,
+                        "message": fallback_result.get("message") or fallback_message or "签到成功",
+                        "data": fallback_result,
+                    }
+                    self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                    return final_result
+                if self._hdhive_checkin_auto_login and self._hdhive_checkin_username and self._hdhive_checkin_password:
+                    login_ok, new_cookie, login_message = self._refresh_hdhive_checkin_cookie()
+                    if login_ok and new_cookie:
+                        retry_ok, retry_result, retry_message = service.perform_web_checkin_with_fallback(
+                            cookie_string=new_cookie,
+                            is_gambler=final_gambler_mode,
+                            trigger=f"{trigger} 自动刷新 Cookie 后重试",
+                        )
+                        if retry_ok:
+                            final_result = {
+                                "success": True,
+                                "message": retry_result.get("message") or retry_message or "签到成功",
+                                "data": retry_result,
+                            }
+                            self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                            return final_result
+                        final_result = {
+                            "success": False,
+                            "message": f"影巢自动登录刷新 Cookie 成功，但签到重试失败：{retry_result.get('message') or retry_message}",
+                            "data": {
+                                "openapi": result,
+                                "web_fallback": fallback_result,
+                                "login": {"ok": True, "message": login_message},
+                                "retry": retry_result,
+                            },
+                        }
+                        self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                        return final_result
+                    final_result = {
+                        "success": False,
+                        "message": f"影巢网页兜底签到失败，自动登录刷新 Cookie 也失败：{login_message}",
+                        "data": {
+                            "openapi": result,
+                            "web_fallback": fallback_result,
+                            "login": {"ok": False, "message": login_message},
+                        },
+                    }
+                    self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                    return final_result
+                final_result = {
+                    "success": False,
+                    "message": f"影巢 OpenAPI 签到受 Premium 限制，且网页兜底签到失败：{fallback_result.get('message') or fallback_message}",
+                    "data": {
+                        "openapi": result,
+                        "web_fallback": fallback_result,
+                    },
+                }
+                self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                return final_result
+            if self._hdhive_checkin_auto_login and self._hdhive_checkin_username and self._hdhive_checkin_password:
+                login_ok, new_cookie, login_message = self._refresh_hdhive_checkin_cookie()
+                if login_ok and new_cookie:
+                    retry_ok, retry_result, retry_message = service.perform_web_checkin_with_fallback(
+                        cookie_string=new_cookie,
+                        is_gambler=final_gambler_mode,
+                        trigger=f"{trigger} 自动刷新 Cookie",
+                    )
+                    if retry_ok:
+                        final_result = {
+                            "success": True,
+                            "message": retry_result.get("message") or retry_message or "签到成功",
+                            "data": retry_result,
+                        }
+                        self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                        return final_result
+                    final_result = {
+                        "success": False,
+                        "message": f"影巢自动登录刷新 Cookie 成功，但签到失败：{retry_result.get('message') or retry_message}",
+                        "data": {
+                            "openapi": result,
+                            "login": {"ok": True, "message": login_message},
+                            "retry": retry_result,
+                        },
+                    }
+                    self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                    return final_result
+                final_result = {
+                    "success": False,
+                    "message": f"影巢 OpenAPI 签到受 Premium 限制，且自动登录刷新 Cookie 失败：{login_message}",
+                    "data": {
+                        "openapi": result,
+                        "login": {"ok": False, "message": login_message},
+                    },
+                }
+                self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+                return final_result
+            final_result = {
+                "success": False,
+                "message": "影巢 OpenAPI 签到受 Premium 限制，且资源官没有配置网页 Cookie 兜底或自动登录账号密码",
+                "data": result,
+            }
+            self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+            return final_result
+
+        final_result = {
+            "success": False,
+            "message": self._friendly_hdhive_error(raw_message, "checkin"),
+            "data": result,
+        }
+        self._record_hdhive_checkin_history(trigger=trigger, is_gambler=final_gambler_mode, result=final_result)
+        return final_result
+
+    def _scheduled_hdhive_checkin(self):
+        if not self._enabled or not self._hdhive_checkin_enabled:
+            return
+        result = self._run_hdhive_checkin(trigger="Agent资源官 定时签到")
+        status = "成功" if result.get("success") else "失败"
+        logger.info(f"[Agent资源官] 影巢定时签到{status}: {result.get('message')}")
+
+    def get_service(self) -> List[Dict[str, Any]]:
+        if not self._enabled or not self._hdhive_checkin_enabled or not self._hdhive_checkin_cron:
+            return []
+        if CronTrigger is None:
+            logger.warning("[Agent资源官] apscheduler 不可用，无法注册影巢定时签到")
+            return []
+        try:
+            trigger = CronTrigger.from_crontab(self._hdhive_checkin_cron)
+        except Exception as exc:
+            logger.warning(f"[Agent资源官] 影巢签到 Cron 配置无效：{self._hdhive_checkin_cron} {exc}")
+            return []
+        return [{
+            "id": "agentresourceofficer_hdhive_checkin",
+            "name": "Agent资源官影巢签到",
+            "trigger": trigger,
+            "func": self._scheduled_hdhive_checkin,
+            "kwargs": {},
+        }]
 
     def _build_config(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         config = {
@@ -464,11 +715,20 @@ class AgentResourceOfficer(_PluginBase):
             "quark_default_path": self._quark_default_path,
             "quark_timeout": self._quark_timeout,
             "quark_auto_import_cookiecloud": self._quark_auto_import_cookiecloud,
+            "pansou_base_url": self._pansou_base_url,
+            "pansou_timeout": self._pansou_timeout,
             "hdhive_api_key": self._hdhive_api_key,
             "hdhive_base_url": self._hdhive_base_url,
             "hdhive_timeout": self._hdhive_timeout,
             "hdhive_default_path": self._hdhive_default_path,
             "hdhive_candidate_page_size": self._hdhive_candidate_page_size,
+            "hdhive_checkin_enabled": self._hdhive_checkin_enabled,
+            "hdhive_checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
+            "hdhive_checkin_cron": self._hdhive_checkin_cron,
+            "hdhive_checkin_cookie": self._hdhive_checkin_cookie,
+            "hdhive_checkin_auto_login": self._hdhive_checkin_auto_login,
+            "hdhive_checkin_username": self._hdhive_checkin_username,
+            "hdhive_checkin_password": self._hdhive_checkin_password,
             "p115_default_path": self._p115_default_path,
             "p115_client_type": self._p115_client_type,
             "p115_cookie": self._p115_cookie,
@@ -690,6 +950,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_hdhive_checkin,
                 "methods": ["POST"],
                 "summary": "执行影巢普通签到或赌狗签到",
+            },
+            {
+                "path": "/hdhive/checkin/history",
+                "endpoint": self.api_hdhive_checkin_history,
+                "methods": ["GET"],
+                "summary": "查看资源官保存的影巢签到日志",
             },
             {
                 "path": "/hdhive/quota",
@@ -981,32 +1247,213 @@ class AgentResourceOfficer(_PluginBase):
         feishu_health = self._ensure_feishu_channel().health()
         feishu_state = "已启用" if feishu_health.get("enabled") else "未启用"
         feishu_running = "运行中" if feishu_health.get("running") else "未运行"
-        return [
-            {
+        hdhive_lines = [line.strip() for line in str(hdhive_summary or "").splitlines() if line.strip()]
+
+        def text_line(text: str, css_class: str = "text-body-2 py-1") -> Dict[str, Any]:
+            return {
+                "component": "div",
+                "props": {"class": css_class},
+                "text": text,
+            }
+
+        def status_card(title: str, subtitle: str, lines: List[str], color: str = "primary") -> Dict[str, Any]:
+            return {
                 "component": "VCard",
+                "props": {"variant": "tonal", "color": color, "class": "h-100"},
                 "content": [
                     {
+                        "component": "VCardTitle",
+                        "props": {"class": "text-subtitle-1 font-weight-bold pb-1"},
+                        "text": title,
+                    },
+                    {
+                        "component": "VCardSubtitle",
+                        "props": {"class": "text-body-2"},
+                        "text": subtitle,
+                    },
+                    {
                         "component": "VCardText",
-                        "text": (
-                            "Agent资源官 已接入影巢搜索/解锁、115 扫码登录与转存、夸克转存，以及统一智能入口。"
-                            f"\n当前夸克配置状态：{quark_ready}"
-                            f"\n默认目录：{self._quark_default_path}"
-                            f"\n当前影巢配置状态：{hdhive_ready}"
-                            f"\n影巢默认目录：{self._hdhive_default_path}"
-                            f"\n115 默认目录：{self._p115_default_path}"
-                            f"\n115 执行方式：{p115_ready}"
-                            f"\n115 扫码客户端：{self._p115_client_type_title(self._p115_client_type)}"
-                            f"\n115 运行状态：{'可用' if p115_health_ok else '待修复'}"
-                            f"\n115 扫码接口：/p115/qrcode  /p115/qrcode/check"
-                            "\n统一智能入口：/assistant/route  /assistant/pick"
-                            f"\n飞书入口：{feishu_state}，长连接：{feishu_running}"
-                            "\n飞书健康检查：/feishu/health"
-                            "\n原生 Agent Tool：影巢会话搜索/选择、115 扫码、115 待任务查看/继续/取消、通用分享路由"
-                            "\n\n已支持的影巢用户态 API：/hdhive/account /hdhive/checkin /hdhive/quota /hdhive/usage_today /hdhive/weekly_free_quota"
-                            f"\n115 Cookie 判定：{cookie_state.get('message') or '当前会话可直接用于 115 直转'}"
-                            f"\n\n{hdhive_summary}"
-                        ),
-                    }
+                        "content": [text_line(line) for line in lines],
+                    },
+                ],
+            }
+
+        def section_card(title: str, lines: List[str]) -> Dict[str, Any]:
+            return {
+                "component": "VCard",
+                "props": {"flat": True, "border": True, "class": "h-100"},
+                "content": [
+                    {
+                        "component": "VCardTitle",
+                        "props": {"class": "text-subtitle-1 font-weight-bold"},
+                        "text": title,
+                    },
+                    {
+                        "component": "VCardText",
+                        "content": [text_line(line) for line in lines],
+                    },
+                ],
+            }
+
+        return [
+            {
+                "component": "VContainer",
+                "props": {"fluid": True, "class": "pa-0"},
+                "content": [
+                    {
+                        "component": "VAlert",
+                        "props": {
+                            "type": "info",
+                            "variant": "tonal",
+                            "class": "mb-4",
+                            "title": "统一资源入口",
+                        },
+                        "content": [
+                            text_line(
+                                "Agent资源官支持三种接入模式：外部智能体调用 Skill/API、MP 内置智能体调用 Agent Tool、飞书 Channel 直接收命令。",
+                                "text-body-2 mb-3",
+                            ),
+                            text_line(
+                                "与智能体搭配",
+                                "text-subtitle-2 font-weight-bold mb-2",
+                            ),
+                            {
+                                "component": "div",
+                                "props": {
+                                    "class": "pa-3 rounded text-body-2",
+                                    "style": "white-space: pre-line; line-height: 1.75; background: rgba(255,255,255,.55);",
+                                },
+                                "text": (
+                                    "把下面这段话直接发给 WorkBuddy、Hermes、OpenClaw（小龙虾）或其他外部智能体：\n"
+                                    "请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，并按 Agent资源官文档接入我的 MoviePilot。"
+                                    "重点看 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。"
+                                    "读完后请在你的环境里创建或安装一个 agent-resource-officer Skill，把这些规则固化下来，不要只依赖普通聊天记忆。"
+                                    "你的职责是理解我的需求、展示候选结果、让我选择编号；资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent资源官。"
+                                    "不要自己拼影巢、盘搜、115 或夸克底层接口，也不要在 Skill 或聊天里写入 API Key、Cookie、Token。"
+                                ),
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "props": {"dense": True},
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    status_card(
+                                        "影巢",
+                                        hdhive_ready,
+                                        [
+                                            f"默认目录：{self._hdhive_default_path}",
+                                            "能力：搜索 / 解锁 / 签到",
+                                            "API：/hdhive/account /checkin /quota",
+                                        ],
+                                        "success" if self._hdhive_api_key else "warning",
+                                    )
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    status_card(
+                                        "115",
+                                        "可用" if p115_health_ok else "待修复",
+                                        [
+                                            f"默认目录：{self._p115_default_path}",
+                                            f"登录方式：{p115_ready}",
+                                            f"扫码客户端：{self._p115_client_type_title(self._p115_client_type)}",
+                                        ],
+                                        "success" if p115_health_ok else "error",
+                                    )
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    status_card(
+                                        "夸克",
+                                        quark_ready,
+                                        [
+                                            f"默认目录：{self._quark_default_path}",
+                                            "能力：分享链接转存",
+                                            "入口：通用分享路由",
+                                        ],
+                                        "success" if self._quark_cookie else "warning",
+                                    )
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    status_card(
+                                        "飞书",
+                                        f"{feishu_state}，长连接：{feishu_running}",
+                                        [
+                                            "模式：内置 Channel",
+                                            "健康检查：/feishu/health",
+                                            "建议：只保留一个飞书入口监听",
+                                        ],
+                                        "success" if feishu_health.get("running") else "secondary",
+                                    )
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "props": {"dense": True, "class": "mt-1"},
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 4},
+                                "content": [
+                                    section_card(
+                                        "智能体入口",
+                                        [
+                                            "统一路由：/assistant/route",
+                                            "继续选择：/assistant/pick",
+                                            "工作流：/assistant/workflow",
+                                            "计划执行：/assistant/plan/execute",
+                                            "Agent Tool：搜索/选择、115 扫码、待任务查看/继续/取消、通用分享路由",
+                                        ],
+                                    )
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 4},
+                                "content": [
+                                    section_card(
+                                        "账号与签到",
+                                        hdhive_lines
+                                        + [
+                                            f"115 Cookie：{cookie_state.get('message') or '当前会话可直接用于 115 直转'}",
+                                        ],
+                                    )
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 4},
+                                "content": [
+                                    section_card(
+                                        "盘搜服务",
+                                        [
+                                            f"API 地址：{self._pansou_base_url}",
+                                            f"请求超时：{self._pansou_timeout} 秒",
+                                            "用法：发送“盘搜搜索 片名”“ps片名”或“1片名”。",
+                                            "说明：资源官只负责调用 PanSou API，本机需要先运行 PanSou 服务。",
+                                        ],
+                                    )
+                                ],
+                            }
+                        ],
+                    },
                 ],
             }
         ]
@@ -1032,7 +1479,7 @@ class AgentResourceOfficer(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "当前版本已经接通影巢搜索/解锁、115 扫码登录与待任务续跑、夸克转存、统一智能入口，以及 MP 原生 Agent Tool。这里主要配置默认目录、影巢 OpenAPI 和夸克会话。",
+                                            "text": "资源官把资源搜索、链接转存、扫码登录、飞书消息和智能体调用集中到一个入口。首次使用先配置默认目录、影巢 OpenAPI、夸克会话，以及需要的飞书机器人信息。调试模式仅排查问题时打开。",
                                         },
                                     }
                                 ],
@@ -1044,7 +1491,7 @@ class AgentResourceOfficer(_PluginBase):
                         "content": [
                             {
                                 "component": "VCol",
-                                "props": {"cols": 6},
+                                "props": {"cols": 12, "md": 4},
                                 "content": [
                                     {
                                         "component": "VSwitch",
@@ -1057,7 +1504,7 @@ class AgentResourceOfficer(_PluginBase):
                             },
                             {
                                 "component": "VCol",
-                                "props": {"cols": 6},
+                                "props": {"cols": 12, "md": 4},
                                 "content": [
                                     {
                                         "component": "VSwitch",
@@ -1070,7 +1517,7 @@ class AgentResourceOfficer(_PluginBase):
                             },
                             {
                                 "component": "VCol",
-                                "props": {"cols": 6},
+                                "props": {"cols": 12, "md": 4},
                                 "content": [
                                     {
                                         "component": "VSwitch",
@@ -1086,6 +1533,188 @@ class AgentResourceOfficer(_PluginBase):
                     {
                         "component": "VRow",
                         "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "影巢签到支持 OpenAPI 与网页兜底两种方式。OpenAPI 签到需要 Premium；普通用户可填写网页 Cookie，或填写账号密码让资源官在 Cookie 失效时自动刷新。",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "hdhive_checkin_enabled",
+                                            "label": "启用影巢定时签到",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "hdhive_checkin_gambler_mode",
+                                            "label": "默认赌狗签到",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 6},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_checkin_cron",
+                                            "label": "影巢签到 Cron",
+                                            "placeholder": "0 8 * * *",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "hdhive_checkin_cookie",
+                                            "label": "影巢网页 Cookie（非 Premium 兜底）",
+                                            "rows": 3,
+                                            "placeholder": "浏览器登录 hdhive.com 后复制 Cookie；OpenAPI 签到失败时自动兜底",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "hdhive_checkin_auto_login",
+                                            "label": "自动刷新 Cookie",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_checkin_username",
+                                            "label": "影巢用户名/邮箱",
+                                            "placeholder": "用于 Cookie 失效时自动登录",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 5},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_checkin_password",
+                                            "label": "影巢密码",
+                                            "type": "password",
+                                            "placeholder": "仅保存在 MoviePilot 本机配置中",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "盘搜用于聚合公开网盘分享结果。请先运行 PanSou 服务，再填写 MoviePilot 容器可以访问的 API 地址；留空默认使用 http://127.0.0.1:805，请求失败时会继续尝试 http://host.docker.internal:805 和 http://127.0.0.1:805。",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 8},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "pansou_base_url",
+                                            "label": "盘搜 API 地址",
+                                            "placeholder": "http://host.docker.internal:805",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "pansou_timeout",
+                                            "label": "盘搜超时(秒)",
+                                            "type": "number",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "夸克用于转存 pan.quark.cn 分享链接。Cookie 可手动填写，也可以开启自动刷新：转存遇到 401 登录失效时，资源官会尝试从 MoviePilot 本地 CookieCloud 导入 quark.cn Cookie，并自动重试一次。",
+                                        },
+                                    }
+                                ],
+                            },
                             {
                                 "component": "VCol",
                                 "props": {"cols": 12},
@@ -1181,7 +1810,7 @@ class AgentResourceOfficer(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "115 建议走扫码会话，不建议填网页版 Cookie。Agent资源官 已支持 /p115/qrcode 和 /p115/qrcode/check 两步扫码登录；手填 Cookie 仅作为高级兜底。",
+                                            "text": "影巢用于资源搜索、解锁和签到。填写 OpenAPI Key 后可查询账号、配额和资源；搜索结果默认转存到影巢默认目录。",
                                         },
                                     }
                                 ],
@@ -1238,6 +1867,25 @@ class AgentResourceOfficer(_PluginBase):
                                             "model": "hdhive_candidate_page_size",
                                             "label": "候选页大小",
                                             "type": "number",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "115 建议走扫码会话，不建议填网页版 Cookie。资源官支持 /p115/qrcode 和 /p115/qrcode/check 两步扫码登录；手填 Cookie 仅作为高级兜底。",
                                         },
                                     }
                                 ],
@@ -1317,7 +1965,7 @@ class AgentResourceOfficer(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
-                                            "text": "飞书入口是可选 Channel，默认关闭。开启前请先关闭旧飞书桥接，避免同一个飞书机器人重复回复。",
+                                            "text": "飞书入口默认关闭。开启后可以在飞书里发送搜索、选择、链接转存、115 登录和 STRM 调度命令；同一个飞书机器人建议只配置一个接收入口。",
                                         },
                                     }
                                 ],
@@ -1405,7 +2053,7 @@ class AgentResourceOfficer(_PluginBase):
                             },
                             {
                                 "component": "VCol",
-                                "props": {"cols": 12, "md": 4},
+                                "props": {"cols": 12, "md": 3},
                                 "content": [
                                     {
                                         "component": "VSelect",
@@ -1424,7 +2072,7 @@ class AgentResourceOfficer(_PluginBase):
                             },
                             {
                                 "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
+                                "props": {"cols": 12, "md": 4},
                                 "content": [
                                     {
                                         "component": "VTextarea",
@@ -1439,7 +2087,7 @@ class AgentResourceOfficer(_PluginBase):
                             },
                             {
                                 "component": "VCol",
-                                "props": {"cols": 12, "md": 6},
+                                "props": {"cols": 12, "md": 5},
                                 "content": [
                                     {
                                         "component": "VTextarea",
@@ -1564,6 +2212,12 @@ class AgentResourceOfficer(_PluginBase):
                 "hdhive_ping_ok": ping_ok,
                 "base_url": self._hdhive_base_url,
                 "default_target_path": self._hdhive_default_path,
+                "checkin_enabled": self._hdhive_checkin_enabled,
+                "checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
+                "checkin_cron": self._hdhive_checkin_cron,
+                "checkin_web_cookie_configured": bool(self._hdhive_checkin_cookie),
+                "checkin_auto_login_enabled": self._hdhive_checkin_auto_login,
+                "checkin_username_configured": bool(self._hdhive_checkin_username),
                 "message": "" if ping_ok else ping_message,
                 "raw": result,
             },
@@ -1584,7 +2238,7 @@ class AgentResourceOfficer(_PluginBase):
                 if fallback_account:
                     return {
                         "success": True,
-                        "message": "当前返回的是 HDHiveDailySign 保存的网页用户快照",
+                        "message": "当前返回的是网页用户快照",
                         "data": fallback_account,
                     }
             return {"success": False, "message": self._friendly_hdhive_error(account_message, "账号"), "data": result}
@@ -1598,40 +2252,20 @@ class AgentResourceOfficer(_PluginBase):
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
 
-        service = self._ensure_hdhive_service()
-        checkin_ok, result, checkin_message = service.perform_checkin(
-            is_gambler=self._parse_bool_value(body.get("is_gambler"), False),
-            trigger="Agent资源官 API",
-        )
-        if not checkin_ok:
-            if self._is_hdhive_premium_limited(result.get("message") or checkin_message):
-                fallback_cookie = self._get_hdhive_fallback_cookie()
-                if fallback_cookie:
-                    fallback_ok, fallback_result, fallback_message = service.perform_web_checkin_with_fallback(
-                        cookie_string=fallback_cookie,
-                        is_gambler=self._parse_bool_value(body.get("is_gambler"), False),
-                        trigger="Agent资源官 网页兜底",
-                    )
-                    if fallback_ok:
-                        return {
-                            "success": True,
-                            "message": fallback_result.get("message") or fallback_message or "签到成功",
-                            "data": fallback_result,
-                        }
-                    return {
-                        "success": False,
-                        "message": f"影巢 OpenAPI 签到受 Premium 限制，且网页兜底签到失败：{fallback_result.get('message') or fallback_message}",
-                        "data": {
-                            "openapi": result,
-                            "web_fallback": fallback_result,
-                        },
-                    }
-            return {
-                "success": False,
-                "message": self._friendly_hdhive_error(result.get("message") or checkin_message, "checkin"),
-                "data": result,
-            }
-        return {"success": True, "message": result.get("message") or "success", "data": result}
+        is_gambler = self._parse_bool_value(body.get("is_gambler"), self._hdhive_checkin_gambler_mode)
+        return self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent资源官 API")
+
+    async def api_hdhive_checkin_history(self, request: Request):
+        ok, message = self._check_api_access(request)
+        if not ok:
+            return {"success": False, "message": message}
+        limit = self._safe_int(request.query_params.get("limit"), 20)
+        data = self._hdhive_checkin_history_public_data(limit=limit)
+        return {
+            "success": True,
+            "message": self._format_hdhive_checkin_history_text(limit=limit),
+            "data": data,
+        }
 
     async def api_hdhive_quota(self, request: Request):
         ok, message = self._check_api_access(request)
@@ -1787,6 +2421,87 @@ class AgentResourceOfficer(_PluginBase):
                 ]
         except Exception:
             self._execution_history = []
+
+    def _persist_hdhive_checkin_history(self) -> None:
+        try:
+            history = list(self._hdhive_checkin_history or [])[-self._hdhive_checkin_history_limit:]
+            self._hdhive_checkin_history = history
+            self.save_data(key=self._hdhive_checkin_history_store_key, value=history)
+        except Exception:
+            pass
+
+    def _restore_hdhive_checkin_history(self) -> None:
+        try:
+            restored = self.get_data(self._hdhive_checkin_history_store_key) or []
+            if isinstance(restored, list):
+                self._hdhive_checkin_history = [
+                    dict(item)
+                    for item in restored[-self._hdhive_checkin_history_limit:]
+                    if isinstance(item, dict)
+                ]
+        except Exception:
+            self._hdhive_checkin_history = []
+
+    def _record_hdhive_checkin_history(
+        self,
+        *,
+        trigger: str,
+        is_gambler: bool,
+        result: Dict[str, Any],
+    ) -> None:
+        timestamp = int(time.time())
+        payload = dict(result or {})
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        entry = {
+            "id": self._new_session_id("hdhive-sign"),
+            "time": timestamp,
+            "time_text": self._format_unix_time(timestamp),
+            "trigger": self._clean_text(trigger),
+            "mode": "赌狗签到" if is_gambler else "普通签到",
+            "is_gambler": bool(is_gambler),
+            "success": bool(payload.get("success")),
+            "message_head": self._assistant_result_message_head(payload.get("message")),
+            "status": self._clean_text(data.get("status")) or ("成功" if payload.get("success") else "失败"),
+            "source": self._clean_text(data.get("source")),
+            "status_code": data.get("status_code"),
+            "login_retry": bool(((data.get("login") or {}) if isinstance(data.get("login"), dict) else {}).get("ok")),
+            "web_fallback": bool(data.get("web_fallback")) if isinstance(data, dict) else False,
+        }
+        self._hdhive_checkin_history.append(entry)
+        self._hdhive_checkin_history = self._hdhive_checkin_history[-self._hdhive_checkin_history_limit:]
+        self._persist_hdhive_checkin_history()
+
+    def _hdhive_checkin_history_public_data(self, *, limit: int = 20) -> Dict[str, Any]:
+        max_limit = min(max(1, self._safe_int(limit, 20)), self._hdhive_checkin_history_limit)
+        items = list(reversed(self._hdhive_checkin_history or []))[:max_limit]
+        return {
+            "total": len(self._hdhive_checkin_history or []),
+            "limit": max_limit,
+            "items": items,
+        }
+
+    def _format_hdhive_checkin_history_text(self, *, limit: int = 10) -> str:
+        data = self._hdhive_checkin_history_public_data(limit=limit)
+        items = data.get("items") or []
+        if not items:
+            return "暂无影巢签到日志。"
+        lines = [f"影巢签到日志：最近 {len(items)} 条"]
+        for idx, item in enumerate(items, start=1):
+            ok_text = "成功" if item.get("success") else "失败"
+            parts = [
+                f"{idx}. {item.get('time_text') or ''}",
+                f"{item.get('mode') or ''}",
+                ok_text,
+            ]
+            if item.get("trigger"):
+                parts.append(f"来源:{item.get('trigger')}")
+            if item.get("login_retry"):
+                parts.append("已自动刷新Cookie")
+            message = self._clean_text(item.get("message_head"))
+            if message:
+                parts.append(message)
+            lines.append(" | ".join(part for part in parts if part))
+        return "\n".join(lines)
 
     def _persist_workflow_plans(self) -> None:
         try:
@@ -2165,7 +2880,9 @@ class AgentResourceOfficer(_PluginBase):
                 key = "other"
             if len(groups[key]) < per_group:
                 groups[key].append(item)
-        ordered = groups["115"] + groups["quark"] + groups["other"]
+        ordered = groups["115"] + groups["quark"]
+        if not ordered:
+            ordered = groups["other"]
         preview: List[Dict[str, Any]] = []
         for index, item in enumerate(ordered, 1):
             row = dict(item)
@@ -2533,9 +3250,14 @@ class AgentResourceOfficer(_PluginBase):
                             "index": self._safe_int(item.get("pick_index"), idx + 1),
                             "provider": self._clean_text(item.get("pan_type")),
                             "title": self._clean_text(item.get("title") or item.get("matched_title")),
-                            "points": item.get("cost"),
-                            "quality": self._clean_text(item.get("quality")),
-                            "size": self._clean_text(item.get("size")),
+                            "points": item.get("unlock_points"),
+                            "points_text": self._resource_points_text(item),
+                            "quality": self._clean_text(self._list_text(item.get("video_resolution")) or item.get("quality")),
+                            "source": self._clean_text(self._list_text(item.get("source"))),
+                            "size": self._clean_text(item.get("share_size") or item.get("size")),
+                            "episodes": self._resource_episode_text(item),
+                            "subtitle": self._resource_subtitle_text(item),
+                            "remark": self._resource_remark_text(item),
                         }
                         for idx, item in enumerate(resources[:8])
                         if isinstance(item, dict)
@@ -3708,6 +4430,8 @@ class AgentResourceOfficer(_PluginBase):
                 "quark_path": self._quark_default_path,
                 "p115_client_type": self._p115_client_type,
                 "hdhive_candidate_page_size": self._hdhive_candidate_page_size,
+                "hdhive_checkin_enabled": self._hdhive_checkin_enabled,
+                "hdhive_checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
             },
             "smart_entry": {
                 "supports_text": True,
@@ -3722,6 +4446,7 @@ class AgentResourceOfficer(_PluginBase):
                     "p115_pending",
                     "p115_resume",
                     "p115_cancel",
+                    "hdhive_checkin",
                 ],
                 "structured_fields": [
                     "session",
@@ -3734,6 +4459,7 @@ class AgentResourceOfficer(_PluginBase):
                     "media_type",
                     "year",
                     "client_type",
+                    "is_gambler",
                     "action",
                     "compact",
                 ],
@@ -3976,7 +4702,7 @@ class AgentResourceOfficer(_PluginBase):
             f"版本：{data.get('version')}",
             "推荐上层调用顺序：",
             "1. 先看 capabilities 或 assistant/startup",
-            "2. 如需恢复旧流程，可先看 assistant/sessions",
+            "2. 如需恢复会话，可先看 assistant/sessions",
             "3. 再调用 smart_entry",
             "4. 之后用 assistant/session 或 session_state 判断下一步",
             "5. 最后再调用 smart_pick 或 session_clear",
@@ -4688,7 +5414,7 @@ class AgentResourceOfficer(_PluginBase):
                 },
             },
             "route_text": {
-                "description": "统一自然语言入口，适合 WorkBuddy、微信侧智能体或其他外部智能体直接转发用户文本。",
+                "description": "统一自然语言入口，适合 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体直接转发用户文本。",
                 "side_effect": "depends_on_text",
                 "requires_confirmation": False,
                 "cache_scope": "no_cache",
@@ -4698,12 +5424,12 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_smart_entry",
                 "tool_args": {
                     "text": "盘搜搜索 大君夫人",
-                    "session": "workbuddy",
+                    "session": "agent:demo",
                     "compact": True,
                 },
                 "body": {
                     "text": "盘搜搜索 大君夫人",
-                    "session": "workbuddy",
+                    "session": "agent:demo",
                     "compact": True,
                 },
             },
@@ -4717,12 +5443,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                 "tool": "agent_resource_officer_smart_pick",
                 "tool_args": {
-                    "session": "assistant",
+                    "session": "agent:demo",
                     "choice": 1,
                     "compact": True,
                 },
                 "body": {
-                    "session": "assistant",
+                    "session": "agent:demo",
                     "choice": 1,
                     "compact": True,
                 },
@@ -4754,6 +5480,7 @@ class AgentResourceOfficer(_PluginBase):
             "plan_then_confirm": ["workflow_dry_run", "saved_plan_execute"],
             "continue_existing_session": ["pick_continue"],
             "maintenance_cycle": ["maintain_preview", "maintain_execute"],
+            "external_agent_quickstart": ["startup_probe", "route_text", "pick_continue"],
             "workbuddy_quickstart": ["startup_probe", "route_text", "pick_continue"],
         }
         recipe_aliases = {
@@ -4774,12 +5501,15 @@ class AgentResourceOfficer(_PluginBase):
             "maintenance": "maintenance_cycle",
             "cleanup": "maintenance_cycle",
             "维护": "maintenance_cycle",
-            "workbuddy": "workbuddy_quickstart",
-            "work_buddy": "workbuddy_quickstart",
-            "workbody": "workbuddy_quickstart",
-            "work_body": "workbuddy_quickstart",
-            "外部智能体": "workbuddy_quickstart",
-            "微信智能体": "workbuddy_quickstart",
+            "external_agent": "external_agent_quickstart",
+            "external-agent": "external_agent_quickstart",
+            "agent": "external_agent_quickstart",
+            "外部智能体": "external_agent_quickstart",
+            "微信智能体": "external_agent_quickstart",
+            "workbuddy": "external_agent_quickstart",
+            "work_buddy": "external_agent_quickstart",
+            "workbody": "external_agent_quickstart",
+            "work_body": "external_agent_quickstart",
         }
         requested_recipe = self._clean_text(recipe)
         selected_recipe = recipe_aliases.get(requested_recipe, requested_recipe)
@@ -4878,8 +5608,13 @@ class AgentResourceOfficer(_PluginBase):
                 "templates": recipe_templates_map["maintenance_cycle"],
             },
             {
+                "name": "external_agent_quickstart",
+                "description": "外部智能体接入：启动探测后，把用户文本交给统一入口，再按编号继续。",
+                "templates": recipe_templates_map["external_agent_quickstart"],
+            },
+            {
                 "name": "workbuddy_quickstart",
-                "description": "WorkBuddy/微信侧智能体接入：启动探测后，把用户文本交给统一入口，再按编号继续。",
+                "description": "兼容别名：等同于 external_agent_quickstart。",
                 "templates": recipe_templates_map["workbuddy_quickstart"],
             },
         ]
@@ -5421,6 +6156,7 @@ class AgentResourceOfficer(_PluginBase):
             "p115_cancel",
             "p115_qrcode_start",
             "p115_qrcode_check",
+            "hdhive_checkin",
             "execute_actions",
             "execute_plan",
             "maintain",
@@ -5458,6 +6194,8 @@ class AgentResourceOfficer(_PluginBase):
         client_type = self._clean_text(body.get("client_type") or body.get("client"))
         if client_type:
             merged["client_type"] = P115TransferService.normalize_qrcode_client_type(client_type)
+        if "is_gambler" in body:
+            merged["is_gambler"] = "true" if self._parse_bool_value(body.get("is_gambler"), False) else "false"
         action = self._clean_text(body.get("action"))
         if action:
             merged["action"] = action
@@ -5570,6 +6308,46 @@ class AgentResourceOfficer(_PluginBase):
             options["action"] = "p115_cancel"
             options["mode"] = ""
             options["keyword"] = ""
+        elif compact in {
+            "影巢签到",
+            "签到",
+            "hdhivecheckin",
+            "hdhivesign",
+        }:
+            options["action"] = "hdhive_checkin"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "影巢签到日志",
+            "签到日志",
+            "影巢日志",
+            "hdhivecheckinhistory",
+            "hdhivesignhistory",
+        }:
+            options["action"] = "hdhive_checkin_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "影巢普通签到",
+            "普通签到",
+            "普通",
+            "hdhivenormalcheckin",
+        }:
+            options["action"] = "hdhive_checkin"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["is_gambler"] = "false"
+        elif compact in {
+            "影巢赌狗签到",
+            "赌狗签到",
+            "赌狗",
+            "hdhivegamblercheckin",
+            "gamblercheckin",
+        }:
+            options["action"] = "hdhive_checkin"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["is_gambler"] = "true"
         for token in remain.split():
             item = token.strip()
             if not item:
@@ -5605,14 +6383,21 @@ class AgentResourceOfficer(_PluginBase):
             {"keyword": keyword},
         ]
         urls = []
+        base_urls = []
+        configured_base = self._clean_text(self._pansou_base_url).rstrip("/")
+        if configured_base:
+            base_urls.append(configured_base)
+        for fallback_base in ("http://host.docker.internal:805", "http://127.0.0.1:805"):
+            if fallback_base not in base_urls:
+                base_urls.append(fallback_base)
         for query in queries:
-            urls.append(f"http://host.docker.internal:805/api/search?{urlencode(query)}")
-            urls.append(f"http://127.0.0.1:805/api/search?{urlencode(query)}")
+            for base_url in base_urls:
+                urls.append(f"{base_url}/api/search?{urlencode(query)}")
         data: Dict[str, Any] = {}
         for url in urls:
             try:
                 request = UrlRequest(url=url, headers={"Accept": "application/json"})
-                with urlopen(request, timeout=20) as response:
+                with urlopen(request, timeout=self._pansou_timeout) as response:
                     data = json.loads(response.read().decode("utf-8", "ignore"))
                 break
             except Exception as exc:
@@ -5828,6 +6613,93 @@ class AgentResourceOfficer(_PluginBase):
         return "\n".join(lines)
 
     @staticmethod
+    def _list_text(value: Any, separator: str = "/") -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (list, tuple, set)):
+            parts = [str(item).strip() for item in value if str(item).strip()]
+            return separator.join(parts)
+        return str(value).strip()
+
+    @staticmethod
+    def _truncate_text(value: Any, limit: int = 140) -> str:
+        text = re.sub(r"\s+", " ", str(value or "")).strip()
+        if not text:
+            return ""
+        if len(text) <= limit:
+            return text
+        return f"{text[: max(0, limit - 1)]}…"
+
+    @staticmethod
+    def _resource_points_text(item: Dict[str, Any]) -> str:
+        points = item.get("unlock_points")
+        if points is None:
+            points = item.get("cost")
+        if points in (0, "0"):
+            return "免费"
+        if points in (None, "", "未知"):
+            return "积分未知"
+        return f"{points}分"
+
+    @staticmethod
+    def _resource_subtitle_text(item: Dict[str, Any]) -> str:
+        language = AgentResourceOfficer._list_text(
+            item.get("subtitle_language")
+            or item.get("subtitle_languages")
+            or item.get("subtitles")
+            or item.get("subtitle")
+        )
+        subtitle_type = AgentResourceOfficer._list_text(item.get("subtitle_type") or item.get("subtitle_types"))
+        if language and subtitle_type:
+            return f"{language} · {subtitle_type}"
+        return language or subtitle_type
+
+    @staticmethod
+    def _resource_episode_text(item: Dict[str, Any]) -> str:
+        explicit_keys = [
+            "episode_range",
+            "episodes_range",
+            "episode_info",
+            "episodes",
+            "episode",
+            "update_status",
+            "update_info",
+            "season_episode",
+        ]
+        for key in explicit_keys:
+            text = AgentResourceOfficer._list_text(item.get(key))
+            if text:
+                return AgentResourceOfficer._truncate_text(text, 40)
+
+        source_text = " ".join(
+            str(item.get(key) or "")
+            for key in ["title", "remark", "description", "desc", "detail", "note"]
+        )
+        patterns = [
+            r"(全\s*\d+\s*集)",
+            r"(全集)",
+            r"(更新至\s*第?\s*\d+\s*集)",
+            r"(更\s*\d+\s*集)",
+            r"(第?\s*\d+\s*[-~到至]\s*\d+\s*集)",
+            r"(\d+\s*-\s*\d+\s*集)",
+            r"(S\d{1,2}E\d{1,3}(?:\s*[-~]\s*E?\d{1,3})?)",
+            r"(EP?\s*\d{1,3}(?:\s*[-~]\s*EP?\s*\d{1,3})?)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, source_text, flags=re.IGNORECASE)
+            if match:
+                return re.sub(r"\s+", "", match.group(1))
+        return ""
+
+    @staticmethod
+    def _resource_remark_text(item: Dict[str, Any]) -> str:
+        for key in ["remark", "description", "desc", "detail", "details", "summary", "note"]:
+            text = AgentResourceOfficer._truncate_text(item.get(key), 160)
+            if text:
+                return text
+        return ""
+
+    @staticmethod
     def _format_resource_lines(resources: List[Dict[str, Any]], candidate: Optional[Dict[str, Any]] = None) -> str:
         lines = []
         if candidate:
@@ -5835,18 +6707,39 @@ class AgentResourceOfficer(_PluginBase):
             candidate_year = str(candidate.get("year") or "?")
             lines.append(f"已选影片：{candidate_title} ({candidate_year})")
         lines.append(f"资源结果：共 {len(resources)} 条")
+        current_provider = ""
         for idx, item in enumerate(resources, start=1):
             provider = str(item.get("pan_type") or "?").lower()
-            points = item.get("unlock_points")
-            if points in (0, "0"):
-                points_text = "免费"
-            elif points in (None, "", "未知"):
-                points_text = "积分未知"
-            else:
-                points_text = f"{points}分"
+            if provider != current_provider:
+                current_provider = provider
+                if provider == "115":
+                    lines.append("115 结果")
+                elif provider == "quark":
+                    lines.append("夸克结果")
+                else:
+                    lines.append(f"{provider} 结果")
+            points_text = AgentResourceOfficer._resource_points_text(item)
             resolution = "/".join(item.get("video_resolution") or []) or "未知清晰度"
             item_title = str(item.get("title") or "未命名资源")
-            lines.append(f"{idx}. [{provider}][{points_text}] {item_title} | {resolution}")
+            share_size = AgentResourceOfficer._list_text(item.get("share_size") or item.get("size"))
+            source = AgentResourceOfficer._list_text(item.get("source"))
+            subtitle = AgentResourceOfficer._resource_subtitle_text(item)
+            episode = AgentResourceOfficer._resource_episode_text(item)
+            remark = AgentResourceOfficer._resource_remark_text(item)
+
+            meta = [points_text, resolution]
+            if share_size:
+                meta.append(share_size)
+            if source:
+                meta.append(source)
+            lines.append(f"{idx}. [{provider}] {item_title}")
+            lines.append(f"   {' | '.join(meta)}")
+            if episode:
+                lines.append(f"   集数：{episode}")
+            if subtitle:
+                lines.append(f"   字幕：{subtitle}")
+            if remark:
+                lines.append(f"   详情：{remark}")
         return "\n".join(lines)
 
     @staticmethod
@@ -6261,7 +7154,7 @@ class AgentResourceOfficer(_PluginBase):
             f"AppID：{'已填' if data.get('app_id_configured') else '未填'}；"
             f"AppSecret：{'已填' if data.get('app_secret_configured') else '未填'}；"
             f"白名单：chat {data.get('allowed_chat_count') or 0} / user {data.get('allowed_user_count') or 0}；"
-            f"旧桥接：{'运行中' if data.get('legacy_bridge_running') else '未运行'}"
+            f"其他飞书入口：{'检测到运行中' if data.get('legacy_bridge_running') else '未检测到'}"
         )
 
     async def tool_assistant_pulse(self) -> str:
@@ -7102,6 +7995,36 @@ class AgentResourceOfficer(_PluginBase):
                     "action": "assistant_help",
                     "ok": True,
                     "status_summary": summary,
+                }),
+            })
+        if assistant_action == "hdhive_checkin":
+            is_gambler = self._parse_bool_value(parsed.get("is_gambler"), self._hdhive_checkin_gambler_mode)
+            result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent资源官 智能入口")
+            data = result.get("data") if isinstance(result.get("data"), dict) else {}
+            status = data.get("status") or ("签到成功" if result.get("success") else "签到失败")
+            mode_text = "赌狗签到" if is_gambler else "普通签到"
+            summary = f"影巢{mode_text}：{status}\n{result.get('message') or ''}".strip()
+            return finish({
+                "success": bool(result.get("success")),
+                "message": summary,
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "hdhive_checkin",
+                    "ok": bool(result.get("success")),
+                    "is_gambler": is_gambler,
+                    "status_summary": summary,
+                    "result": data,
+                }),
+            })
+        if assistant_action == "hdhive_checkin_history":
+            summary = self._format_hdhive_checkin_history_text(limit=10)
+            return finish({
+                "success": True,
+                "message": summary,
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "hdhive_checkin_history",
+                    "ok": True,
+                    "status_summary": summary,
+                    "history": self._hdhive_checkin_history_public_data(limit=10),
                 }),
             })
         if assistant_action == "p115_help":
