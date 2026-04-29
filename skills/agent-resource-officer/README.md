@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.12`
+当前 helper 版本：`0.1.13`
 
 公开仓库：
 
@@ -70,6 +70,7 @@ python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
+python3 scripts/aro_request.py preferences --session agent:demo
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
 python3 scripts/aro_request.py session-clear --session default
@@ -90,6 +91,8 @@ python3 scripts/aro_request.py pick --choice 1
 `external-agent` 会输出可直接交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体的系统提示词和最小工具约定；`external-agent --full` 会输出完整接入说明。旧命令 `workbuddy` 仍保留为兼容别名。
 
 注意：`workflow` 是 dry-run，不会解锁或转存资源，但会保存一个待确认执行的 plan，因此在命令目录里属于写入型命令。
+
+首次交给外部智能体使用时，建议先运行 `preferences`。如果返回需要初始化偏好，智能体应询问用户：清晰度、杜比视界/HDR、字幕、电视剧是否全集优先、PT 最低做种、影巢积分上限、默认目录、是否允许高分资源自动入库。偏好会用于云盘和 PT 分源评分。
 
 `config-check` 只检查连接配置来源和是否存在，不输出真实 API Key。
 
@@ -161,6 +164,20 @@ python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
 - 只有显式传 `--session` 或 `--session-id` 时，才会收窄到单个会话。
 - `session-clear` / `sessions-clear` 是写入型清理命令，用于清理放弃的会话或 pending 115 恢复状态。
 - `plans-clear` 是写入型清理命令，优先使用 `--plan-id` 精确清理；批量清理时再使用 `--session`、`--executed`、`--unexecuted` 或 `--all-plans`。
+
+## 偏好与评分
+
+```bash
+python3 scripts/aro_request.py preferences --session agent:demo
+python3 scripts/aro_request.py preferences --session agent:demo --preferences-json '{"prefer_resolution":"4K","prefer_dolby_vision":true,"prefer_hdr":true,"prefer_chinese_subtitle":true,"prefer_complete_series":true,"pt_min_seeders":3,"hdhive_max_unlock_points":20,"auto_ingest_enabled":false}'
+python3 scripts/aro_request.py workflow --workflow mp_search --keyword "蜘蛛侠"
+python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword "蜘蛛侠" --choice 1
+python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20
+```
+
+- 云盘资源按清晰度、HDR/DV、字幕、完整度、目录和网盘类型评分；影巢额外受积分上限保护。
+- PT 资源按做种数、免费/促销、下载折算、清晰度、HDR/DV、字幕和标题匹配评分；做种低于阈值不会自动下载。
+- 下载、订阅、影巢解锁、网盘转存默认先生成 `plan_id`，确认后再执行。
 
 ## 说明
 

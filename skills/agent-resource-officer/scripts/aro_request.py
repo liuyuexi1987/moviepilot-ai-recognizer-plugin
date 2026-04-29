@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.12"
+HELPER_VERSION = "0.1.13"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -27,6 +27,7 @@ HELPER_COMMANDS = [
     "templates",
     "route",
     "pick",
+    "preferences",
     "workflow",
     "plan-execute",
     "maintain",
@@ -95,6 +96,8 @@ def external_agent_payload():
         "你是外部智能体，通过 AgentResourceOfficer 控制 MoviePilot 资源工作流。"
         "不要直接调用影巢、115、夸克或盘搜原始 API。"
         "每个新会话先调用 startup 或 readiness；普通用户指令走 route；"
+        "如果 preferences 未初始化，先询问并保存片源偏好；"
+        "云盘和 PT 使用不同评分规则：云盘看质量/完整度/字幕/影巢积分，PT 看做种/促销/质量/字幕。"
         "编号选择走 pick；写入动作遵守 dry_run、plan_id、execute 的确认流程。"
         "输出时只展示用户需要选择或执行的信息，不回显 API Key、Cookie、Token。"
     )
@@ -198,6 +201,9 @@ def compact(data):
             "recommended_recipe_detail",
             "next_actions",
             "recovery",
+            "preferences",
+            "needs_onboarding",
+            "initialized",
         ]
         out = {key: data.get(key) for key in ["success", "message"] if key in data}
         for key in keys:
@@ -561,6 +567,7 @@ def commands_catalog():
             {"name": "recover", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "inspect or execute the recommended recovery action"},
             {"name": "route", "network": True, "writes": True, "write_condition": "depends on text and routed action", "purpose": "route natural-language resource requests"},
             {"name": "pick", "network": True, "writes": True, "write_condition": "depends on current session and selected action", "purpose": "continue numbered choices or actions"},
+            {"name": "preferences", "network": True, "writes": True, "write_condition": "only with --preferences-json or --reset", "purpose": "read/save/reset source preferences used by cloud and PT scoring"},
             {"name": "workflow", "network": True, "writes": True, "write_condition": "saves a dry-run plan; does not unlock or transfer", "purpose": "create dry-run workflow plans"},
             {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan; use --plan-id for exact execution", "purpose": "execute a saved plan by plan_id or latest unexecuted session plan"},
             {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
@@ -600,6 +607,9 @@ def main():
     parser.add_argument("--workflow", default="hdhive_candidates")
     parser.add_argument("--keyword")
     parser.add_argument("--media-type", default="movie")
+    parser.add_argument("--source", default="")
+    parser.add_argument("--preferences-json")
+    parser.add_argument("--reset", action="store_true")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--executed", action="store_true")
@@ -940,6 +950,23 @@ def main():
             body["action"] = args.action
         if args.target_path:
             body["path"] = args.target_path
+    elif args.command == "preferences":
+        method = "DELETE" if args.reset else "POST" if args.preferences_json else "GET"
+        path = assistant_path("preferences")
+        if method == "GET":
+            query = {"compact": "true"}
+            if args.session:
+                query["session"] = args.session
+            if args.session_id:
+                query["session_id"] = args.session_id
+        else:
+            body = {"compact": True}
+            if args.session:
+                body["session"] = args.session
+            if args.session_id:
+                body["session_id"] = args.session_id
+            if args.preferences_json:
+                body["preferences"] = load_json_arg(args.preferences_json)
     elif args.command == "workflow":
         method = "POST"
         path = assistant_path("workflow")
@@ -948,6 +975,10 @@ def main():
             "name": args.workflow,
             "keyword": args.keyword or "",
             "media_type": args.media_type,
+            "choice": args.choice,
+            "path": args.target_path or "",
+            "source": args.source or "",
+            "limit": args.limit,
             "dry_run": True,
             "compact": True,
         }

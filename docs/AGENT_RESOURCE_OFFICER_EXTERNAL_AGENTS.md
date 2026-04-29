@@ -21,6 +21,8 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 所有调用都走 `AgentResourceOfficer` 的标准 `assistant` 接口。
 - 同一个用户或群聊固定使用同一个 `session`，例如 `agent:${chat_id}`。
 - 搜索和展示是读操作；选择编号、转存、解锁、执行计划是写操作，需要用户明确输入编号或链接。
+- 首次接入建议先读取 `assistant/preferences`。如果未初始化，先询问用户片源偏好，再保存为偏好画像。
+- 云盘资源和 PT 资源分开评分：云盘看清晰度、字幕、完整度、网盘类型和影巢积分；PT 看做种数、免费/促销、下载折算、清晰度、字幕和匹配度。
 
 ## 必要配置
 
@@ -97,10 +99,11 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 3. 所有资源搜索、影巢解锁、115/夸克转存、115 登录状态都必须调用 Agent云盘资源整合。
 4. 不要直接调用影巢、盘搜、115、夸克底层 API。
 5. Skill 至少包含 startup、route、pick 三个核心入口。
-6. 同一个用户或群聊固定使用 session=agent:会话ID。
-7. 搜索结果只展示 Agent云盘资源整合返回的内容，编号选择继续调用 pick。
-8. 写入类动作必须等用户明确选择编号或给出链接后再执行。
-9. 创建后请运行 external-agent 或等价自检，确认 schema_version=external_agent.v1。
+6. 增加 preferences 入口。第一次接入用户时先读取偏好，未初始化就询问并保存。
+7. 同一个用户或群聊固定使用 session=agent:会话ID。
+8. 搜索结果只展示 Agent云盘资源整合返回的内容，编号选择继续调用 pick。
+9. 写入类动作必须等用户明确选择编号或给出链接后再执行；下载、订阅、影巢解锁和网盘转存优先生成 plan_id。
+10. 创建后请运行 external-agent 或等价自检，确认 schema_version=external_agent.v1。
 ```
 
 创建完成后，用这两句检查它是否真正理解：

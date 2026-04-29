@@ -250,6 +250,7 @@ The response includes:
 For natural-language resource work, use `route`:
 
 ```bash
+python3 scripts/aro_request.py route --text "MP搜索 蜘蛛侠"
 python3 scripts/aro_request.py route --text "影巢搜索 蜘蛛侠"
 python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py route --text "链接 https://pan.quark.cn/s/xxxx path=/飞书"
@@ -289,6 +290,39 @@ Notes:
 - Use `session-clear` or `sessions-clear` to clear abandoned assistant state after user confirmation.
 - Use `plans-clear --plan-id ...` for exact saved-plan cleanup. Treat bulk cleanup flags as write-side-effect operations requiring confirmation.
 
+## Preferences And Scoring
+
+Before the first automated resource task in a new user profile, check preferences:
+
+```bash
+python3 scripts/aro_request.py preferences --session agent:<用户ID>
+```
+
+If `needs_onboarding=true`, ask the user for a compact preference profile and save it:
+
+```bash
+python3 scripts/aro_request.py preferences --session agent:<用户ID> --preferences-json '{"prefer_resolution":"4K","prefer_dolby_vision":true,"prefer_hdr":true,"prefer_chinese_subtitle":true,"prefer_complete_series":true,"prefer_cloud_provider":"115","pt_require_free":false,"pt_min_seeders":3,"hdhive_max_unlock_points":20,"p115_default_path":"/待整理","quark_default_path":"/飞书","auto_ingest_enabled":false,"auto_ingest_score_threshold":90}'
+```
+
+Scoring rules are source-specific:
+
+- Cloud resources: HDHive, PanSou 115, PanSou Quark, direct 115/Quark links. Score quality, Dolby Vision/HDR, subtitles, completeness, file size, drive preference, and target directory. HDHive also checks point cost.
+- PT resources: MoviePilot native site search/download/subscribe. Score seeders, free/promo status, volume factor, resolution, Dolby Vision/HDR, subtitles, release group/site, size, and title match.
+- PT seeders are a hard gate. Default minimum is `3`; seeders `0` means never auto-download.
+- HDHive point cost is a hard gate. Default max is `20`; unknown points cannot auto-unlock.
+- Auto ingest is off by default. Only auto-execute when `auto_ingest_enabled=true`, `score >= 90`, and there are no hard risks.
+
+For MP native workflows:
+
+```bash
+python3 scripts/aro_request.py workflow --workflow mp_search --keyword "蜘蛛侠"
+python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword "蜘蛛侠" --choice 1
+python3 scripts/aro_request.py workflow --workflow mp_subscribe --keyword "蜘蛛侠"
+python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20
+```
+
+`mp_search_download`, `mp_subscribe`, and `mp_subscribe_and_search` are write-side-effect workflows. They should return a saved `plan_id` first; execute with `plan-execute` only after the user confirms.
+
 ## Confirmation Rules
 
 Do not execute confirmation-required calls silently.
@@ -300,6 +334,9 @@ Common confirmation points:
 - `saved_plan_execute`
 - `maintain_execute`
 - `pick_continue`
+- `mp_search_download`
+- `mp_subscribe`
+- `mp_subscribe_and_search`
 
 ## Maintenance And Health
 
@@ -339,6 +376,8 @@ This skill is for the resource workflow hub:
 - HDHive search and unlock
 - PanSou search
 - 115 and Quark share routing
+- MP native search/download/subscribe/recommendation orchestration
+- cloud/PT scoring and preference-aware automation advice
 - 115 login/status/pending tasks
 - session recovery
 - recipe-guided assistant calls

@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.13
+
+- Added `preferences` helper command to read, save, or reset source preferences for external agents.
+- Documented cloud/PT source-specific scoring and MP native search/download/subscribe/recommend workflows.
+- Updated the external-agent handoff prompt to check preferences before automated resource tasks.
+
 ## 0.1.12
 
 - Added `external-agent` helper command to print a compact external-agent prompt and minimal tool contract.

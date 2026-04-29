@@ -14,6 +14,7 @@ from .schemas import (
     AssistantHelpToolInput,
     AssistantMaintainToolInput,
     AssistantPickToolInput,
+    AssistantPreferencesToolInput,
     AssistantPlansClearToolInput,
     AssistantPlansToolInput,
     AssistantPulseToolInput,
@@ -392,6 +393,7 @@ class AssistantExecuteActionTool(MoviePilotTool):
         url: str = None,
         access_code: str = None,
         client_type: str = None,
+        source: str = None,
         kind: str = None,
         has_pending_p115: bool = None,
         stale_only: bool = False,
@@ -417,6 +419,7 @@ class AssistantExecuteActionTool(MoviePilotTool):
             share_url=url,
             access_code=access_code,
             client_type=client_type,
+            source=source,
             kind=kind,
             has_pending_p115=has_pending_p115,
             stale_only=stale_only,
@@ -462,7 +465,7 @@ class AssistantExecuteActionsTool(MoviePilotTool):
 
 class AssistantWorkflowTool(MoviePilotTool):
     name: str = "agent_resource_officer_run_workflow"
-    description: str = "Run a preset Agent云盘资源整合 workflow such as pansou_transfer, hdhive_candidates, hdhive_unlock, share_transfer, or p115_status with compact inputs."
+    description: str = "Run a preset Agent云盘资源整合 workflow such as pansou_transfer, hdhive_unlock, mp_search_download, mp_subscribe, mp_recommend, share_transfer, or p115_status with compact inputs."
     args_schema: Type[BaseModel] = AssistantWorkflowToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
@@ -483,6 +486,8 @@ class AssistantWorkflowTool(MoviePilotTool):
         media_type: str = None,
         year: str = None,
         client_type: str = None,
+        source: str = None,
+        limit: int = 20,
         dry_run: bool = False,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
@@ -506,9 +511,46 @@ class AssistantWorkflowTool(MoviePilotTool):
             media_type=media_type,
             year=year,
             client_type=client_type,
+            source=source,
+            limit=limit,
             dry_run=dry_run,
             stop_on_error=stop_on_error,
             include_raw_results=include_raw_results,
+            compact=compact,
+        )
+
+
+class AssistantPreferencesTool(MoviePilotTool):
+    name: str = "agent_resource_officer_preferences"
+    description: str = "Read, save, or reset Agent云盘资源整合 source preferences for scoring cloud-drive and PT results before automated actions."
+    args_schema: Type[BaseModel] = AssistantPreferencesToolInput
+
+    def get_tool_message(self, **kwargs) -> Optional[str]:
+        if kwargs.get("reset"):
+            return "正在重置 Agent云盘资源整合 智能体偏好画像"
+        if kwargs.get("preferences"):
+            return "正在保存 Agent云盘资源整合 智能体偏好画像"
+        return "正在读取 Agent云盘资源整合 智能体偏好画像"
+
+    async def run(
+        self,
+        session: str = "default",
+        session_id: str = None,
+        user_key: str = None,
+        preferences: dict = None,
+        reset: bool = False,
+        compact: bool = True,
+        **kwargs,
+    ) -> str:
+        plugin = _get_plugin()
+        if not plugin:
+            return "Agent云盘资源整合 插件未运行"
+        return await plugin.tool_assistant_preferences(
+            session=session,
+            session_id=session_id,
+            user_key=user_key,
+            preferences=preferences,
+            reset=reset,
             compact=compact,
         )
 

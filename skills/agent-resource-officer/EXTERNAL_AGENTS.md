@@ -21,6 +21,8 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 不在提示词里写 Cookie、Token、API Key。
 - 同一个用户或群聊固定使用一个 `session`，例如 `agent:${chat_id}`。
 - 用户明确给出链接或编号后，才继续可能写入的动作。
+- 第一次接入用户时先读取 `preferences`。如果未初始化，询问片源偏好并保存，后续云盘与 PT 评分都复用这份画像。
+- 云盘资源按质量、字幕、完整度、目录和影巢积分评分；PT 资源按做种、免费/促销、下载折算、质量、字幕和匹配度评分。
 
 ## 连接变量
 
@@ -76,7 +78,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 - Skill 名称建议为 `agent-resource-officer`。
 - Skill 文档中必须写明：不直接调用影巢、盘搜、115、夸克底层 API。
 - Skill 文档中必须写明：不保存、不输出 API Key、Cookie、Token。
-- Skill 至少提供 `startup`、`route`、`pick` 三个入口。
+- Skill 至少提供 `startup`、`route`、`pick`、`preferences` 四个入口。
 - session 示例使用 `agent:会话ID`，不要把平台名写死。
 - 推荐 helper 命令使用 `external-agent`；`workbuddy` 只作为兼容别名。
 - 创建后自测 `盘搜搜索 大君夫人` 应走 `route`，`选择 3` 应沿用同一 session 走 `pick`。

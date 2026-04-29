@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.02"
+    plugin_version = "0.2.03"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -179,6 +179,9 @@ class AgentResourceOfficer(_PluginBase):
     _workflow_plan_store_key = "assistant_workflow_plans"
     _workflow_plan_limit = 50
     _workflow_plans: Dict[str, Dict[str, Any]] = {}
+    _assistant_preferences_store_key = "assistant_preferences"
+    _assistant_preferences_limit = 100
+    _assistant_preferences: Dict[str, Dict[str, Any]] = {}
     _hdhive_checkin_history_store_key = "hdhive_checkin_history"
     _hdhive_checkin_history_limit = 60
     _hdhive_checkin_history: List[Dict[str, Any]] = []
@@ -319,6 +322,7 @@ class AgentResourceOfficer(_PluginBase):
         self._restore_execution_history()
         self._restore_hdhive_checkin_history()
         self._restore_workflow_plans()
+        self._restore_assistant_preferences()
         self._agent_tools_reloaded = False
         self._ensure_feishu_channel().configure(self._build_config())
         if self._enabled and self._feishu_enabled:
@@ -1144,6 +1148,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_workflow,
                 "methods": ["GET", "POST"],
                 "summary": "运行预设工作流，适合外部智能体用更短参数完成常见资源任务",
+            },
+            {
+                "path": "/assistant/preferences",
+                "endpoint": self.api_assistant_preferences,
+                "methods": ["GET", "POST", "DELETE"],
+                "summary": "读取、保存或重置智能体片源偏好画像，用于云盘和 PT 分源评分",
             },
             {
                 "path": "/assistant/plan/execute",
@@ -2632,6 +2642,688 @@ class AgentResourceOfficer(_PluginBase):
             ), {"limit": limit, "points": points, "limited": True, "reason": "points_over_limit"}
         return True, "", {"limit": limit, "points": points, "limited": False}
 
+    def _default_assistant_preferences(self) -> Dict[str, Any]:
+        return {
+            "schema_version": "preferences.v1",
+            "initialized": False,
+            "prefer_resolution": "4K",
+            "prefer_dolby_vision": True,
+            "prefer_hdr": True,
+            "prefer_chinese_subtitle": True,
+            "prefer_complete_series": True,
+            "prefer_cloud_provider": "",
+            "cloud_default_path": self._hdhive_default_path,
+            "quark_default_path": self._quark_default_path,
+            "p115_default_path": self._p115_default_path,
+            "pt_require_free": False,
+            "pt_min_seeders": 3,
+            "pt_prefer_free": True,
+            "hdhive_max_unlock_points": self._hdhive_max_unlock_points,
+            "auto_ingest_enabled": False,
+            "auto_ingest_score_threshold": 90,
+            "confirm_score_threshold": 70,
+            "updated_at": 0,
+        }
+
+    def _normalize_preference_key(self, session: Any = None, user_key: Any = None) -> str:
+        key = self._clean_text(user_key)
+        if key:
+            return key
+        session_name = self._clean_text(session) or "default"
+        return f"session:{session_name}"
+
+    def _normalize_assistant_preferences(self, value: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        defaults = self._default_assistant_preferences()
+        payload = dict(value or {})
+        if "resolution_priority" in payload and "prefer_resolution" not in payload:
+            choices = payload.get("resolution_priority")
+            if isinstance(choices, (list, tuple)) and choices:
+                payload["prefer_resolution"] = choices[0]
+            else:
+                payload["prefer_resolution"] = choices
+        if "subtitle_priority" in payload and "prefer_chinese_subtitle" not in payload:
+            subtitle_text = " ".join(str(item) for item in payload.get("subtitle_priority") or []) if isinstance(payload.get("subtitle_priority"), (list, tuple)) else str(payload.get("subtitle_priority") or "")
+            payload["prefer_chinese_subtitle"] = bool(re.search(r"中文|中字|简中|繁中|双语|chinese", subtitle_text, flags=re.IGNORECASE))
+        if "pt_free_only" in payload and "pt_require_free" not in payload:
+            payload["pt_require_free"] = payload.get("pt_free_only")
+        if "preferred_cloud_drive" in payload and "prefer_cloud_provider" not in payload:
+            providers = payload.get("preferred_cloud_drive")
+            payload["prefer_cloud_provider"] = providers[0] if isinstance(providers, (list, tuple)) and providers else providers
+        if "auto_ingest" in payload and "auto_ingest_enabled" not in payload:
+            payload["auto_ingest_enabled"] = payload.get("auto_ingest")
+        if "auto_execute_score_threshold" in payload and "auto_ingest_score_threshold" not in payload:
+            payload["auto_ingest_score_threshold"] = payload.get("auto_execute_score_threshold")
+        normalized = {**defaults, **payload}
+        normalized["schema_version"] = "preferences.v1"
+        normalized["initialized"] = bool(normalized.get("initialized"))
+        normalized["prefer_resolution"] = self._clean_text(normalized.get("prefer_resolution") or defaults["prefer_resolution"]).upper()
+        normalized["prefer_dolby_vision"] = self._parse_bool_value(normalized.get("prefer_dolby_vision"), True)
+        normalized["prefer_hdr"] = self._parse_bool_value(normalized.get("prefer_hdr"), True)
+        normalized["prefer_chinese_subtitle"] = self._parse_bool_value(normalized.get("prefer_chinese_subtitle"), True)
+        normalized["prefer_complete_series"] = self._parse_bool_value(normalized.get("prefer_complete_series"), True)
+        normalized["prefer_cloud_provider"] = self._clean_text(normalized.get("prefer_cloud_provider")).lower()
+        normalized["cloud_default_path"] = self._normalize_path(normalized.get("cloud_default_path") or self._hdhive_default_path)
+        normalized["quark_default_path"] = self._normalize_path(normalized.get("quark_default_path") or self._quark_default_path)
+        normalized["p115_default_path"] = self._normalize_path(normalized.get("p115_default_path") or self._p115_default_path)
+        normalized["pt_require_free"] = self._parse_bool_value(normalized.get("pt_require_free"), False)
+        normalized["pt_min_seeders"] = max(0, self._safe_int(normalized.get("pt_min_seeders"), 3))
+        normalized["pt_prefer_free"] = self._parse_bool_value(normalized.get("pt_prefer_free"), True)
+        normalized["hdhive_max_unlock_points"] = max(0, self._safe_int(normalized.get("hdhive_max_unlock_points"), self._hdhive_max_unlock_points))
+        normalized["auto_ingest_enabled"] = self._parse_bool_value(normalized.get("auto_ingest_enabled"), False)
+        normalized["auto_ingest_score_threshold"] = max(1, min(100, self._safe_int(normalized.get("auto_ingest_score_threshold"), 90)))
+        normalized["confirm_score_threshold"] = max(1, min(100, self._safe_int(normalized.get("confirm_score_threshold"), 70)))
+        normalized["updated_at"] = self._safe_int(normalized.get("updated_at"), 0)
+        return normalized
+
+    def _restore_assistant_preferences(self) -> None:
+        try:
+            restored = self.get_data(self._assistant_preferences_store_key) or {}
+            if isinstance(restored, dict):
+                self._assistant_preferences = {
+                    self._clean_text(key): self._normalize_assistant_preferences(value)
+                    for key, value in restored.items()
+                    if self._clean_text(key) and isinstance(value, dict)
+                }
+        except Exception:
+            self._assistant_preferences = {}
+
+    def _persist_assistant_preferences(self) -> None:
+        try:
+            items = list((self._assistant_preferences or {}).items())[-self._assistant_preferences_limit:]
+            self._assistant_preferences = {key: value for key, value in items if key}
+            self.save_data(key=self._assistant_preferences_store_key, value=self._assistant_preferences)
+        except Exception:
+            pass
+
+    def _assistant_preferences_public_data(self, *, session: str = "", user_key: str = "") -> Dict[str, Any]:
+        key = self._normalize_preference_key(session=session, user_key=user_key)
+        preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(key))
+        questions = [
+            "你更偏好 4K 还是 1080P？",
+            "是否优先杜比视界 / HDR？",
+            "是否必须中文字幕？",
+            "电视剧是否优先全集或完整季？",
+            "PT 资源最低做种数是多少？默认 3。",
+            "影巢单资源最多愿意消耗多少积分？默认 20。",
+            "是否允许 90 分以上资源自动入库？默认关闭。",
+        ]
+        return {
+            "schema_version": "preferences.v1",
+            "key": key,
+            "initialized": bool(preferences.get("initialized")),
+            "preferences": preferences,
+            "needs_onboarding": not bool(preferences.get("initialized")),
+            "onboarding_questions": questions if not bool(preferences.get("initialized")) else [],
+            "defaults": self._default_assistant_preferences(),
+        }
+
+    def _save_assistant_preferences(
+        self,
+        *,
+        session: str = "",
+        user_key: str = "",
+        preferences: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        key = self._normalize_preference_key(session=session, user_key=user_key)
+        current = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(key))
+        incoming = dict(preferences or {})
+        merged = {**current, **incoming}
+        merged["initialized"] = self._parse_bool_value(merged.get("initialized"), True)
+        merged["updated_at"] = int(time.time())
+        normalized = self._normalize_assistant_preferences(merged)
+        self._assistant_preferences[key] = normalized
+        self._persist_assistant_preferences()
+        return self._assistant_preferences_public_data(session=session, user_key=key)
+
+    def _reset_assistant_preferences(self, *, session: str = "", user_key: str = "") -> Dict[str, Any]:
+        key = self._normalize_preference_key(session=session, user_key=user_key)
+        self._assistant_preferences.pop(key, None)
+        self._persist_assistant_preferences()
+        return self._assistant_preferences_public_data(session=session, user_key=key)
+
+    @staticmethod
+    def _score_text_blob(item: Any) -> str:
+        if isinstance(item, dict):
+            parts: List[str] = []
+            for value in item.values():
+                if isinstance(value, (dict, list, tuple)):
+                    parts.append(AgentResourceOfficer._score_text_blob(value))
+                elif value is not None:
+                    parts.append(str(value))
+            return " ".join(parts).lower()
+        if isinstance(item, (list, tuple)):
+            return " ".join(AgentResourceOfficer._score_text_blob(value) for value in item).lower()
+        return str(item or "").lower()
+
+    @staticmethod
+    def _score_has_any(text: str, keywords: List[str]) -> bool:
+        return any(keyword.lower() in text for keyword in keywords)
+
+    @staticmethod
+    def _score_level(score: int) -> str:
+        if score >= 90:
+            return "excellent"
+        if score >= 70:
+            return "confirm"
+        return "low"
+
+    def _score_decision(
+        self,
+        *,
+        score: int,
+        risk_reasons: List[str],
+        preferences: Dict[str, Any],
+        default_action: str,
+    ) -> Dict[str, Any]:
+        threshold = max(1, min(100, self._safe_int(preferences.get("auto_ingest_score_threshold"), 90)))
+        confirm_threshold = max(1, min(100, self._safe_int(preferences.get("confirm_score_threshold"), 70)))
+        auto_enabled = self._parse_bool_value(preferences.get("auto_ingest_enabled"), False)
+        hard_risk = bool(risk_reasons)
+        can_auto = bool(auto_enabled and not hard_risk and score >= threshold)
+        if can_auto:
+            recommended = default_action
+        elif score >= confirm_threshold and not hard_risk:
+            recommended = "ask_confirm"
+        else:
+            recommended = "do_not_auto"
+        return {
+            "score": score,
+            "score_level": self._score_level(score),
+            "risk_reasons": risk_reasons,
+            "can_auto_execute": can_auto,
+            "recommended_action": recommended,
+            "auto_ingest_enabled": auto_enabled,
+            "auto_ingest_score_threshold": threshold,
+            "confirm_score_threshold": confirm_threshold,
+        }
+
+    def _score_cloud_resource(
+        self,
+        item: Dict[str, Any],
+        *,
+        preferences: Optional[Dict[str, Any]] = None,
+        source_type: str = "cloud",
+        target_path: str = "",
+    ) -> Dict[str, Any]:
+        prefs = self._normalize_assistant_preferences(preferences)
+        text = self._score_text_blob(item)
+        score = 20
+        reasons: List[str] = []
+        risks: List[str] = []
+        resolution_pref = self._clean_text(prefs.get("prefer_resolution")).lower()
+        provider = self._clean_text(item.get("pan_type") or item.get("channel")).lower()
+
+        if "2160" in text or "4k" in text or "uhd" in text:
+            score += 25
+            reasons.append("4K/UHD +25")
+        elif "1080" in text:
+            score += 16
+            reasons.append("1080P +16")
+        elif "720" in text:
+            score += 6
+            reasons.append("720P +6")
+        if resolution_pref and resolution_pref in text:
+            score += 5
+            reasons.append(f"匹配偏好分辨率 {resolution_pref.upper()} +5")
+
+        if self._score_has_any(text, ["dolby vision", "dovi", "dv", "杜比视界"]):
+            score += 18
+            reasons.append("杜比视界 +18")
+        elif self._score_has_any(text, ["hdr10", "hdr", "hlg", "杜比"]):
+            score += 12
+            reasons.append("HDR +12")
+
+        if self._score_has_any(text, ["中字", "中文字幕", "简中", "繁中", "内封简繁", "双语", "官中"]):
+            score += 14
+            reasons.append("中文字幕 +14")
+        elif self._parse_bool_value(prefs.get("prefer_chinese_subtitle"), True):
+            score -= 5
+            risks.append("未识别到中文字幕")
+
+        if self._score_has_any(text, ["全集", "全季", "完结", "complete", "全 ", "更至", "更0", "更新至"]):
+            score += 12
+            reasons.append("完整度信息 +12")
+        elif self._parse_bool_value(prefs.get("prefer_complete_series"), True):
+            score -= 6
+            risks.append("未识别到全集/更新完整度")
+
+        if self._score_has_any(text, ["remux", "原盘", "blu-ray", "bluray", "web-dl", "高码率"]):
+            score += 8
+            reasons.append("片源质量标识 +8")
+
+        prefer_provider = self._clean_text(prefs.get("prefer_cloud_provider")).lower()
+        if prefer_provider and provider and prefer_provider == provider:
+            score += 5
+            reasons.append(f"匹配网盘偏好 {provider} +5")
+        if target_path and target_path in {
+            self._clean_text(prefs.get("cloud_default_path")),
+            self._clean_text(prefs.get("p115_default_path")),
+            self._clean_text(prefs.get("quark_default_path")),
+        }:
+            score += 3
+            reasons.append("匹配默认目录 +3")
+
+        if source_type == "hdhive":
+            limit = max(0, self._safe_int(prefs.get("hdhive_max_unlock_points"), self._hdhive_max_unlock_points))
+            points = self._resource_points_value(item)
+            if points == 0:
+                score += 10
+                reasons.append("影巢免费 +10")
+            elif points is None and limit > 0:
+                score -= 20
+                risks.append("影巢积分未知，禁止自动解锁")
+            elif limit > 0 and points is not None and points > limit:
+                score -= 30
+                risks.append(f"影巢积分 {points} 超过上限 {limit}，禁止自动解锁")
+            elif points is not None:
+                score += max(0, 10 - points)
+                reasons.append(f"影巢积分 {points}")
+
+        final_score = max(0, min(100, score))
+        decision = self._score_decision(
+            score=final_score,
+            risk_reasons=risks,
+            preferences=prefs,
+            default_action="auto_ingest_cloud",
+        )
+        return {
+            **decision,
+            "source_type": source_type,
+            "score_reasons": reasons,
+        }
+
+    def _score_pt_resource(
+        self,
+        item: Dict[str, Any],
+        *,
+        preferences: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        prefs = self._normalize_assistant_preferences(preferences)
+        text = self._score_text_blob(item)
+        torrent = item.get("torrent_info") if isinstance(item.get("torrent_info"), dict) else item
+        score = 20
+        reasons: List[str] = []
+        risks: List[str] = []
+        min_seeders = max(0, self._safe_int(prefs.get("pt_min_seeders"), 3))
+        seeders = self._safe_int(torrent.get("seeders"), 0)
+        peers = self._safe_int(torrent.get("peers"), 0)
+        volume = self._clean_text(torrent.get("volume_factor") or item.get("volume_factor")).lower()
+
+        if seeders <= 0:
+            risks.append("做种数 0，禁止自动下载")
+            score -= 35
+        elif seeders < min_seeders:
+            risks.append(f"做种数 {seeders}，低于阈值 {min_seeders}，禁止自动下载")
+            score -= 25
+        elif seeders >= 20:
+            score += 22
+            reasons.append(f"做种数 {seeders} +22")
+        elif seeders >= 10:
+            score += 16
+            reasons.append(f"做种数 {seeders} +16")
+        else:
+            score += 10
+            reasons.append(f"做种数 {seeders} +10")
+
+        if peers >= seeders * 5 and seeders < 5:
+            score -= 8
+            risks.append("下载需求高但做种偏低")
+
+        if self._score_has_any(volume, ["free", "免费", "2xfree", "2x free", "freeleech"]):
+            score += 18
+            reasons.append("免费/促销 +18")
+        elif self._parse_bool_value(prefs.get("pt_require_free"), False):
+            score -= 20
+            risks.append("用户要求 PT 免费资源")
+        elif self._parse_bool_value(prefs.get("pt_prefer_free"), True):
+            reasons.append("普通 PT 资源，未额外扣分")
+
+        if "2160" in text or "4k" in text or "uhd" in text:
+            score += 20
+            reasons.append("4K/UHD +20")
+        elif "1080" in text:
+            score += 12
+            reasons.append("1080P +12")
+        if self._score_has_any(text, ["dolby vision", "dovi", "dv", "杜比视界"]):
+            score += 14
+            reasons.append("杜比视界 +14")
+        elif self._score_has_any(text, ["hdr10", "hdr", "hlg"]):
+            score += 9
+            reasons.append("HDR +9")
+        if self._score_has_any(text, ["中字", "简中", "繁中", "双语", "内封", "字幕"]):
+            score += 10
+            reasons.append("字幕信息 +10")
+        if self._score_has_any(text, ["remux", "原盘", "blu-ray", "bluray", "web-dl", "高码率"]):
+            score += 8
+            reasons.append("片源质量标识 +8")
+        if self._score_has_any(text, ["s01", "season", "全集", "全季", "complete"]):
+            score += 6
+            reasons.append("季/全集标识 +6")
+
+        final_score = max(0, min(100, score))
+        decision = self._score_decision(
+            score=final_score,
+            risk_reasons=risks,
+            preferences=prefs,
+            default_action="auto_download_pt",
+        )
+        return {
+            **decision,
+            "source_type": "pt",
+            "score_reasons": reasons,
+            "seeders": seeders,
+            "peers": peers,
+            "min_seeders": min_seeders,
+            "volume_factor": volume,
+        }
+
+    def _attach_cloud_scores(
+        self,
+        items: List[Dict[str, Any]],
+        *,
+        preferences: Optional[Dict[str, Any]] = None,
+        source_type: str = "cloud",
+        target_path: str = "",
+    ) -> List[Dict[str, Any]]:
+        return [
+            {
+                **dict(item or {}),
+                "score": self._score_cloud_resource(
+                    dict(item or {}),
+                    preferences=preferences,
+                    source_type=source_type,
+                    target_path=target_path,
+                ),
+            }
+            for item in items
+            if isinstance(item, dict)
+        ]
+
+    @staticmethod
+    def _format_score_label(item: Dict[str, Any]) -> str:
+        score = item.get("score") if isinstance(item.get("score"), dict) else {}
+        if not score:
+            return ""
+        try:
+            value = int(float(score.get("score") or 0))
+        except Exception:
+            value = 0
+        action = AgentResourceOfficer._clean_text(score.get("recommended_action"))
+        if score.get("can_auto_execute"):
+            suffix = "可自动入库"
+        elif action == "ask_confirm":
+            suffix = "建议确认"
+        else:
+            suffix = "不建议自动"
+        return f"{value}分 {suffix}"
+
+    @staticmethod
+    def _format_bytes_size(value: Any) -> str:
+        try:
+            size = float(value or 0)
+        except Exception:
+            return ""
+        if size <= 0:
+            return ""
+        units = ["B", "KB", "MB", "GB", "TB"]
+        index = 0
+        while size >= 1024 and index < len(units) - 1:
+            size /= 1024
+            index += 1
+        return f"{size:.2f}{units[index]}" if index else f"{int(size)}B"
+
+    def _mp_context_preview_item(self, context: Any, index: int, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        torrent = getattr(context, "torrent_info", None)
+        meta = getattr(context, "meta_info", None)
+        media = getattr(context, "media_info", None)
+        item = {
+            "index": index,
+            "torrent_info": {
+                "title": self._clean_text(getattr(torrent, "title", "")),
+                "size": self._format_bytes_size(getattr(torrent, "size", None)),
+                "seeders": getattr(torrent, "seeders", None),
+                "peers": getattr(torrent, "peers", None),
+                "site_name": self._clean_text(getattr(torrent, "site_name", "")),
+                "volume_factor": self._clean_text(getattr(torrent, "volume_factor", "")),
+                "page_url": self._clean_text(getattr(torrent, "page_url", "")),
+            },
+            "meta_info": {
+                "season_episode": self._clean_text(getattr(meta, "season_episode", "")),
+                "resource_team": self._clean_text(getattr(meta, "resource_team", "")),
+                "video_encode": self._clean_text(getattr(meta, "video_encode", "")),
+                "edition": self._clean_text(getattr(meta, "edition", "")),
+                "resource_pix": self._clean_text(getattr(meta, "resource_pix", "")),
+            },
+            "media_info": {
+                "title": self._clean_text(getattr(media, "title", "")),
+                "year": self._clean_text(getattr(media, "year", "")),
+                "tmdb_id": getattr(media, "tmdb_id", None),
+                "douban_id": getattr(media, "douban_id", None),
+            },
+        }
+        item["score"] = self._score_pt_resource(item, preferences=preferences)
+        return item
+
+    def _mp_search_cache_preview(self, cache_key: str, preferences: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
+        try:
+            cache = self._ensure_feishu_channel()._get_search_cache(cache_key)
+        except Exception:
+            cache = None
+        results = (cache or {}).get("results") or []
+        preview: List[Dict[str, Any]] = []
+        for index, context in enumerate(results[:max(1, limit)], 1):
+            preview.append(self._mp_context_preview_item(context, index, preferences))
+        return preview
+
+    def _format_mp_search_text(self, keyword: str, message_text: str, preview: List[Dict[str, Any]]) -> str:
+        lines = [message_text.strip()] if message_text else [f"MP 原生搜索：{keyword}"]
+        if preview:
+            lines.append("")
+            lines.append("PT 评分摘要：")
+            for item in preview[:10]:
+                torrent = item.get("torrent_info") or {}
+                score = item.get("score") or {}
+                title = torrent.get("title") or "未命名资源"
+                lines.append(f"{item.get('index')}. {self._format_score_label(item)} | [{torrent.get('site_name') or '未知站点'}] {title}")
+                details = [
+                    f"做种：{torrent.get('seeders') if torrent.get('seeders') is not None else '?'}",
+                    f"促销：{torrent.get('volume_factor') or '普通'}",
+                    f"大小：{torrent.get('size') or '未知'}",
+                ]
+                risks = score.get("risk_reasons") or []
+                if risks:
+                    details.append("风险：" + "；".join(str(item) for item in risks[:2]))
+                lines.append("   " + " | ".join(details))
+            lines.append("下载/订阅属于写入动作，默认请先用 dry_run 生成 plan_id，再确认执行。")
+        return "\n".join(line for line in lines if line)
+
+    async def _assistant_mp_media_search(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        message_text = self._ensure_feishu_channel()._execute_media_search(keyword, cache_key)
+        failed_prefixes = ("MP 原生搜索失败", "未识别到媒体信息", "搜索资源失败")
+        route_ok = not any(message_text.startswith(prefix) for prefix in failed_prefixes)
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        self._save_session(cache_key, {
+            "kind": "assistant_mp",
+            "stage": "search_result",
+            "keyword": keyword,
+            "items": preview,
+            "target_path": "",
+        })
+        return {
+            "success": route_ok,
+            "message": self._format_mp_search_text(keyword, message_text, preview),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_media_search",
+                "ok": route_ok,
+                "keyword": keyword,
+                "source_type": "pt",
+                "items": preview,
+                "preferences": preferences,
+            }),
+        }
+
+    async def _assistant_mp_download(self, *, choice: int, session: str, cache_key: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
+        score = selected.get("score") if isinstance(selected.get("score"), dict) else {}
+        if score and score.get("risk_reasons"):
+            return {
+                "success": False,
+                "message": "已阻止 PT 自动下载：" + "；".join(str(item) for item in score.get("risk_reasons") or []),
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download",
+                    "ok": False,
+                    "error_code": "pt_score_risk_blocked",
+                    "selected": selected,
+                    "score": score,
+                }),
+            }
+        message_text = self._ensure_feishu_channel()._execute_media_download(choice, cache_key)
+        ok = not message_text.startswith("下载资源失败") and not message_text.startswith("没有可用")
+        return {
+            "success": ok,
+            "message": message_text,
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download",
+                "ok": ok,
+                "choice": choice,
+                "selected": selected,
+                "score": score,
+                "write_effect": "write",
+            }),
+        }
+
+    async def _assistant_mp_subscribe(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        immediate_search: bool = False,
+    ) -> Dict[str, Any]:
+        keyword = self._clean_text(keyword)
+        if not keyword:
+            return {
+                "success": False,
+                "message": "订阅失败：缺少片名或关键词",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_search" if immediate_search else "mp_subscribe",
+                    "ok": False,
+                    "error_code": "missing_keyword",
+                }),
+            }
+        message_text = self._ensure_feishu_channel()._execute_media_subscribe(keyword, immediate_search)
+        ok = not message_text.startswith("订阅失败")
+        return {
+            "success": ok,
+            "message": message_text,
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_subscribe_search" if immediate_search else "mp_subscribe",
+                "ok": ok,
+                "keyword": keyword,
+                "immediate_search": bool(immediate_search),
+                "write_effect": "write",
+            }),
+        }
+
+    async def _assistant_mp_recommendations(
+        self,
+        *,
+        source: str = "tmdb_trending",
+        media_type: str = "all",
+        limit: int = 20,
+        session: str = "default",
+    ) -> Dict[str, Any]:
+        try:
+            from app.chain.recommend import RecommendChain
+            from app.schemas.types import MediaType, media_type_to_agent
+        except Exception as exc:
+            return {
+                "success": False,
+                "message": f"MP 推荐失败：当前环境缺少推荐依赖 {exc}",
+                "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
+            }
+        max_limit = max(1, min(50, self._safe_int(limit, 20)))
+        source_name = self._clean_text(source) or "tmdb_trending"
+        media_type_name = self._clean_text(media_type) or "all"
+        chain = RecommendChain()
+        try:
+            results: List[Dict[str, Any]] = []
+            if source_name == "tmdb_trending":
+                results = await chain.async_tmdb_trending(page=1)
+            elif source_name == "tmdb_movies":
+                results = await chain.async_tmdb_movies(page=1)
+            elif source_name == "tmdb_tvs":
+                results = await chain.async_tmdb_tvs(page=1)
+            elif source_name in {"douban_hot", "douban_movie_hot"}:
+                results = await chain.async_douban_movie_hot(page=1, count=max_limit)
+                if source_name == "douban_hot" and media_type_name in {"all", "tv"}:
+                    results.extend(await chain.async_douban_tv_hot(page=1, count=max_limit))
+            elif source_name == "douban_tv_hot":
+                results = await chain.async_douban_tv_hot(page=1, count=max_limit)
+            elif source_name == "douban_movie_showing":
+                results = await chain.async_douban_movie_showing(page=1, count=max_limit)
+            elif source_name == "douban_movie_top250":
+                results = await chain.async_douban_movie_top250(page=1, count=max_limit)
+            elif source_name == "douban_tv_animation":
+                results = await chain.async_douban_tv_animation(page=1, count=max_limit)
+            elif source_name == "bangumi_calendar":
+                results = await chain.async_bangumi_calendar(page=1, count=max_limit)
+            else:
+                return {
+                    "success": False,
+                    "message": f"不支持的推荐来源：{source_name}",
+                    "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
+                }
+            items = []
+            for item in (results or [])[:max_limit]:
+                if not isinstance(item, dict):
+                    continue
+                item_type = item.get("type")
+                if media_type_name != "all":
+                    enum_type = MediaType.from_agent(media_type_name)
+                    if enum_type and item_type != enum_type:
+                        continue
+                items.append({
+                    "index": len(items) + 1,
+                    "title": item.get("title"),
+                    "year": item.get("year"),
+                    "type": media_type_to_agent(item_type),
+                    "tmdb_id": item.get("tmdb_id"),
+                    "douban_id": item.get("douban_id"),
+                    "vote_average": item.get("vote_average"),
+                    "poster_path": item.get("poster_path"),
+                    "detail_link": item.get("detail_link"),
+                })
+            lines = [f"MP 热门推荐：{source_name}，共 {len(items)} 条"]
+            for item in items[:10]:
+                lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
+            lines.append("下一步：可选择片名继续执行 MP 搜索、盘搜或影巢搜索。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_recommendations",
+                    "ok": True,
+                    "source": source_name,
+                    "media_type": media_type_name,
+                    "items": items,
+                }),
+            }
+        except Exception as exc:
+            logger.error(f"MP 推荐失败：{source_name} {exc}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"MP 推荐失败：{exc}",
+                "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
+            }
+
     def _persist_workflow_plans(self) -> None:
         try:
             items = sorted(
@@ -3244,6 +3936,10 @@ class AgentResourceOfficer(_PluginBase):
             mode = "continue_pansou"
             reason = "当前会话停留在盘搜结果列表"
             template = self._assistant_find_action_template(templates, ["pick_pansou_result"])
+        elif has_session and kind == "assistant_mp":
+            mode = "continue_mp_search"
+            reason = "当前会话停留在 MP 原生搜索结果列表"
+            template = self._assistant_find_action_template(templates, ["pick_mp_download"])
         elif has_session and kind == "assistant_hdhive" and stage == "candidate":
             mode = "continue_hdhive_candidate"
             reason = "当前会话停留在影巢候选列表"
@@ -3333,6 +4029,25 @@ class AgentResourceOfficer(_PluginBase):
                 ],
                 "suggested_actions": ["smart_pick.choice", "session_clear"],
             })
+        elif kind == "assistant_mp":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(((item.get("torrent_info") or {}).get("title")) or item.get("title")),
+                        "site": self._clean_text((item.get("torrent_info") or {}).get("site_name")),
+                        "seeders": (item.get("torrent_info") or {}).get("seeders"),
+                        "volume_factor": self._clean_text((item.get("torrent_info") or {}).get("volume_factor")),
+                        "score": (item.get("score") or {}).get("score") if isinstance(item.get("score"), dict) else None,
+                        "score_level": (item.get("score") or {}).get("score_level") if isinstance(item.get("score"), dict) else "",
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_download.choice", "mp_subscribe.keyword", "session_clear"],
+            })
         elif kind == "assistant_hdhive":
             if stage == "candidate":
                 candidates = state.get("candidates") or []
@@ -3387,6 +4102,8 @@ class AgentResourceOfficer(_PluginBase):
                             "episodes": self._resource_episode_text(item),
                             "subtitle": self._resource_subtitle_text(item),
                             "remark": self._resource_remark_text(item),
+                            "score": (item.get("score") or {}).get("score") if isinstance(item.get("score"), dict) else None,
+                            "score_level": (item.get("score") or {}).get("score_level") if isinstance(item.get("score"), dict) else "",
                         }
                         for idx, item in enumerate(resources[:8])
                         if isinstance(item, dict)
@@ -3613,6 +4330,20 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "mode": "hdhive", "keyword": "<关键词>", "media_type": "movie"},
                 ),
                 self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="发起新的 MP 原生搜索，返回 PT 候选和评分摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": "<关键词>"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_recommendations",
+                    description="查看 MP 原生热门推荐，例如 TMDB、豆瓣或 Bangumi",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "start_mp_recommendations", "source": "tmdb_trending", "media_type": "all"},
+                ),
+                self._assistant_action_template(
                     name="start_115_login",
                     description="发起新的 115 扫码登录",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
@@ -3659,6 +4390,23 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_pick, "choice": "<1-N>", "path": target_path or self._p115_default_path},
                 )
             )
+        elif kind == "assistant_mp":
+            templates.extend([
+                self._assistant_action_template(
+                    name="pick_mp_download",
+                    description="按编号选择 MP 原生搜索结果并下载；写入动作建议先 dry_run 生成计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "pick_mp_download", "choice": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_subscribe",
+                    description="按当前关键词创建 MP 订阅",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "start_mp_subscribe", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+            ])
         elif kind == "assistant_hdhive" and stage == "candidate":
             templates.extend([
                 self._assistant_action_template(
@@ -4563,6 +5311,9 @@ class AgentResourceOfficer(_PluginBase):
                 "hdhive_max_unlock_points": self._hdhive_max_unlock_points,
                 "hdhive_checkin_enabled": self._hdhive_checkin_enabled,
                 "hdhive_checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
+                "pt_min_seeders": self._default_assistant_preferences().get("pt_min_seeders"),
+                "auto_ingest": self._default_assistant_preferences().get("auto_ingest"),
+                "auto_ingest_score_threshold": self._default_assistant_preferences().get("auto_ingest_score_threshold"),
             },
             "smart_entry": {
                 "supports_text": True,
@@ -4578,6 +5329,11 @@ class AgentResourceOfficer(_PluginBase):
                     "p115_resume",
                     "p115_cancel",
                     "hdhive_checkin",
+                    "hdhive_checkin_history",
+                    "mp_download",
+                    "mp_subscribe",
+                    "mp_subscribe_search",
+                    "mp_recommendations",
                 ],
                 "structured_fields": [
                     "session",
@@ -4594,6 +5350,10 @@ class AgentResourceOfficer(_PluginBase):
                     "action",
                     "compact",
                 ],
+            },
+            "assistant_preferences": {
+                "fields": ["session", "session_id", "user_key", "preferences", "reset", "compact"],
+                "description": "智能体片源偏好画像：云盘与 PT 分源评分都会读取这里；无偏好时建议先完成一次偏好询问。",
             },
             "smart_pick": {
                 "fields": ["session", "session_id", "choice", "action", "path", "compact"],
@@ -4632,6 +5392,7 @@ class AgentResourceOfficer(_PluginBase):
                     "url",
                     "access_code",
                     "client_type",
+                    "source",
                     "kind",
                     "has_pending_p115",
                     "stale_only",
@@ -4726,6 +5487,7 @@ class AgentResourceOfficer(_PluginBase):
                 "assistant/action",
                 "assistant/actions",
                 "assistant/workflow",
+                "assistant/preferences",
                 "assistant/plan/execute",
                 "assistant/plans",
                 "assistant/plans/clear",
@@ -4766,6 +5528,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_plans_clear",
                 "agent_resource_officer_recover",
                 "agent_resource_officer_run_workflow",
+                "agent_resource_officer_preferences",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
                 "agent_resource_officer_smart_pick",
@@ -4796,6 +5559,7 @@ class AgentResourceOfficer(_PluginBase):
             "assistant/history",
             "assistant/actions",
             "assistant/workflow",
+            "assistant/preferences",
             "assistant/plan/execute",
             "assistant/plans",
         ]
@@ -5481,6 +6245,38 @@ class AgentResourceOfficer(_PluginBase):
                 "tool_args": {"execute": True, "limit": max_limit},
                 "body": {"execute": True, "limit": max_limit},
             },
+            "preferences_get": {
+                "description": "读取智能体片源偏好画像；未初始化时应先询问用户偏好。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "GET",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/preferences",
+                "tool": "agent_resource_officer_preferences",
+                "tool_args": {"session": "assistant", "compact": True},
+                "query": {"session": "assistant", "compact": True},
+            },
+            "preferences_save": {
+                "description": "保存智能体片源偏好画像；影响云盘与 PT 评分、自动化建议和安全阈值。",
+                "side_effect": "state",
+                "requires_confirmation": True,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/preferences",
+                "tool": "agent_resource_officer_preferences",
+                "tool_args": {
+                    "session": "assistant",
+                    "preferences": self._default_assistant_preferences(),
+                    "compact": True,
+                },
+                "body": {
+                    "session": "assistant",
+                    "preferences": self._default_assistant_preferences(),
+                    "compact": True,
+                },
+            },
             "workflow_dry_run": {
                 "description": "生成并保存工作流计划，不实际执行；适合先让用户确认。",
                 "side_effect": "plan_write",
@@ -5506,6 +6302,42 @@ class AgentResourceOfficer(_PluginBase):
                     "dry_run": True,
                     "compact": True,
                 },
+            },
+            "mp_search": {
+                "description": "执行 MP 原生搜索，返回 PT 候选与 PT 评分摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "session_cache",
+                "cache_ttl_seconds": 600,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_search", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+            },
+            "mp_search_download_plan": {
+                "description": "MP 原生搜索并选择编号下载；写入动作默认只生成 plan_id，确认后执行。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
+                "body": {"workflow": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_recommend": {
+                "description": "读取 MP 原生热门推荐，例如 TMDB、豆瓣或 Bangumi。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 300,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_recommend", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_recommend", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
             },
             "saved_plan_execute": {
                 "description": "执行已保存的 dry_run 工作流计划，可按 session 自动选择未执行计划。",
@@ -6291,6 +7123,14 @@ class AgentResourceOfficer(_PluginBase):
             "p115_qrcode_start",
             "p115_qrcode_check",
             "hdhive_checkin",
+            "mp_download",
+            "mp_subscribe",
+            "mp_subscribe_search",
+            "pick_mp_download",
+            "start_mp_subscribe",
+            "start_mp_subscribe_search",
+            "preferences_save",
+            "preferences_reset",
             "execute_actions",
             "execute_plan",
             "maintain",
@@ -6482,6 +7322,27 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
             options["is_gambler"] = "true"
+        else:
+            for prefix, action in [
+                ("下载资源", "mp_download"),
+                ("下载", "mp_download"),
+                ("订阅并搜索", "mp_subscribe_search"),
+                ("订阅搜索", "mp_subscribe_search"),
+                ("订阅媒体", "mp_subscribe"),
+                ("订阅", "mp_subscribe"),
+                ("热门推荐", "mp_recommendations"),
+                ("推荐", "mp_recommendations"),
+            ]:
+                if raw == prefix:
+                    options["action"] = action
+                    options["mode"] = ""
+                    options["keyword"] = ""
+                    break
+                if raw.startswith(prefix + " "):
+                    options["action"] = action
+                    options["mode"] = ""
+                    options["keyword"] = raw[len(prefix):].strip()
+                    break
         for token in remain.split():
             item = token.strip()
             if not item:
@@ -6616,6 +7477,13 @@ class AgentResourceOfficer(_PluginBase):
                 lines.append(f"   {' · '.join(detail_parts)}")
             if cached.get("password"):
                 lines.append(f"   提取码：{cached['password']}")
+            score_label = self._format_score_label(cached)
+            if score_label:
+                lines.append(f"   评分：{score_label}")
+                score = cached.get("score") if isinstance(cached.get("score"), dict) else {}
+                risks = score.get("risk_reasons") or []
+                if risks:
+                    lines.append("   风险：" + "；".join(str(item) for item in risks[:2]))
             lines.append(f"   {cached['url']}")
         next_quark_hint = count_115 + 1 if count_quark else 1
         lines.append("下一步：回复“选择 1”即可直接转存支持的 115 / 夸克结果。")
@@ -6868,6 +7736,13 @@ class AgentResourceOfficer(_PluginBase):
                 meta.append(source)
             lines.append(f"{idx}. [{provider}] {item_title}")
             lines.append(f"   {' | '.join(meta)}")
+            score_label = AgentResourceOfficer._format_score_label(item)
+            score = item.get("score") if isinstance(item.get("score"), dict) else {}
+            if score_label:
+                lines.append(f"   评分：{score_label}")
+                risks = score.get("risk_reasons") or []
+                if risks:
+                    lines.append("   风险：" + "；".join(str(risk) for risk in risks[:2]))
             if episode:
                 lines.append(f"   集数：{episode}")
             if subtitle:
@@ -7127,7 +8002,15 @@ class AgentResourceOfficer(_PluginBase):
             )
             if not resource_ok:
                 return f"影巢资源查询失败：{resource_message}"
-            preview = self._group_resource_preview(resource_result.get("data") or [], per_group=6)
+            preferences = self._normalize_assistant_preferences(
+                (self._assistant_preferences or {}).get(self._normalize_preference_key(session=self._clean_text(session.get("keyword")) or "default"))
+            )
+            preview = self._attach_cloud_scores(
+                self._group_resource_preview(resource_result.get("data") or [], per_group=6),
+                preferences=preferences,
+                source_type="hdhive",
+                target_path=target_path or session.get("target_path") or "",
+            )
             self._save_session(
                 self._clean_text(session_id),
                 {
@@ -7382,6 +8265,7 @@ class AgentResourceOfficer(_PluginBase):
         share_url: str = "",
         access_code: str = "",
         client_type: str = "",
+        source: str = "",
         kind: str = "",
         has_pending_p115: Optional[bool] = None,
         stale_only: bool = False,
@@ -7408,6 +8292,7 @@ class AgentResourceOfficer(_PluginBase):
                     "url": self._clean_text(share_url),
                     "access_code": self._clean_text(access_code),
                     "client_type": self._clean_text(client_type),
+                    "source": self._clean_text(source),
                     "kind": self._clean_text(kind),
                     "has_pending_p115": has_pending_p115,
                     "stale_only": bool(stale_only),
@@ -7462,6 +8347,8 @@ class AgentResourceOfficer(_PluginBase):
         media_type: str = "",
         year: str = "",
         client_type: str = "",
+        source: str = "",
+        limit: int = 20,
         dry_run: bool = False,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
@@ -7486,6 +8373,8 @@ class AgentResourceOfficer(_PluginBase):
                     "media_type": self._clean_text(media_type),
                     "year": self._clean_text(year),
                     "client_type": self._clean_text(client_type),
+                    "source": self._clean_text(source),
+                    "limit": self._safe_int(limit, 20),
                     "dry_run": bool(dry_run),
                     "stop_on_error": bool(stop_on_error),
                     "include_raw_results": bool(include_raw_results),
@@ -7494,6 +8383,33 @@ class AgentResourceOfficer(_PluginBase):
             )
         )
         return str(result.get("message") or "工作流执行完成")
+
+    async def tool_assistant_preferences(
+        self,
+        session: str = "default",
+        session_id: str = "",
+        user_key: str = "",
+        preferences: Optional[Dict[str, Any]] = None,
+        reset: bool = False,
+        compact: bool = True,
+    ) -> str:
+        if not self._enabled:
+            return "Agent云盘资源整合 插件未启用"
+        method = "DELETE" if reset else "POST" if preferences else "GET"
+        result = await self.api_assistant_preferences(
+            _JsonRequestShim(
+                _RequestContextShim(),
+                {
+                    "session": self._clean_text(session) or "default",
+                    "session_id": self._clean_text(session_id),
+                    "user_key": self._clean_text(user_key),
+                    "preferences": preferences or {},
+                    "compact": bool(compact),
+                },
+                method=method,
+            )
+        )
+        return str(result.get("message") or "偏好画像处理完成")
 
     async def tool_assistant_execute_plan(
         self,
@@ -8087,6 +9003,62 @@ class AgentResourceOfficer(_PluginBase):
             "data": {"provider": "unknown", "url": share_url},
         }
 
+    async def api_assistant_preferences(self, request: Request):
+        body: Dict[str, Any] = {}
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        session = self._clean_text(body.get("session") or request.query_params.get("session") or "default")
+        user_key = self._clean_text(body.get("user_key") or request.query_params.get("user_key"))
+        if request.method.upper() == "DELETE" or self._parse_bool_value(body.get("reset"), False):
+            preferences_data = self._reset_assistant_preferences(session=session, user_key=user_key)
+            return {
+                "success": True,
+                "message": "智能体片源偏好已重置，下一次启动会重新进入偏好询问。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "preferences_reset",
+                    "ok": True,
+                    "preferences": preferences_data,
+                    "write_effect": "state",
+                }),
+            }
+        if request.method.upper() == "POST":
+            preferences = body.get("preferences") if isinstance(body.get("preferences"), dict) else {
+                key: value
+                for key, value in body.items()
+                if key not in {"apikey", "session", "session_id", "user_key", "compact", "reset"}
+            }
+            preferences_data = self._save_assistant_preferences(session=session, user_key=user_key, preferences=preferences)
+            return {
+                "success": True,
+                "message": "智能体片源偏好已保存。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "preferences_save",
+                    "ok": True,
+                    "preferences": preferences_data,
+                    "write_effect": "state",
+                }),
+            }
+
+        preferences_data = self._assistant_preferences_public_data(session=session, user_key=user_key)
+        message_text = "智能体片源偏好未初始化，请先询问用户偏好。" if preferences_data.get("needs_onboarding") else "智能体片源偏好已初始化。"
+        return {
+            "success": True,
+            "message": message_text,
+            "data": self._assistant_response_data(session=session, data={
+                "action": "preferences",
+                "ok": True,
+                "preferences": preferences_data,
+            }),
+        }
+
     async def api_assistant_route(self, request: Request):
         body = await request.json()
         ok, message = self._check_api_access(request, body)
@@ -8182,6 +9154,43 @@ class AgentResourceOfficer(_PluginBase):
                     "history": self._hdhive_checkin_history_public_data(limit=10),
                 }),
             })
+        if assistant_action == "mp_download":
+            choice = self._safe_int(parsed.get("keyword") or body.get("choice") or body.get("index"), 0)
+            if choice <= 0:
+                return finish({
+                    "success": False,
+                    "message": "用法：下载资源 1",
+                    "data": self._assistant_response_data(session=session, data={"action": "mp_download", "ok": False}),
+                })
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            return finish(await self._assistant_mp_download(
+                choice=choice,
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            ))
+        if assistant_action in {"mp_subscribe", "mp_subscribe_search"}:
+            if not keyword:
+                return finish({
+                    "success": False,
+                    "message": "用法：订阅媒体 片名 或 订阅并搜索 片名",
+                    "data": self._assistant_response_data(session=session, data={"action": assistant_action, "ok": False}),
+                })
+            return finish(await self._assistant_mp_subscribe(
+                keyword=keyword,
+                session=session,
+                immediate_search=assistant_action == "mp_subscribe_search",
+            ))
+        if assistant_action == "mp_recommendations":
+            source = self._clean_text(body.get("source") or parsed.get("keyword") or "tmdb_trending")
+            if source in {"", "推荐", "热门推荐"}:
+                source = "tmdb_trending"
+            return finish(await self._assistant_mp_recommendations(
+                source=source,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or "all"),
+                limit=self._safe_int(body.get("limit"), 20),
+                session=session,
+            ))
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()
             pending_summary = self._pending_p115_summary(state)
@@ -8465,22 +9474,13 @@ class AgentResourceOfficer(_PluginBase):
                         "ok": False,
                     }),
                 })
-            message_text = self._ensure_feishu_channel()._execute_media_search(keyword, cache_key)
-            failed_prefixes = (
-                "MP 原生搜索失败",
-                "未识别到媒体信息",
-                "搜索资源失败",
-            )
-            route_ok = not any(message_text.startswith(prefix) for prefix in failed_prefixes)
-            return finish({
-                "success": route_ok,
-                "message": message_text,
-                "data": self._assistant_response_data(session=session, data={
-                    "action": "media_search",
-                    "ok": route_ok,
-                    "keyword": keyword,
-                }),
-            })
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            return finish(await self._assistant_mp_media_search(
+                keyword=keyword,
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            ))
 
         if mode == "pansou":
             search_ok, payload, search_message = self._call_pansou_search(keyword)
@@ -8495,6 +9495,13 @@ class AgentResourceOfficer(_PluginBase):
                 items.append({**item, "index": len(items) + 1})
             if not items:
                 return {"success": False, "message": f"盘搜暂无结果：{keyword}"}
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            items = self._attach_cloud_scores(
+                items,
+                preferences=preferences,
+                source_type="pansou",
+                target_path=target_path or self._hdhive_default_path,
+            )
             self._save_session(
                 cache_key,
                 {
@@ -8608,6 +9615,56 @@ class AgentResourceOfficer(_PluginBase):
                 "year": body.get("year"),
             })
             return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
+        if name == "start_mp_media_search":
+            route_payload.update({
+                "mode": "mp",
+                "keyword": body.get("keyword"),
+            })
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
+        if name == "pick_mp_download":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            return await finish(self._assistant_mp_download(
+                choice=self._safe_int(body.get("choice") or body.get("index"), 0),
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
+        if name in {"start_mp_subscribe", "start_mp_subscribe_search"}:
+            keyword = self._clean_text(body.get("keyword") or body.get("title"))
+            if not keyword:
+                session_name, cache_key = self._normalize_assistant_session_ref(
+                    session=body.get("session") or "default",
+                    session_id=body.get("session_id"),
+                )
+                state = self._load_session(cache_key) or {}
+                keyword = self._clean_text(state.get("keyword"))
+            return await finish(self._assistant_mp_subscribe(
+                keyword=keyword,
+                session=self._clean_text(body.get("session")) or "default",
+                immediate_search=name == "start_mp_subscribe_search",
+            ))
+        if name == "start_mp_recommendations":
+            return await finish(self._assistant_mp_recommendations(
+                source=self._clean_text(body.get("source")) or "tmdb_trending",
+                media_type=self._clean_text(body.get("media_type") or body.get("type")) or "all",
+                limit=self._safe_int(body.get("limit"), 20),
+                session=self._clean_text(body.get("session")) or "default",
+            ))
+        if name in {"preferences_get", "preferences_save", "preferences_reset"}:
+            method = "GET" if name == "preferences_get" else "DELETE" if name == "preferences_reset" else "POST"
+            payload = {
+                "session": body.get("session"),
+                "session_id": body.get("session_id"),
+                "user_key": body.get("user_key"),
+                "preferences": body.get("preferences") or {},
+                "compact": body.get("compact", True),
+                "apikey": self._extract_apikey(request, body),
+            }
+            return await finish(self.api_assistant_preferences(_JsonRequestShim(request, payload, method=method)))
         if name == "start_115_login":
             route_payload.update({
                 "action": "p115_qrcode_start",
@@ -8850,6 +9907,36 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "candidate_choice", "resource_choice", "media_type", "year", "path", "compact"],
                 },
                 {
+                    "name": "mp_search",
+                    "description": "执行 MP 原生搜索，返回 PT 候选结果和评分摘要",
+                    "fields": ["session", "keyword", "compact"],
+                },
+                {
+                    "name": "mp_search_download",
+                    "description": "执行 MP 原生搜索并按编号下载，默认先生成 plan_id",
+                    "fields": ["session", "keyword", "choice", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_subscribe",
+                    "description": "按关键词创建 MP 订阅，默认先生成 plan_id",
+                    "fields": ["session", "keyword", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_subscribe_and_search",
+                    "description": "创建订阅并立即触发搜索，默认先生成 plan_id",
+                    "fields": ["session", "keyword", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_recommend",
+                    "description": "读取 MP 原生推荐，例如 TMDB、豆瓣、Bangumi",
+                    "fields": ["session", "source", "media_type", "limit", "compact"],
+                },
+                {
+                    "name": "mp_recommend_search",
+                    "description": "从推荐或指定关键词进入 MP 原生搜索；传 keyword 时直接搜索",
+                    "fields": ["session", "source", "keyword", "media_type", "limit", "compact"],
+                },
+                {
                     "name": "share_transfer",
                     "description": "识别 115 或夸克分享链接并直接转存",
                     "fields": ["session", "url", "access_code", "path", "compact"],
@@ -8875,6 +9962,8 @@ class AgentResourceOfficer(_PluginBase):
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
         media_type = self._clean_text(body.get("media_type") or "movie")
         year = self._clean_text(body.get("year"))
+        source = self._clean_text(body.get("source")) or "tmdb_trending"
+        limit = self._safe_int(body.get("limit"), 20)
 
         def base(payload: Dict[str, Any]) -> Dict[str, Any]:
             current = dict(payload)
@@ -8927,6 +10016,52 @@ class AgentResourceOfficer(_PluginBase):
                 }),
                 base({"name": "pick_hdhive_candidate", "choice": candidate_choice}),
                 base({"name": "pick_hdhive_resource", "choice": resource_choice}),
+            ], ""
+
+        if workflow_name == "mp_search":
+            if not keyword:
+                return [], "mp_search 缺少 keyword"
+            return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
+
+        if workflow_name == "mp_search_download":
+            if not keyword:
+                return [], "mp_search_download 缺少 keyword"
+            choice = self._safe_int(body.get("choice"), 1)
+            return [
+                base({"name": "start_mp_media_search", "keyword": keyword}),
+                base({"name": "pick_mp_download", "choice": max(1, choice)}),
+            ], ""
+
+        if workflow_name == "mp_subscribe":
+            if not keyword:
+                return [], "mp_subscribe 缺少 keyword"
+            return [base({"name": "start_mp_subscribe", "keyword": keyword})], ""
+
+        if workflow_name == "mp_subscribe_and_search":
+            if not keyword:
+                return [], "mp_subscribe_and_search 缺少 keyword"
+            return [base({"name": "start_mp_subscribe_search", "keyword": keyword})], ""
+
+        if workflow_name == "mp_recommend":
+            return [
+                base({
+                    "name": "start_mp_recommendations",
+                    "source": source,
+                    "media_type": self._clean_text(body.get("media_type")) or "all",
+                    "limit": max(1, min(50, limit)),
+                })
+            ], ""
+
+        if workflow_name == "mp_recommend_search":
+            if keyword:
+                return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
+            return [
+                base({
+                    "name": "start_mp_recommendations",
+                    "source": source,
+                    "media_type": self._clean_text(body.get("media_type")) or "all",
+                    "limit": max(1, min(50, limit)),
+                })
             ], ""
 
         if workflow_name == "share_transfer":
@@ -8985,7 +10120,19 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": build_error}
 
         session = self._clean_text(body.get("session")) or "default"
-        if self._parse_bool_value(body.get("dry_run"), False):
+        write_workflows = {
+            "pansou_transfer",
+            "hdhive_unlock",
+            "share_transfer",
+            "mp_search_download",
+            "mp_subscribe",
+            "mp_subscribe_and_search",
+        }
+        dry_run = self._parse_bool_value(
+            body.get("dry_run"),
+            self._clean_text(workflow_name).lower() in write_workflows,
+        )
+        if dry_run:
             execute_body = {
                 **{key: value for key, value in body.items() if key not in {"apikey", "dry_run"}},
                 "dry_run": False,
@@ -9288,7 +10435,13 @@ class AgentResourceOfficer(_PluginBase):
                 )
                 if not resource_ok:
                     return {"success": False, "message": f"影巢资源查询失败：{resource_message}", "data": resource_result}
-                preview = self._group_resource_preview(resource_result.get("data") or [], per_group=6)
+                preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+                preview = self._attach_cloud_scores(
+                    self._group_resource_preview(resource_result.get("data") or [], per_group=6),
+                    preferences=preferences,
+                    source_type="hdhive",
+                    target_path=final_path,
+                )
                 self._save_session(
                     cache_key,
                     {

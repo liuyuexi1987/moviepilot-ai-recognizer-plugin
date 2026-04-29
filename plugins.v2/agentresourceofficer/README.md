@@ -18,6 +18,9 @@
 - 影巢资源解锁
 - 影巢解锁后自动路由到 115 / 夸克执行层
 - 通用分享链接自动路由
+- 智能体偏好画像
+- 云盘 / PT 分源评分
+- MP 原生搜索、下载、订阅与推荐调度
 
 ## 目标
 
@@ -59,7 +62,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.2.02`
+- 当前版本：`0.2.03`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -77,6 +80,9 @@
 - 影巢部分用户态接口受站点 Premium 权限限制；账号信息会优先回退到 `HDHiveDailySign` 的网页快照，签到会优先尝试 `HDHiveDailySign` 现有 Cookie 做网页兜底
 - `115` 自动转存已具备轻量直转层：可优先使用扫码得到的 115 客户端会话，或复用已加载的 115 客户端直接调用分享转存接口；直转失败时再回退 `P115StrmHelper`
 - 已内置可选 `Feishu Channel`：可直接用飞书长连接接收消息，并复用本插件统一入口执行搜索、选择、转存、115 登录和 STRM 调度
+- 已新增智能体偏好画像：第一次接入可询问用户片源偏好，后续云盘和 PT 结果会按偏好评分
+- 已新增分源评分：云盘重点看清晰度、HDR/DV、字幕、完整度、目录和影巢积分；PT 重点看做种数、免费/促销、下载折算、清晰度、字幕和匹配度
+- 已接入 MP 原生动作计划：`mp_search`、`mp_search_download`、`mp_subscribe`、`mp_subscribe_and_search`、`mp_recommend`
 
 这意味着 `Agent云盘资源整合` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
 对于登录方式，当前已经不再推荐粘贴网页版 Cookie，而是优先走 `p115client` 同款扫码会话。
@@ -119,6 +125,7 @@ MP搜索 片名
 下载资源 1
 订阅媒体 片名
 订阅并搜索 片名
+热门推荐
 刮削 /待整理/
 生成STRM
 全量STRM
@@ -174,6 +181,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/actions`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
+- `GET/POST/DELETE /api/v1/plugin/AgentResourceOfficer/assistant/preferences`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/session`
@@ -197,6 +205,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_execute_action`
 - `agent_resource_officer_execute_actions`
 - `agent_resource_officer_run_workflow`
+- `agent_resource_officer_preferences`
 - `agent_resource_officer_route_share`
 - `agent_resource_officer_sessions`
 - `agent_resource_officer_sessions_clear`
