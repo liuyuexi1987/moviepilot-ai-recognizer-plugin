@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.14
+
+- Added compact `preference_status` to assistant responses so external agents can detect onboarding without a separate verbose call.
+
 ## 0.1.13
 
 - Added `preferences` helper command to read, save, or reset source preferences for external agents.

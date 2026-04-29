@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.03"
+    plugin_version = "0.2.04"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -2781,6 +2781,50 @@ class AgentResourceOfficer(_PluginBase):
         self._persist_assistant_preferences()
         return self._assistant_preferences_public_data(session=session, user_key=key)
 
+    def _assistant_preferences_status_brief(self, *, session: str = "", user_key: str = "") -> Dict[str, Any]:
+        data = self._assistant_preferences_public_data(session=session, user_key=user_key)
+        prefs = dict(data.get("preferences") or {})
+        brief = {
+            "key": data.get("key"),
+            "initialized": bool(data.get("initialized")),
+            "needs_onboarding": bool(data.get("needs_onboarding")),
+            "summary": {
+                "prefer_resolution": self._clean_text(prefs.get("prefer_resolution")),
+                "prefer_dolby_vision": bool(prefs.get("prefer_dolby_vision")),
+                "prefer_hdr": bool(prefs.get("prefer_hdr")),
+                "prefer_chinese_subtitle": bool(prefs.get("prefer_chinese_subtitle")),
+                "prefer_complete_series": bool(prefs.get("prefer_complete_series")),
+                "prefer_cloud_provider": self._clean_text(prefs.get("prefer_cloud_provider")),
+                "pt_min_seeders": self._safe_int(prefs.get("pt_min_seeders"), 3),
+                "pt_require_free": bool(prefs.get("pt_require_free")),
+                "hdhive_max_unlock_points": self._safe_int(prefs.get("hdhive_max_unlock_points"), self._hdhive_max_unlock_points),
+                "auto_ingest_enabled": bool(prefs.get("auto_ingest_enabled")),
+                "auto_ingest_score_threshold": self._safe_int(prefs.get("auto_ingest_score_threshold"), 90),
+            },
+        }
+        if brief["needs_onboarding"]:
+            brief["onboarding_questions"] = data.get("onboarding_questions") or []
+            brief["recommended_action"] = "ask_user_preferences_then_save"
+        return brief
+
+    def _assistant_default_preferences_template(self) -> Dict[str, Any]:
+        prefs = self._default_assistant_preferences()
+        return {
+            "prefer_resolution": prefs.get("prefer_resolution"),
+            "prefer_dolby_vision": prefs.get("prefer_dolby_vision"),
+            "prefer_hdr": prefs.get("prefer_hdr"),
+            "prefer_chinese_subtitle": prefs.get("prefer_chinese_subtitle"),
+            "prefer_complete_series": prefs.get("prefer_complete_series"),
+            "prefer_cloud_provider": prefs.get("prefer_cloud_provider"),
+            "pt_require_free": prefs.get("pt_require_free"),
+            "pt_min_seeders": prefs.get("pt_min_seeders"),
+            "hdhive_max_unlock_points": prefs.get("hdhive_max_unlock_points"),
+            "p115_default_path": prefs.get("p115_default_path"),
+            "quark_default_path": prefs.get("quark_default_path"),
+            "auto_ingest_enabled": prefs.get("auto_ingest_enabled"),
+            "auto_ingest_score_threshold": prefs.get("auto_ingest_score_threshold"),
+        }
+
     @staticmethod
     def _score_text_blob(item: Any) -> str:
         if isinstance(item, dict):
@@ -3932,6 +3976,10 @@ class AgentResourceOfficer(_PluginBase):
                 "resume_pending_115",
                 "check_115_login",
             ])
+        elif self._assistant_find_action_template(templates, ["preferences_save"]):
+            mode = "onboard_preferences"
+            reason = "智能体片源偏好未初始化，建议先询问并保存用户偏好"
+            template = self._assistant_find_action_template(templates, ["preferences_save"])
         elif has_session and kind == "assistant_pansou":
             mode = "continue_pansou"
             reason = "当前会话停留在盘搜结果列表"
@@ -4268,6 +4316,7 @@ class AgentResourceOfficer(_PluginBase):
             "limit",
             "plan_id",
             "prefer_unexecuted",
+            "preferences",
             "compact",
         ]:
             if key in body_payload:
@@ -4300,9 +4349,19 @@ class AgentResourceOfficer(_PluginBase):
             "session_id": session_id,
         }
         templates: List[Dict[str, Any]] = []
+        preference_status = self._assistant_preferences_status_brief(session=session_name)
+        preference_template = self._assistant_action_template(
+            name="preferences_save",
+            description="保存智能体片源偏好；首次接入建议先询问用户后再保存",
+            endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/preferences",
+            tool="agent_resource_officer_preferences",
+            body={**base_state, "preferences": self._assistant_default_preferences_template()},
+        )
 
         if not data.get("has_session"):
             templates = []
+            if preference_status.get("needs_onboarding"):
+                templates.append(preference_template)
             saved_plan = dict(data.get("saved_plan") or {})
             if saved_plan.get("has_pending"):
                 templates.append(
@@ -4369,6 +4428,8 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_state, "prefer_unexecuted": True},
                 )
             )
+        if preference_status.get("needs_onboarding"):
+            templates.append(preference_template)
 
         templates.append(
             self._assistant_action_template(
@@ -4916,6 +4977,10 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
             "action_templates": data.get("action_templates") or [],
         }
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        return payload
 
     def _assistant_single_action_compact_response(self, name: str, result: Dict[str, Any]) -> Dict[str, Any]:
         response = dict(result or {})
@@ -4938,6 +5003,9 @@ class AgentResourceOfficer(_PluginBase):
         for key in ["plan_id", "workflow", "plan_auto_selected", "has_session", "has_pending"]:
             if key in data:
                 payload[key] = data.get(key)
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
         pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
         if pending_p115:
             payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
@@ -4971,6 +5039,9 @@ class AgentResourceOfficer(_PluginBase):
         for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource"]:
             if key in data:
                 payload[key] = data.get(key)
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
         for key in ["items", "candidates", "resources"]:
             if isinstance(data.get(key), list):
                 payload[f"{key}_count"] = len(data.get(key) or [])
@@ -5010,6 +5081,8 @@ class AgentResourceOfficer(_PluginBase):
             "execute_plan_body": data.get("execute_plan_body") or {"plan_id": plan_id},
             "plan_created_at": data.get("plan_created_at"),
             "plan_created_at_text": data.get("plan_created_at_text"),
+            "preference_status": data.get("preference_status") or {},
+            "needs_onboarding": bool((data.get("preference_status") or {}).get("needs_onboarding")),
             "next_actions": ["execute_plan"] if plan_id else [],
             "action_templates": [template] if template else [],
         }
@@ -7105,7 +7178,10 @@ class AgentResourceOfficer(_PluginBase):
         payload["session"] = session_name
         payload["session_id"] = session_state.get("session_id") or self._assistant_session_id(session_name)
         payload["session_state"] = session_state
+        payload["preference_status"] = payload.get("preference_status") or self._assistant_preferences_status_brief(session=session_name)
         payload["next_actions"] = payload.get("next_actions") or session_state.get("suggested_actions") or []
+        if payload["preference_status"].get("needs_onboarding") and "preferences.init" not in payload["next_actions"]:
+            payload["next_actions"] = ["preferences.init", *list(payload["next_actions"] or [])]
         payload["action_templates"] = payload.get("action_templates") or session_state.get("action_templates") or []
         payload["recovery"] = payload.get("recovery") or session_state.get("recovery") or self._assistant_recovery_public_data(session_state=session_state)
         return payload

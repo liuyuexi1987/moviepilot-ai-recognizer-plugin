@@ -38,11 +38,12 @@
     "name": "Agent云盘资源整合",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存、飞书入口与智能体接口的资源工作流主插件。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.2.03",
+    "version": "0.2.04",
     "icon": "agentresourceofficer.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.2.04": "增强智能体偏好引导协议，主响应返回低 token preference_status，并在未初始化时优先提示保存偏好。",
       "0.2.03": "新增智能体偏好画像、云盘/PT 分源评分、MP 原生搜索下载订阅推荐工作流，并让写入动作优先生成 plan_id。",
       "0.2.02": "新增影巢资源搜索/解锁总开关与单资源积分上限，降低外部智能体误解锁高积分资源的风险。",
       "0.2.01": "移除 get_state 中的主动 Agent Tool 重载，避免插件状态轮询时反复打印工具加载日志。",

@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.13"
+HELPER_VERSION = "0.1.14"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -209,6 +209,7 @@ def compact(data):
             "recommended_recipe_detail",
             "next_actions",
             "recovery",
+            "preference_status",
             "preferences",
             "needs_onboarding",
             "initialized",

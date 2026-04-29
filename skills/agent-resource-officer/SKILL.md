@@ -298,6 +298,8 @@ Before the first automated resource task in a new user profile, check preference
 python3 scripts/aro_request.py preferences --session agent:<用户ID>
 ```
 
+Most assistant responses also include compact `preference_status`. If `preference_status.needs_onboarding=true`, pause automation, ask the user for preferences, then save them before choosing downloads, unlocks, or transfers.
+
 If `needs_onboarding=true`, ask the user for a compact preference profile and save it:
 
 ```bash
