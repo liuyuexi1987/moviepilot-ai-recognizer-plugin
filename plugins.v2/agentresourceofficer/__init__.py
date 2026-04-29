@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.12"
+    plugin_version = "0.2.13"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3651,6 +3651,44 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    async def _assistant_mp_downloaders(self, *, session: str) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_downloaders()
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载器查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_downloaders",
+                "ok": bool(result.get("success")),
+                "items": result.get("items") if isinstance(result.get("items"), list) else [],
+                "enabled_count": self._safe_int(result.get("enabled_count"), 0),
+            }),
+        }
+
+    async def _assistant_mp_sites(
+        self,
+        *,
+        session: str,
+        status: str = "active",
+        name: str = "",
+        limit: int = 30,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_sites(
+            status=status or "active",
+            name=name,
+            limit=max(1, min(100, self._safe_int(limit, 30))),
+        )
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "站点查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_sites",
+                "ok": bool(result.get("success")),
+                "status": result.get("status") or status,
+                "items": result.get("items") if isinstance(result.get("items"), list) else [],
+                "total": self._safe_int(result.get("total"), 0),
+            }),
+        }
+
     async def _assistant_mp_recommendations(
         self,
         *,
@@ -4876,6 +4914,20 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "name": "query_mp_download_tasks", "status": "downloading"},
                 ),
                 self._assistant_action_template(
+                    name="query_mp_downloaders",
+                    description="查看 MP 下载器配置摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_downloaders"},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_sites",
+                    description="查看 MP 站点启用状态和 Cookie 是否存在，不返回 Cookie 明文",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_sites", "status": "active", "limit": 30},
+                ),
+                self._assistant_action_template(
                     name="start_115_login",
                     description="发起新的 115 扫码登录",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
@@ -5896,6 +5948,7 @@ class AgentResourceOfficer(_PluginBase):
             "6. text=链接 https://pan.quark.cn/s/xxxx 位置=分享",
             "7. text=MP搜索 蜘蛛侠；下载1 会先生成计划",
             "8. text=下载任务；暂停下载 1 / 恢复下载 1 / 删除下载 1 会先生成计划",
+            "9. text=站点状态；下载器状态 用于排查 PT 搜索/下载环境",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -5942,6 +5995,8 @@ class AgentResourceOfficer(_PluginBase):
                     "hdhive_checkin_history",
                     "mp_download_tasks",
                     "mp_download_control",
+                    "mp_downloaders",
+                    "mp_sites",
                     "mp_download",
                     "mp_subscribe",
                     "mp_subscribe_search",
@@ -5962,6 +6017,8 @@ class AgentResourceOfficer(_PluginBase):
                     "action",
                     "status",
                     "hash",
+                    "name",
+                    "site_name",
                     "downloader",
                     "download_control",
                     "delete_files",
@@ -6014,6 +6071,8 @@ class AgentResourceOfficer(_PluginBase):
                     "status",
                     "hash",
                     "target",
+                    "name",
+                    "site_name",
                     "control",
                     "downloader",
                     "delete_files",
@@ -7980,6 +8039,27 @@ class AgentResourceOfficer(_PluginBase):
             options["action"] = "mp_download_tasks"
             options["mode"] = ""
             options["keyword"] = ""
+        elif compact in {
+            "下载器",
+            "下载器状态",
+            "下载器列表",
+            "查看下载器",
+            "downloaders",
+        }:
+            options["action"] = "mp_downloaders"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "站点",
+            "站点状态",
+            "站点列表",
+            "pt站点",
+            "pt站点状态",
+            "sites",
+        }:
+            options["action"] = "mp_sites"
+            options["mode"] = ""
+            options["keyword"] = ""
         else:
             for prefix, control in [
                 ("暂停下载", "pause"),
@@ -8002,6 +8082,13 @@ class AgentResourceOfficer(_PluginBase):
                 for prefix in ["下载任务", "下载状态", "下载列表", "查看下载", "下载进度"]:
                     if raw.startswith(prefix + " "):
                         options["action"] = "mp_download_tasks"
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
+            if not options.get("action"):
+                for prefix in ["站点状态", "站点列表", "PT站点", "pt站点", "站点"]:
+                    if raw.startswith(prefix + " "):
+                        options["action"] = "mp_sites"
                         options["mode"] = ""
                         options["keyword"] = raw[len(prefix):].strip()
                         break
@@ -9882,6 +9969,15 @@ class AgentResourceOfficer(_PluginBase):
                     "history": self._hdhive_checkin_history_public_data(limit=10),
                 }),
             })
+        if assistant_action == "mp_downloaders":
+            return finish(await self._assistant_mp_downloaders(session=session))
+        if assistant_action == "mp_sites":
+            return finish(await self._assistant_mp_sites(
+                session=session,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "active"),
+                name=keyword,
+                limit=self._safe_int(body.get("limit"), 30),
+            ))
         if assistant_action == "mp_download_tasks":
             return finish(await self._assistant_mp_download_tasks(
                 session=session,
@@ -10557,6 +10653,23 @@ class AgentResourceOfficer(_PluginBase):
                 downloader=self._clean_text(body.get("downloader")),
                 limit=self._safe_int(body.get("limit"), 10),
             ))
+        if name == "query_mp_downloaders":
+            session_name, _ = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_downloaders(session=session_name))
+        if name == "query_mp_sites":
+            session_name, _ = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_sites(
+                session=session_name,
+                status=self._clean_text(body.get("status") or "active"),
+                name=self._clean_text(body.get("site_name") or body.get("keyword") or body.get("title")),
+                limit=self._safe_int(body.get("limit"), 30),
+            ))
         if name == "mp_download_control":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -10878,6 +10991,16 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "status", "title", "hash", "downloader", "limit", "compact"],
                 },
                 {
+                    "name": "mp_downloaders",
+                    "description": "查询 MP 下载器配置摘要，不返回敏感字段",
+                    "fields": ["session", "compact"],
+                },
+                {
+                    "name": "mp_sites",
+                    "description": "查询 MP 站点启用状态、优先级和 Cookie 是否存在，不返回 Cookie 明文",
+                    "fields": ["session", "status", "keyword", "limit", "compact"],
+                },
+                {
                     "name": "mp_download_control",
                     "description": "暂停、恢复或删除 MP 下载任务，默认先生成 plan_id",
                     "fields": ["session", "control", "target", "downloader", "delete_files", "compact", "dry_run"],
@@ -11006,6 +11129,17 @@ class AgentResourceOfficer(_PluginBase):
                 "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
                 "downloader": self._clean_text(body.get("downloader")),
                 "limit": self._safe_int(body.get("limit"), 10),
+            })], ""
+
+        if workflow_name == "mp_downloaders":
+            return [base({"name": "query_mp_downloaders"})], ""
+
+        if workflow_name == "mp_sites":
+            return [base({
+                "name": "query_mp_sites",
+                "status": self._clean_text(body.get("status")) or "active",
+                "keyword": keyword,
+                "limit": self._safe_int(body.get("limit"), 30),
             })], ""
 
         if workflow_name == "mp_download_control":

@@ -217,6 +217,15 @@ python3 scripts/aro_request.py route --text "恢复下载 1"
 python3 scripts/aro_request.py route --text "删除下载 1"
 ```
 
+PT 环境诊断也可以直接询问；站点结果只返回脱敏摘要，不会暴露 Cookie：
+
+```bash
+python3 scripts/aro_request.py route --text "站点状态"
+python3 scripts/aro_request.py route --text "下载器状态"
+python3 scripts/aro_request.py workflow --workflow mp_sites --status active --limit 30
+python3 scripts/aro_request.py workflow --workflow mp_downloaders
+```
+
 - 云盘资源按清晰度、HDR/DV、字幕、完整度、目录和网盘类型评分；影巢额外受积分上限保护。
 - PT 资源按做种数、免费/促销、下载折算、清晰度、HDR/DV、字幕和标题匹配评分；做种低于阈值不会自动下载。
 - 下载、订阅、影巢解锁、网盘转存默认先生成 `plan_id`，确认后再执行。

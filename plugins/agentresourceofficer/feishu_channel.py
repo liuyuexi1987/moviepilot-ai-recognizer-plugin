@@ -33,10 +33,12 @@ try:
     from app.core.event import eventmanager
     from app.core.metainfo import MetaInfo
     from app.db.downloadhistory_oper import DownloadHistoryOper
+    from app.db.site_oper import SiteOper
+    from app.db.systemconfig_oper import SystemConfigOper
     from app.core.plugin import PluginManager
     from app.log import logger
     from app.scheduler import Scheduler
-    from app.schemas.types import EventType, TorrentStatus
+    from app.schemas.types import EventType, SystemConfigKey, TorrentStatus
     from app.utils.http import RequestUtils
     from app.utils.string import StringUtils
 except Exception:
@@ -44,12 +46,15 @@ except Exception:
     DownloadHistoryOper = None
     MediaChain = None
     SearchChain = None
+    SiteOper = None
     SubscribeChain = None
+    SystemConfigOper = None
     eventmanager = None
     MetaInfo = None
     PluginManager = None
     Scheduler = None
     EventType = None
+    SystemConfigKey = None
     TorrentStatus = None
     RequestUtils = None
     StringUtils = None
@@ -796,6 +801,96 @@ class FeishuChannel:
         except Exception as exc:
             logger.error(f"[AgentResourceOfficer][Feishu] 操作下载任务失败：{task_hash} {exc}\n{traceback.format_exc()}")
             return {"success": False, "message": f"操作下载任务失败：{exc}"}
+
+    def _query_downloaders(self) -> Dict[str, Any]:
+        if SystemConfigOper is None or SystemConfigKey is None:
+            return {"success": False, "message": "查询下载器失败：当前环境缺少 MoviePilot 配置依赖。", "items": []}
+        try:
+            raw_items = SystemConfigOper().get(SystemConfigKey.Downloaders) or []
+            items: List[Dict[str, Any]] = []
+            for index, item in enumerate(raw_items, 1):
+                if not isinstance(item, dict):
+                    continue
+                items.append({
+                    "index": index,
+                    "name": str(item.get("name") or ""),
+                    "type": str(item.get("type") or ""),
+                    "enabled": bool(item.get("enabled")),
+                    "default": bool(item.get("default")),
+                })
+            enabled = [item for item in items if item.get("enabled")]
+            if not items:
+                return {"success": True, "message": "未配置下载器。", "items": [], "enabled_count": 0}
+            lines = [f"下载器配置：共 {len(items)} 个，启用 {len(enabled)} 个"]
+            for item in items:
+                status = "启用" if item.get("enabled") else "停用"
+                default = "，默认" if item.get("default") else ""
+                lines.append(f"{item.get('index')}. {item.get('name') or '-'} | {item.get('type') or '-'} | {status}{default}")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "enabled_count": len(enabled),
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询下载器失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询下载器失败：{exc}", "items": []}
+
+    def _query_sites(self, *, status: str = "active", name: str = "", limit: int = 30) -> Dict[str, Any]:
+        if SiteOper is None:
+            return {"success": False, "message": "查询站点失败：当前环境缺少 MoviePilot 站点依赖。", "items": []}
+        try:
+            status_name = str(status or "active").strip().lower()
+            name_filter = str(name or "").strip().lower()
+            sites = SiteOper().list_order_by_pri() or []
+            items: List[Dict[str, Any]] = []
+            for site in sites:
+                is_active = bool(getattr(site, "is_active", False))
+                if status_name == "active" and not is_active:
+                    continue
+                if status_name == "inactive" and is_active:
+                    continue
+                site_name = str(getattr(site, "name", "") or "")
+                if name_filter and name_filter not in site_name.lower():
+                    continue
+                cookie = str(getattr(site, "cookie", "") or "")
+                items.append({
+                    "index": len(items) + 1,
+                    "id": getattr(site, "id", None),
+                    "name": site_name,
+                    "domain": str(getattr(site, "domain", "") or ""),
+                    "url": str(getattr(site, "url", "") or ""),
+                    "pri": getattr(site, "pri", None),
+                    "is_active": is_active,
+                    "has_cookie": bool(cookie),
+                    "downloader": str(getattr(site, "downloader", "") or ""),
+                    "proxy": bool(getattr(site, "proxy", False)),
+                    "timeout": getattr(site, "timeout", None),
+                })
+            total = len(items)
+            items = items[:max(1, min(100, int(limit or 30)))]
+            label = {"active": "已启用", "inactive": "已停用", "all": "全部"}.get(status_name, status_name)
+            if not items:
+                return {"success": True, "message": f"未找到{label}站点。", "items": [], "total": total}
+            lines = [f"PT 站点：{label}，共 {total} 个，展示前 {len(items)} 个："]
+            for item in items:
+                cookie_state = "有Cookie" if item.get("has_cookie") else "无Cookie"
+                active_state = "启用" if item.get("is_active") else "停用"
+                lines.append(
+                    f"{item.get('index')}. {item.get('name') or '-'} | {item.get('domain') or '-'} | "
+                    f"{active_state} | {cookie_state} | 优先级:{item.get('pri')} | 下载器:{item.get('downloader') or '默认'}"
+                )
+            lines.append("说明：这里不会返回 Cookie 明文；如站点搜索失败，优先检查是否启用、Cookie 是否存在、站点绑定下载器是否可用。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": total,
+                "status": status_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询站点失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询站点失败：{exc}", "items": []}
 
     def _execute_media_subscribe(self, keyword: str, immediate_search: bool) -> str:
         if not all([MetaInfo, SubscribeChain]):

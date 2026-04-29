@@ -358,6 +358,13 @@ Download task management also uses the same route. Querying tasks is read-only. 
 删除下载 1
 ```
 
+PT environment diagnostics are read-only and safe. Site results are sanitized and must not expose cookies:
+
+```text
+站点状态
+下载器状态
+```
+
 Natural-language route examples that should call recommendations:
 
 ```text
