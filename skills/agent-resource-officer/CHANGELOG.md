@@ -5,6 +5,7 @@
 - Added `preferences` helper command to read, save, or reset source preferences for external agents.
 - Documented cloud/PT source-specific scoring and MP native search/download/subscribe/recommend workflows.
 - Updated the external-agent handoff prompt to check preferences before automated resource tasks.
+- Changed `workflow` helper behavior so read-only workflows execute directly while write workflows still generate a dry-run plan by default.
 
 ## 0.1.12
 

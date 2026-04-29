@@ -2768,7 +2768,7 @@ class AgentResourceOfficer(_PluginBase):
         current = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(key))
         incoming = dict(preferences or {})
         merged = {**current, **incoming}
-        merged["initialized"] = self._parse_bool_value(merged.get("initialized"), True)
+        merged["initialized"] = self._parse_bool_value(incoming.get("initialized"), True) if "initialized" in incoming else True
         merged["updated_at"] = int(time.time())
         normalized = self._normalize_assistant_preferences(merged)
         self._assistant_preferences[key] = normalized

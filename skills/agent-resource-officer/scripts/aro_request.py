@@ -44,6 +44,14 @@ HELPER_COMMANDS = [
     "external-agent",
     "workbuddy",
 ]
+WRITE_WORKFLOWS = {
+    "pansou_transfer",
+    "hdhive_unlock",
+    "share_transfer",
+    "mp_search_download",
+    "mp_subscribe",
+    "mp_subscribe_and_search",
+}
 
 
 def read_config():
@@ -568,7 +576,7 @@ def commands_catalog():
             {"name": "route", "network": True, "writes": True, "write_condition": "depends on text and routed action", "purpose": "route natural-language resource requests"},
             {"name": "pick", "network": True, "writes": True, "write_condition": "depends on current session and selected action", "purpose": "continue numbered choices or actions"},
             {"name": "preferences", "network": True, "writes": True, "write_condition": "only with --preferences-json or --reset", "purpose": "read/save/reset source preferences used by cloud and PT scoring"},
-            {"name": "workflow", "network": True, "writes": True, "write_condition": "saves a dry-run plan; does not unlock or transfer", "purpose": "create dry-run workflow plans"},
+            {"name": "workflow", "network": True, "writes": True, "write_condition": "read workflows execute directly; write workflows save a dry-run plan by default", "purpose": "run or plan preset assistant workflows"},
             {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan; use --plan-id for exact execution", "purpose": "execute a saved plan by plan_id or latest unexecuted session plan"},
             {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
             {"name": "session", "network": True, "writes": False, "write_condition": "", "purpose": "inspect one assistant session"},
@@ -979,7 +987,7 @@ def main():
             "path": args.target_path or "",
             "source": args.source or "",
             "limit": args.limit,
-            "dry_run": True,
+            "dry_run": args.workflow in WRITE_WORKFLOWS,
             "compact": True,
         }
         if args.session:

@@ -90,7 +90,7 @@ python3 scripts/aro_request.py pick --choice 1
 
 `external-agent` 会输出可直接交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体的系统提示词和最小工具约定；`external-agent --full` 会输出完整接入说明。旧命令 `workbuddy` 仍保留为兼容别名。
 
-注意：`workflow` 是 dry-run，不会解锁或转存资源，但会保存一个待确认执行的 plan，因此在命令目录里属于写入型命令。
+注意：`workflow` 会直接执行只读工作流；涉及下载、订阅、解锁或转存的写入工作流会默认保存待确认执行的 `plan_id`。
 
 首次交给外部智能体使用时，建议先运行 `preferences`。如果返回需要初始化偏好，智能体应询问用户：清晰度、杜比视界/HDR、字幕、电视剧是否全集优先、PT 最低做种、影巢积分上限、默认目录、是否允许高分资源自动入库。偏好会用于云盘和 PT 分源评分。
 
