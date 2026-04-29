@@ -183,6 +183,14 @@ python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source 
 python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source tmdb_trending --media-type all --choice 1 --mode hdhive
 ```
 
+智能体也可以直接走自然语言路由：
+
+```bash
+python3 scripts/aro_request.py route --text "看看最近有什么热门影视"
+python3 scripts/aro_request.py route --text "豆瓣热门电影"
+python3 scripts/aro_request.py route --text "今日番剧"
+```
+
 - 云盘资源按清晰度、HDR/DV、字幕、完整度、目录和网盘类型评分；影巢额外受积分上限保护。
 - PT 资源按做种数、免费/促销、下载折算、清晰度、HDR/DV、字幕和标题匹配评分；做种低于阈值不会自动下载。
 - 下载、订阅、影巢解锁、网盘转存默认先生成 `plan_id`，确认后再执行。

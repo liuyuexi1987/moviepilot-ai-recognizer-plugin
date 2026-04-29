@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.08"
+    plugin_version = "0.2.09"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -232,6 +232,76 @@ class AgentResourceOfficer(_PluginBase):
                 if remain:
                     return mode, remain
         return "", raw
+
+    @staticmethod
+    def _normalize_mp_recommend_request(value: Any, default_source: str = "tmdb_trending") -> Tuple[str, str]:
+        raw = str(value or "").strip()
+        compact = re.sub(r"[\s，。？！!?,、:：]+", "", raw).lower()
+        allowed_sources = {
+            "tmdb_trending",
+            "tmdb_movies",
+            "tmdb_tvs",
+            "douban_hot",
+            "douban_movie_hot",
+            "douban_tv_hot",
+            "douban_movie_showing",
+            "douban_movie_top250",
+            "douban_tv_animation",
+            "bangumi_calendar",
+        }
+        if compact in allowed_sources:
+            return compact, "all"
+        source_aliases = {
+            "trending": ("tmdb_trending", "all"),
+            "tmdb": ("tmdb_trending", "all"),
+            "tmdb热门": ("tmdb_trending", "all"),
+            "tmdb电影": ("tmdb_movies", "movie"),
+            "tmdb剧集": ("tmdb_tvs", "tv"),
+            "tmdb电视剧": ("tmdb_tvs", "tv"),
+            "豆瓣": ("douban_hot", "all"),
+            "豆瓣热门": ("douban_hot", "all"),
+            "豆瓣电影": ("douban_movie_hot", "movie"),
+            "豆瓣热门电影": ("douban_movie_hot", "movie"),
+            "豆瓣电视剧": ("douban_tv_hot", "tv"),
+            "豆瓣剧集": ("douban_tv_hot", "tv"),
+            "豆瓣top250": ("douban_movie_top250", "movie"),
+            "top250": ("douban_movie_top250", "movie"),
+            "正在热映": ("douban_movie_showing", "movie"),
+            "热映": ("douban_movie_showing", "movie"),
+            "院线": ("douban_movie_showing", "movie"),
+            "bangumi": ("bangumi_calendar", "tv"),
+            "番剧": ("bangumi_calendar", "tv"),
+            "今日番剧": ("bangumi_calendar", "tv"),
+            "每日放送": ("bangumi_calendar", "tv"),
+            "动画番剧": ("bangumi_calendar", "tv"),
+        }
+        if compact in source_aliases:
+            return source_aliases[compact]
+        if "top250" in compact:
+            return "douban_movie_top250", "movie"
+        if any(token in compact for token in ["bangumi", "番剧", "每日放送", "今日放送", "今日动画"]):
+            return "bangumi_calendar", "tv"
+        if any(token in compact for token in ["正在热映", "热映", "院线"]):
+            return "douban_movie_showing", "movie"
+        if "豆瓣" in compact:
+            if "动画" in compact:
+                return "douban_tv_animation", "tv"
+            if any(token in compact for token in ["电视剧", "剧集", "剧", "tv"]):
+                return "douban_tv_hot", "tv"
+            if any(token in compact for token in ["电影", "movie"]):
+                return "douban_movie_hot", "movie"
+            return "douban_hot", "all"
+        if "tmdb" in compact:
+            if any(token in compact for token in ["电视剧", "剧集", "剧", "tv"]):
+                return "tmdb_tvs", "tv"
+            if any(token in compact for token in ["电影", "movie"]):
+                return "tmdb_movies", "movie"
+            return "tmdb_trending", "all"
+        if any(token in compact for token in ["电视剧", "剧集", "剧集推荐", "热门剧", "热门电视剧"]):
+            return "tmdb_tvs", "tv"
+        if any(token in compact for token in ["电影", "影视电影", "热门电影"]):
+            return "tmdb_movies", "movie"
+        return default_source or "tmdb_trending", "all"
 
     @classmethod
     def _resolve_pan_path_value(cls, value: str) -> str:
@@ -3443,6 +3513,30 @@ class AgentResourceOfficer(_PluginBase):
         media_type_name = self._clean_text(media_type) or "all"
         chain = RecommendChain()
         try:
+            def collect_items(raw_results: List[Dict[str, Any]], media_type_filter: str = "") -> List[Dict[str, Any]]:
+                current_media_type = media_type_filter or media_type_name
+                collected = []
+                for raw_item in (raw_results or [])[:max_limit]:
+                    if not isinstance(raw_item, dict):
+                        continue
+                    item_type = raw_item.get("type")
+                    if current_media_type != "all":
+                        enum_type = MediaType.from_agent(current_media_type)
+                        if enum_type and item_type != enum_type:
+                            continue
+                    collected.append({
+                        "index": len(collected) + 1,
+                        "title": raw_item.get("title"),
+                        "year": raw_item.get("year"),
+                        "type": media_type_to_agent(item_type),
+                        "tmdb_id": raw_item.get("tmdb_id"),
+                        "douban_id": raw_item.get("douban_id"),
+                        "vote_average": raw_item.get("vote_average"),
+                        "poster_path": raw_item.get("poster_path"),
+                        "detail_link": raw_item.get("detail_link"),
+                    })
+                return collected
+
             results: List[Dict[str, Any]] = []
             if source_name == "tmdb_trending":
                 results = await chain.async_tmdb_trending(page=1)
@@ -3470,27 +3564,15 @@ class AgentResourceOfficer(_PluginBase):
                     "message": f"不支持的推荐来源：{source_name}",
                     "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
                 }
-            items = []
-            for item in (results or [])[:max_limit]:
-                if not isinstance(item, dict):
-                    continue
-                item_type = item.get("type")
-                if media_type_name != "all":
-                    enum_type = MediaType.from_agent(media_type_name)
-                    if enum_type and item_type != enum_type:
-                        continue
-                items.append({
-                    "index": len(items) + 1,
-                    "title": item.get("title"),
-                    "year": item.get("year"),
-                    "type": media_type_to_agent(item_type),
-                    "tmdb_id": item.get("tmdb_id"),
-                    "douban_id": item.get("douban_id"),
-                    "vote_average": item.get("vote_average"),
-                    "poster_path": item.get("poster_path"),
-                    "detail_link": item.get("detail_link"),
-                })
-            lines = [f"MP 热门推荐：{source_name}，共 {len(items)} 条"]
+            items = collect_items(results)
+            fallback_source = ""
+            if not items and source_name != "tmdb_trending":
+                fallback_source = "tmdb_trending"
+                items = collect_items(await chain.async_tmdb_trending(page=1), "all")
+            display_source = fallback_source or source_name
+            lines = [f"MP 热门推荐：{display_source}，共 {len(items)} 条"]
+            if fallback_source:
+                lines.append(f"注：{source_name} 当前暂无结果，已自动回退 {fallback_source}。")
             for item in items[:10]:
                 lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
             lines.append("下一步：回复“选择 1”进入 MP 原生搜索；也可结构化传 mode=hdhive 或 mode=pansou。")
@@ -3498,7 +3580,8 @@ class AgentResourceOfficer(_PluginBase):
                 self._save_session(cache_key, {
                     "kind": "assistant_mp_recommend",
                     "stage": "result",
-                    "source": source_name,
+                    "source": fallback_source or source_name,
+                    "requested_source": source_name,
                     "media_type": media_type_name,
                     "keyword": "",
                     "items": items,
@@ -3510,7 +3593,9 @@ class AgentResourceOfficer(_PluginBase):
                 "data": self._assistant_response_data(session=session, data={
                     "action": "mp_recommendations",
                     "ok": True,
-                    "source": source_name,
+                    "source": fallback_source or source_name,
+                    "requested_source": source_name,
+                    "fallback_source": fallback_source,
                     "media_type": media_type_name,
                     "items": items,
                 }),
@@ -7668,6 +7753,32 @@ class AgentResourceOfficer(_PluginBase):
                     options["mode"] = ""
                     options["keyword"] = raw[len(prefix):].strip()
                     break
+            if not options.get("action") and any(
+                marker in compact
+                for marker in [
+                    "热门影视",
+                    "热门电影",
+                    "热门电视剧",
+                    "热门剧集",
+                    "最近热门",
+                    "有什么热门",
+                    "看看热门",
+                    "影视推荐",
+                    "电影推荐",
+                    "剧集推荐",
+                    "电视剧推荐",
+                    "豆瓣热门",
+                    "豆瓣top250",
+                    "正在热映",
+                    "今日番剧",
+                    "每日放送",
+                    "bangumi",
+                    "tmdb热门",
+                ]
+            ):
+                options["action"] = "mp_recommendations"
+                options["mode"] = ""
+                options["keyword"] = raw
         for token in remain.split():
             item = token.strip()
             if not item:
@@ -9438,6 +9549,7 @@ class AgentResourceOfficer(_PluginBase):
             })
 
         assistant_action = self._clean_text(parsed.get("action"))
+        keyword = self._clean_text(parsed.get("keyword"))
         if assistant_action == "assistant_help":
             summary = self._format_assistant_help_text(session=session)
             return finish({
@@ -9507,12 +9619,12 @@ class AgentResourceOfficer(_PluginBase):
                 immediate_search=assistant_action == "mp_subscribe_search",
             ))
         if assistant_action == "mp_recommendations":
-            source = self._clean_text(body.get("source") or parsed.get("keyword") or "tmdb_trending")
-            if source in {"", "推荐", "热门推荐"}:
-                source = "tmdb_trending"
+            source, inferred_media_type = self._normalize_mp_recommend_request(
+                body.get("source") or parsed.get("keyword") or text or "tmdb_trending"
+            )
             return finish(await self._assistant_mp_recommendations(
                 source=source,
-                media_type=self._clean_text(body.get("media_type") or body.get("type") or "all"),
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or parsed.get("type") or inferred_media_type or "all"),
                 limit=self._safe_int(body.get("limit"), 20),
                 session=session,
                 cache_key=cache_key,
@@ -9786,7 +9898,6 @@ class AgentResourceOfficer(_PluginBase):
             })
 
         mode = parsed.get("mode") or "hdhive"
-        keyword = self._clean_text(parsed.get("keyword"))
         media_type = self._clean_text(parsed.get("type") or "auto").lower() or "auto"
         year = self._clean_text(parsed.get("year"))
 
@@ -9979,9 +10090,12 @@ class AgentResourceOfficer(_PluginBase):
                 session=self._clean_text(body.get("session")) or "default",
                 session_id=body.get("session_id"),
             )
+            source_name, inferred_media_type = self._normalize_mp_recommend_request(
+                body.get("source") or "tmdb_trending"
+            )
             return await finish(self._assistant_mp_recommendations(
-                source=self._clean_text(body.get("source")) or "tmdb_trending",
-                media_type=self._clean_text(body.get("media_type") or body.get("type")) or "all",
+                source=source_name,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or inferred_media_type) or "all",
                 limit=self._safe_int(body.get("limit"), 20),
                 session=recommend_session,
                 cache_key=recommend_cache_key,
@@ -10386,11 +10500,12 @@ class AgentResourceOfficer(_PluginBase):
             return [base({"name": "start_mp_subscribe_search", "keyword": keyword})], ""
 
         if workflow_name == "mp_recommend":
+            source_name, inferred_media_type = self._normalize_mp_recommend_request(source)
             return [
                 base({
                     "name": "start_mp_recommendations",
-                    "source": source,
-                    "media_type": self._clean_text(body.get("media_type")) or "all",
+                    "source": source_name,
+                    "media_type": self._clean_text(body.get("media_type")) or inferred_media_type or "all",
                     "limit": max(1, min(50, limit)),
                 })
             ], ""
@@ -10398,11 +10513,12 @@ class AgentResourceOfficer(_PluginBase):
         if workflow_name == "mp_recommend_search":
             if keyword:
                 return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
+            source_name, inferred_media_type = self._normalize_mp_recommend_request(source)
             actions = [
                 base({
                     "name": "start_mp_recommendations",
-                    "source": source,
-                    "media_type": self._clean_text(body.get("media_type")) or "all",
+                    "source": source_name,
+                    "media_type": self._clean_text(body.get("media_type")) or inferred_media_type or "all",
                     "limit": max(1, min(50, limit)),
                 })
             ]
