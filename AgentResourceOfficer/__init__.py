@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.09"
+    plugin_version = "0.2.10"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -325,6 +325,64 @@ class AgentResourceOfficer(_PluginBase):
         if text in {"n", "next", "next_page", "下一页", "下页"} or text.startswith("n "):
             return "next_page"
         return ""
+
+    @staticmethod
+    def _normalize_pick_mode(value: Any) -> str:
+        text = str(value or "").strip().lower()
+        compact = re.sub(r"\s+", "", text)
+        if not compact:
+            return ""
+        if any(token in compact for token in ["hdhive", "影巢", "影潮", "走影巢", "用影巢"]):
+            return "hdhive"
+        if re.search(r"(^|[^a-z])yc($|[^a-z])", text):
+            return "hdhive"
+        if any(token in compact for token in ["pansou", "盘搜", "走盘搜", "用盘搜"]):
+            return "pansou"
+        if re.search(r"(^|[^a-z])ps($|[^a-z])", text):
+            return "pansou"
+        if any(token in compact for token in ["mp", "原生", "moviepilot", "站点", "pt"]):
+            return "mp"
+        return ""
+
+    @classmethod
+    def _parse_pick_text(cls, value: Any) -> Tuple[int, str, str, str]:
+        raw = cls._clean_text(value)
+        action = cls._normalize_pick_action(raw)
+        if action:
+            return 0, "", action, ""
+        alias_match = re.match(r"^(?:/smart_pick|smart_pick|选择|选|继续|pick)\s*", raw, flags=re.IGNORECASE)
+        digit_match = re.match(r"^(\d+)(.*)$", raw)
+        if not alias_match and not digit_match:
+            return 0, "", "", ""
+        if digit_match and not alias_match:
+            suffix = cls._clean_text(digit_match.group(2))
+            if suffix and not (
+                suffix.startswith("/")
+                or "=" in suffix
+                or cls._normalize_pick_mode(suffix)
+                or suffix.lower() in {"n", "next"}
+            ):
+                return 0, "", "", ""
+        text = re.sub(r"^(?:/smart_pick|smart_pick|选择|选|继续|pick)\s*", "", raw, flags=re.IGNORECASE).strip()
+        index = 0
+        path = ""
+        mode = ""
+        match = re.search(r"\d+", text)
+        if match:
+            index = cls._safe_int(match.group(0), 0)
+        for token in text.split():
+            if "=" not in token:
+                continue
+            key, token_value = token.split("=", 1)
+            key = key.strip().lower()
+            token_value = token_value.strip()
+            if key in {"path", "dir", "目录", "位置"} and token_value:
+                path = cls._resolve_pan_path_value(token_value)
+            elif key in {"mode", "search_mode", "target", "方式", "来源", "渠道"} and token_value:
+                mode = cls._normalize_pick_mode(token_value)
+        if not mode:
+            mode = cls._normalize_pick_mode(text)
+        return index, path, "", mode
 
     def init_plugin(self, config: Optional[Dict[str, Any]] = None):
         config = config or {}
@@ -8317,7 +8375,7 @@ class AgentResourceOfficer(_PluginBase):
         )
 
     def feishu_assistant_pick(self, arg: str, session: str) -> Dict[str, Any]:
-        index, target_path, action = self._parse_feishu_pick_arg(arg)
+        index, target_path, action, mode = self._parse_feishu_pick_arg(arg)
         return self._run_coroutine_sync(
             self.api_assistant_pick(
                 _JsonRequestShim(
@@ -8326,6 +8384,7 @@ class AgentResourceOfficer(_PluginBase):
                         "session": self._clean_text(session) or "feishu",
                         "index": index,
                         "action": action,
+                        "mode": mode,
                         "path": target_path,
                         "compact": False,
                     },
@@ -8334,23 +8393,8 @@ class AgentResourceOfficer(_PluginBase):
         )
 
     @classmethod
-    def _parse_feishu_pick_arg(cls, arg: str) -> Tuple[int, str, str]:
-        text = cls._clean_text(arg)
-        action = cls._normalize_pick_action(text)
-        index = 0
-        path = ""
-        if action:
-            return 0, "", action
-        match = re.search(r"\d+", text)
-        if match:
-            index = cls._safe_int(match.group(0), 0)
-        for token in text.split():
-            if "=" not in token:
-                continue
-            key, value = token.split("=", 1)
-            if key.strip().lower() in {"path", "dir", "目录", "位置"}:
-                path = cls._resolve_pan_path_value(value)
-        return index, path, action
+    def _parse_feishu_pick_arg(cls, arg: str) -> Tuple[int, str, str, str]:
+        return cls._parse_pick_text(arg)
 
     async def tool_hdhive_search_session(
         self,
@@ -8554,6 +8598,7 @@ class AgentResourceOfficer(_PluginBase):
         session_id: str = "",
         index: int = 0,
         action: str = "",
+        mode: str = "",
         target_path: str = "",
         compact: bool = True,
     ) -> str:
@@ -8567,6 +8612,7 @@ class AgentResourceOfficer(_PluginBase):
                     "session_id": self._clean_text(session_id),
                     "choice": index,
                     "action": self._clean_text(action),
+                    "mode": self._clean_text(mode),
                     "path": self._clean_text(target_path),
                     "compact": bool(compact),
                 },
@@ -9521,6 +9567,21 @@ class AgentResourceOfficer(_PluginBase):
 
         def finish(result: Dict[str, Any]) -> Dict[str, Any]:
             return self._assistant_interaction_compact_response(result) if compact else result
+
+        pick_index, pick_path, pick_action, pick_mode = self._parse_pick_text(text)
+        if pick_index > 0 or pick_action:
+            pick_result = await self.api_assistant_pick(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "index": pick_index,
+                    "action": pick_action,
+                    "mode": pick_mode,
+                    "path": target_path or pick_path,
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            )
+            return pick_result
 
         route_action = self._normalize_pick_action(text)
         if route_action:

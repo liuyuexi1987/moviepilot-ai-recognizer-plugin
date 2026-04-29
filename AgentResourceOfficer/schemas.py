@@ -44,6 +44,7 @@ class AssistantPickToolInput(BaseModel):
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
     choice: int = Field(default=0, description="选择的编号，从 1 开始；详情或翻页时可为 0")
     action: Optional[str] = Field(default=None, description="可选动作：detail/details/review/详情/审查 或 next/n/下一页")
+    mode: Optional[str] = Field(default=None, description="推荐列表后续搜索方式：mp / hdhive / pansou")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则沿用会话目录")
     compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 

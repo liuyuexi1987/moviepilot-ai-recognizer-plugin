@@ -173,6 +173,7 @@ class AssistantPickTool(MoviePilotTool):
         session_id: str = None,
         choice: int = 0,
         action: str = None,
+        mode: str = None,
         path: str = None,
         compact: bool = True,
         **kwargs,
@@ -185,6 +186,7 @@ class AssistantPickTool(MoviePilotTool):
             session_id=session_id,
             index=choice,
             action=action,
+            mode=mode,
             target_path=path,
             compact=compact,
         )

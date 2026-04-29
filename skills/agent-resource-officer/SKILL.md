@@ -331,6 +331,15 @@ python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source 
 
 `mp_recommend_search` is the low-token recommendation chain. Without `choice`, it returns a recommendation list and stores the session. With `choice`, it immediately continues the selected title into `mode=mp`, `mode=hdhive`, or `mode=pansou`.
 
+After a recommendation list, natural-language picks are valid:
+
+```text
+选择 1
+选择 1 盘搜
+选择1影巢
+选 2 mp
+```
+
 Natural-language route examples that should call recommendations:
 
 ```text

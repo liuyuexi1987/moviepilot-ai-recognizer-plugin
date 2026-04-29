@@ -191,6 +191,14 @@ python3 scripts/aro_request.py route --text "豆瓣热门电影"
 python3 scripts/aro_request.py route --text "今日番剧"
 ```
 
+推荐列表出来后，可以用自然语言继续：
+
+```bash
+python3 scripts/aro_request.py route --text "选择 1"
+python3 scripts/aro_request.py route --text "选择 1 盘搜"
+python3 scripts/aro_request.py route --text "选择1影巢"
+```
+
 - 云盘资源按清晰度、HDR/DV、字幕、完整度、目录和网盘类型评分；影巢额外受积分上限保护。
 - PT 资源按做种数、免费/促销、下载折算、清晰度、HDR/DV、字幕和标题匹配评分；做种低于阈值不会自动下载。
 - 下载、订阅、影巢解锁、网盘转存默认先生成 `plan_id`，确认后再执行。
