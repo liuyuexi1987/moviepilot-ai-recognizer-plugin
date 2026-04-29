@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.25"
+    plugin_version = "0.2.26"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -324,6 +324,8 @@ class AgentResourceOfficer(_PluginBase):
             return "detail"
         if text in {"best", "best_result", "recommend_best", "最佳", "最佳片源", "推荐片源", "推荐下载", "最优"}:
             return "best"
+        if text in {"plan", "dry_run", "make_plan", "计划", "生成计划", "计划选择", "计划处理", "转存计划", "解锁计划"}:
+            return "plan"
         if text in {"n", "next", "next_page", "下一页", "下页"} or text.startswith("n "):
             return "next_page"
         return ""
@@ -352,7 +354,8 @@ class AgentResourceOfficer(_PluginBase):
         action = cls._normalize_pick_action(raw)
         if action:
             return 0, "", action, ""
-        alias_match = re.match(r"^(?:/smart_pick|smart_pick|选择|选|继续|pick)\s*", raw, flags=re.IGNORECASE)
+        alias_pattern = r"^(?:/smart_pick|smart_pick|计划选择|计划处理|生成计划|转存计划|解锁计划|计划(?=\s*\d)|选择|选|继续|pick|plan|dry_run|make_plan)\s*"
+        alias_match = re.match(alias_pattern, raw, flags=re.IGNORECASE)
         digit_match = re.match(r"^(\d+)(.*)$", raw)
         if not alias_match and not digit_match:
             return 0, "", "", ""
@@ -366,11 +369,13 @@ class AgentResourceOfficer(_PluginBase):
                 or suffix.lower() in {"n", "next"}
             ):
                 return 0, "", "", ""
-        text = re.sub(r"^(?:/smart_pick|smart_pick|选择|选|继续|pick)\s*", "", raw, flags=re.IGNORECASE).strip()
+        text = re.sub(alias_pattern, "", raw, flags=re.IGNORECASE).strip()
+        if alias_match and cls._normalize_pick_action(alias_match.group(0).strip()) == "plan":
+            action = "plan"
         index = 0
         path = ""
         mode = ""
-        pick_action = ""
+        pick_action = action or ""
         match = re.search(r"\d+", text)
         if match:
             index = cls._safe_int(match.group(0), 0)
@@ -4537,6 +4542,65 @@ class AgentResourceOfficer(_PluginBase):
         self._persist_workflow_plans()
         return dict(plan)
 
+    def _save_assistant_pick_plan_response(
+        self,
+        *,
+        workflow: str,
+        session: str,
+        session_id: str,
+        actions: List[Dict[str, Any]],
+        execute_body: Dict[str, Any],
+        message: str,
+        score_items: Optional[List[Dict[str, Any]]] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        plan = self._save_workflow_plan(
+            workflow=workflow,
+            session=session,
+            session_id=session_id,
+            actions=actions,
+            execute_body=execute_body,
+        )
+        plan_id = self._clean_text(plan.get("plan_id"))
+        template = self._assistant_action_template(
+            name="execute_plan",
+            description="执行刚生成的计划",
+            endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+            tool="agent_resource_officer_execute_plan",
+            body={
+                "plan_id": plan_id,
+                "session": session,
+                "session_id": session_id,
+                "prefer_unexecuted": True,
+            },
+        )
+        data = {
+            "action": "workflow_plan",
+            "ok": True,
+            "plan_id": plan_id,
+            "workflow": workflow,
+            "dry_run": True,
+            "workflow_actions": [dict(item or {}) for item in actions],
+            "estimated_steps": len(actions),
+            "ready_to_execute": True,
+            "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+            "execute_plan_body": {"plan_id": plan_id},
+            "plan_created_at": plan.get("created_at"),
+            "plan_created_at_text": plan.get("created_at_text"),
+            "next_actions": ["execute_plan"],
+            "action_templates": [template],
+            "write_effect": "state",
+        }
+        if score_items:
+            data["score_summary"] = self._score_summary(score_items, limit=1)
+        if extra_data:
+            data.update(extra_data)
+        return {
+            "success": True,
+            "message": f"{message}：{plan_id}\n未实际执行。回复“执行计划 {plan_id}”后才会写入。",
+            "data": self._assistant_response_data(session=session, data=data),
+        }
+
     def _load_workflow_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
         plan = (self._workflow_plans or {}).get(self._clean_text(plan_id))
         return dict(plan) if isinstance(plan, dict) else None
@@ -5691,15 +5755,22 @@ class AgentResourceOfficer(_PluginBase):
         )
 
         if kind == "assistant_pansou":
-            templates.append(
+            templates.extend([
                 self._assistant_action_template(
                     name="pick_pansou_result",
                     description="按编号选择盘搜结果继续转存",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                     tool="agent_resource_officer_smart_pick",
                     body={**base_pick, "choice": "<1-N>", "path": target_path or self._p115_default_path},
-                )
-            )
+                ),
+                self._assistant_action_template(
+                    name="plan_pansou_result",
+                    description="按编号生成盘搜转存计划，不立即写入",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "action": "plan", "path": target_path or self._p115_default_path},
+                ),
+            ])
         elif kind == "assistant_mp":
             templates.extend([
                 self._assistant_action_template(
@@ -5842,15 +5913,22 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ])
         elif kind == "assistant_hdhive" and stage == "resource":
-            templates.append(
+            templates.extend([
                 self._assistant_action_template(
                     name="pick_hdhive_resource",
                     description="按编号选择影巢资源，解锁并路由到对应网盘",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                     tool="agent_resource_officer_smart_pick",
                     body={**base_pick, "choice": "<1-N>", "path": target_path or self._hdhive_default_path},
-                )
-            )
+                ),
+                self._assistant_action_template(
+                    name="plan_hdhive_resource",
+                    description="按编号生成影巢解锁/转存计划，不立即扣分或写入",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "action": "plan", "path": target_path or self._hdhive_default_path},
+                ),
+            ])
         elif kind == "assistant_p115_login":
             templates.extend([
                 self._assistant_action_template(
@@ -12027,6 +12105,9 @@ class AgentResourceOfficer(_PluginBase):
             result = await awaitable
             return self._assistant_single_action_compact_response(name, result) if compact else result
 
+        async def immediate(result: Dict[str, Any]) -> Dict[str, Any]:
+            return result
+
         route_payload = {
             "session": body.get("session"),
             "session_id": body.get("session_id"),
@@ -12282,6 +12363,64 @@ class AgentResourceOfficer(_PluginBase):
                 "access_code": body.get("access_code"),
             })
             return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
+        if name == "unlock_hdhive_resource":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            resource = body.get("resource") if isinstance(body.get("resource"), dict) else {}
+            slug = self._clean_text(body.get("slug") or resource.get("slug"))
+            final_path = self._resolve_pan_path_value(
+                self._clean_text(body.get("path") or body.get("target_path"))
+            ) or self._hdhive_default_path
+            if not slug:
+                return await finish(immediate({
+                    "success": False,
+                    "message": "影巢解锁动作缺少 slug",
+                    "data": self._assistant_response_data(session=session_name, data={
+                        "action": "hdhive_unlock",
+                        "ok": False,
+                        "error_code": "missing_slug",
+                    }),
+                }))
+            route_ok, route_result, route_message = await self._unlock_and_route(
+                slug,
+                target_path=final_path,
+                resource=resource,
+            )
+            if not route_ok:
+                route = dict((route_result or {}).get("route") or {})
+                share_url = self._clean_text(route.get("share_url"))
+                if self._is_115_url(share_url) or self._clean_text(route.get("provider")) == "115":
+                    self._save_pending_p115_share(
+                        cache_key,
+                        share_url=share_url,
+                        access_code=route.get("access_code") or "",
+                        target_path=route.get("target_path") or final_path,
+                        source="assistant_hdhive_plan",
+                        title=resource.get("title") or resource.get("matched_title") or "",
+                        last_error=route_message,
+                    )
+                return await finish(immediate({
+                    "success": False,
+                    "message": route_message,
+                    "data": self._assistant_response_data(session=session_name, data={
+                        "action": "hdhive_unlock",
+                        "ok": False,
+                        "selected_resource": resource,
+                        "result": route_result,
+                    }),
+                }))
+            return await finish(immediate({
+                "success": True,
+                "message": self._format_route_result(route_result),
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "hdhive_unlock",
+                    "ok": True,
+                    "selected_resource": resource,
+                    "result": route_result,
+                }),
+            }))
         if name == "inspect_session_state":
             return await finish(self.api_assistant_session_state(_JsonRequestShim(request, {
                 "session": body.get("session"),
@@ -12300,6 +12439,12 @@ class AgentResourceOfficer(_PluginBase):
             })))
         if name in {"pick_pansou_result", "pick_hdhive_candidate", "pick_hdhive_resource"}:
             pick_payload.update({"choice": body.get("choice") or body.get("index")})
+            return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
+        if name in {"plan_pansou_result", "plan_hdhive_resource", "plan_pick_result"}:
+            pick_payload.update({
+                "choice": body.get("choice") or body.get("index"),
+                "action": "plan",
+            })
             return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
         if name == "candidate_detail":
             pick_payload.update({"action": "detail"})
@@ -13170,8 +13315,50 @@ class AgentResourceOfficer(_PluginBase):
                         "score_summary": self._score_summary([selected], limit=1),
                     }),
                 })
+            if action == "plan":
+                if index <= 0:
+                    return {"success": False, "message": "盘搜计划需要编号，例如：计划选择 1。"}
+                if index > len(items):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
+                selected = dict(items[index - 1])
+                share_url = self._clean_text(selected.get("url"))
+                if not share_url:
+                    return {"success": False, "message": "选中的盘搜结果缺少分享链接，无法生成计划。"}
+                access_code = self._clean_text(selected.get("password"))
+                final_path = target_path or (
+                    self._p115_default_path if self._is_115_url(share_url) else self._quark_default_path
+                )
+                actions = [{
+                    "name": "route_share",
+                    "session": session,
+                    "session_id": cache_key,
+                    "url": share_url,
+                    "access_code": access_code,
+                    "path": final_path,
+                }]
+                return finish(self._save_assistant_pick_plan_response(
+                    workflow="pansou_transfer_selected",
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": "pansou_transfer_selected",
+                        "session": session,
+                        "session_id": cache_key,
+                        "choice": index,
+                        "path": final_path,
+                    },
+                    message="盘搜转存计划已生成",
+                    score_items=[selected],
+                    extra_data={
+                        "choice": index,
+                        "provider": "115" if self._is_115_url(share_url) else "quark" if self._is_quark_url(share_url) else selected.get("channel"),
+                        "target_path": final_path,
+                        "selected_item": selected,
+                    },
+                ))
             if action:
-                return {"success": False, "message": "盘搜结果当前只支持：选择 编号、选择 编号 详情、最佳片源。"}
+                return {"success": False, "message": "盘搜结果当前只支持：选择 编号、计划选择 编号、选择 编号 详情、最佳片源。"}
             if index <= 0:
                 return {"success": False, "message": "请选择有效序号，例如：选择 1"}
             if index > len(items):
@@ -13355,6 +13542,8 @@ class AgentResourceOfficer(_PluginBase):
                     })
                 if action == "best":
                     return {"success": False, "message": "影巢候选影片阶段没有评分，不能用“最佳片源”；请先回复编号选择影片，进入资源列表后再用“最佳片源”。"}
+                if action == "plan":
+                    return {"success": False, "message": "影巢候选影片阶段不能生成资源计划；请先回复编号选择影片，进入资源列表后再发：计划选择 1。"}
                 if action:
                     return {"success": False, "message": "影巢候选阶段只支持：选择 编号、详情/审查、下一页。"}
                 if index <= 0:
@@ -13436,8 +13625,45 @@ class AgentResourceOfficer(_PluginBase):
                         "score_summary": self._score_summary([resource], limit=1),
                     }),
                 })
+            if action == "plan":
+                if index <= 0:
+                    return {"success": False, "message": "影巢资源计划需要编号，例如：计划选择 1。"}
+                if index > len(resources):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(resources)} 之间的数字。"}
+                resource = dict(resources[index - 1])
+                slug = self._clean_text(resource.get("slug"))
+                if not slug:
+                    return {"success": False, "message": "选中的影巢资源缺少 slug，无法生成计划。"}
+                actions = [{
+                    "name": "unlock_hdhive_resource",
+                    "session": session,
+                    "session_id": cache_key,
+                    "slug": slug,
+                    "path": final_path,
+                    "resource": resource,
+                }]
+                return finish(self._save_assistant_pick_plan_response(
+                    workflow="hdhive_unlock_selected",
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": "hdhive_unlock_selected",
+                        "session": session,
+                        "session_id": cache_key,
+                        "choice": index,
+                        "path": final_path,
+                    },
+                    message="影巢解锁/转存计划已生成",
+                    score_items=[resource],
+                    extra_data={
+                        "choice": index,
+                        "target_path": final_path,
+                        "selected_resource": resource,
+                    },
+                ))
             if action:
-                return {"success": False, "message": "影巢资源阶段只支持：选择 编号、选择 编号 详情、最佳片源。"}
+                return {"success": False, "message": "影巢资源阶段只支持：选择 编号、计划选择 编号、选择 编号 详情、最佳片源。"}
             if index <= 0:
                 return {"success": False, "message": "请选择有效资源编号，例如：选择 1"}
             if index > len(resources):

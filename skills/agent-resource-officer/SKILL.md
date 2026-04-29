@@ -359,7 +359,7 @@ After an MP search session, `下载最佳` generates a saved download plan for t
 
 Exception: if the user has explicitly enabled `auto_ingest_enabled=true` in preferences and the selected PT candidate has `can_auto_execute=true`, `下载1` and `下载最佳` may submit the download directly. Default preferences keep auto ingest disabled, so agents should normally expect a `plan_id` first.
 
-For cloud-drive result sessions, `最佳片源` is read-only. It returns the highest-scoring PanSou or HDHive resource detail and must not transfer or unlock by itself. `选择 N 详情` is also read-only. Use numbered `选择 N` only after the user confirms transfer/unlock.
+For cloud-drive result sessions, `最佳片源` is read-only. It returns the highest-scoring PanSou or HDHive resource detail and must not transfer or unlock by itself. `选择 N 详情` is also read-only. Prefer `计划选择 N` for PanSou transfer or HDHive unlock when an external agent is acting for the user; it returns a saved `plan_id` and performs no write action until the plan is executed. Use direct `选择 N` only after the user explicitly confirms immediate transfer/unlock.
 
 `mp_recommend_search` is the low-token recommendation chain. Without `choice`, it returns a recommendation list and stores the session. With `choice`, it immediately continues the selected title into `mode=mp`, `mode=hdhive`, or `mode=pansou`.
 
@@ -367,6 +367,7 @@ After a recommendation list, natural-language picks are valid:
 
 ```text
 选择 1
+计划选择 1
 选择 1 盘搜
 选择1影巢
 选 2 mp
