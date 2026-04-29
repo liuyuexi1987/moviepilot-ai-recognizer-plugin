@@ -467,7 +467,7 @@ class AssistantExecuteActionsTool(MoviePilotTool):
 
 class AssistantWorkflowTool(MoviePilotTool):
     name: str = "agent_resource_officer_run_workflow"
-    description: str = "Run a preset Agent云盘资源整合 workflow such as pansou_transfer, hdhive_unlock, mp_search_download, mp_subscribe, mp_recommend, share_transfer, or p115_status with compact inputs."
+    description: str = "Run a preset Agent云盘资源整合 workflow such as pansou_transfer, hdhive_unlock, mp_search_detail, mp_search_download, mp_subscribe, mp_recommend, share_transfer, or p115_status with compact inputs."
     args_schema: Type[BaseModel] = AssistantWorkflowToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:

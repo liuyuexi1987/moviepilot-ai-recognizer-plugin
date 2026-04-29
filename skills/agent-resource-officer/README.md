@@ -178,6 +178,7 @@ python3 scripts/aro_request.py preferences --session agent:demo
 python3 scripts/aro_request.py preferences --session agent:demo --preferences-json '{"prefer_resolution":"4K","prefer_dolby_vision":true,"prefer_hdr":true,"prefer_chinese_subtitle":true,"prefer_complete_series":true,"pt_min_seeders":3,"hdhive_max_unlock_points":20,"auto_ingest_enabled":false}'
 python3 scripts/aro_request.py workflow --workflow mp_search --keyword "蜘蛛侠"
 python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword "蜘蛛侠"
+python3 scripts/aro_request.py workflow --workflow mp_search_detail --keyword "蜘蛛侠" --choice 1
 python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword "蜘蛛侠" --choice 1
 python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20
 python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source tmdb_trending --media-type all --choice 1 --mode mp
@@ -207,6 +208,8 @@ python3 scripts/aro_request.py route --text "下载1"
 python3 scripts/aro_request.py route --text "下载第1个"
 python3 scripts/aro_request.py route --text "订阅蜘蛛侠"
 python3 scripts/aro_request.py route --text "订阅并搜索蜘蛛侠"
+python3 scripts/aro_request.py route --text "MP搜索 蜘蛛侠" --session agent:demo
+python3 scripts/aro_request.py pick --choice 1 --session agent:demo
 ```
 
 下载任务也可以走同一入口。查询是读操作；暂停、恢复、删除会先返回 `plan_id`，确认后再执行：

@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.18`
+- `AgentResourceOfficer`: `0.2.19`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.19`：新增 MP 搜索结果详情入口；MP 搜索后“选择 1”会先展示 PT 详情、评分理由和风险，再由用户确认是否下载。
 - `AgentResourceOfficer 0.2.18`：新增 MP 原生媒体识别详情入口；智能体可用“识别 片名”或 `mp_media_detail` 工作流确认 TMDB/Douban/IMDB 信息后再搜索、下载或订阅。
 - `AgentResourceOfficer 0.2.17`：新增 MP 生命周期追踪聚合入口；智能体可用“追踪 片名”一次查看下载任务、下载历史和整理/入库历史。
 - `AgentResourceOfficer 0.2.16`：新增 MP 下载历史查询，并按 hash 关联整理/入库状态；智能体可用“下载历史 片名”追踪资源是否已提交下载和是否落库。

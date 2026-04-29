@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.18"
+    plugin_version = "0.2.19"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3520,6 +3520,90 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    async def _assistant_mp_result_detail(
+        self,
+        *,
+        choice: int,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        try:
+            cache = self._ensure_feishu_channel()._get_search_cache(cache_key)
+        except Exception:
+            cache = None
+        results = (cache or {}).get("results") or []
+        if choice <= 0 or choice > len(results):
+            return {
+                "success": False,
+                "message": f"序号超出范围，请输入 1 到 {len(results)} 之间的数字。" if results else "没有可继续的 MP 搜索结果，请先发送“MP搜索 片名”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_search_result_detail",
+                    "ok": False,
+                    "error_code": "mp_result_not_found",
+                }),
+            }
+        item = self._mp_context_preview_item(results[choice - 1], choice, preferences=preferences)
+        torrent = item.get("torrent_info") or {}
+        meta = item.get("meta_info") or {}
+        media = item.get("media_info") or {}
+        score = item.get("score") or {}
+        lines = [
+            f"MP 搜索结果详情 #{choice}",
+            f"标题：{torrent.get('title') or '未命名资源'}",
+            f"站点：{torrent.get('site_name') or '未知站点'}",
+            f"大小：{torrent.get('size') or '未知'}",
+            f"做种：{torrent.get('seeders') if torrent.get('seeders') is not None else '?'} | 下载：{torrent.get('peers') if torrent.get('peers') is not None else '?'} | 促销：{torrent.get('volume_factor') or '普通'}",
+        ]
+        media_text = " / ".join(str(part) for part in [
+            media.get("title"),
+            media.get("year"),
+            f"TMDB:{media.get('tmdb_id')}" if media.get("tmdb_id") else "",
+            f"豆瓣:{media.get('douban_id')}" if media.get("douban_id") else "",
+        ] if part)
+        if media_text:
+            lines.append(f"媒体：{media_text}")
+        meta_text = " / ".join(str(part) for part in [
+            meta.get("season_episode"),
+            meta.get("resource_pix"),
+            meta.get("video_encode"),
+            meta.get("edition"),
+            meta.get("resource_team"),
+        ] if part)
+        if meta_text:
+            lines.append(f"识别标签：{meta_text}")
+        score_label = self._format_score_label(item)
+        if score_label:
+            lines.append(f"评分：{score_label}")
+        reasons = [str(value) for value in (score.get("score_reasons") or []) if value]
+        risks = [str(value) for value in (score.get("risk_reasons") or []) if value]
+        if reasons:
+            lines.append("加分理由：" + "；".join(reasons[:6]))
+        if risks:
+            lines.append("风险：" + "；".join(risks[:6]))
+        if torrent.get("page_url"):
+            lines.append(f"详情页：{torrent.get('page_url')}")
+        lines.append(f"下一步：确认下载请发“下载{choice}”，会先生成 plan_id，不会静默下载。")
+        self._save_session(cache_key, {
+            "kind": "assistant_mp",
+            "stage": "search_result",
+            "keyword": (cache or {}).get("keyword") or "",
+            "items": self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10),
+            "selected_index": choice,
+            "target_path": "",
+        })
+        return {
+            "success": True,
+            "message": "\n".join(lines),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_search_result_detail",
+                "ok": True,
+                "choice": choice,
+                "item": item,
+                "score_summary": self._score_summary([item], limit=1),
+            }),
+        }
+
     async def _assistant_mp_download(self, *, choice: int, session: str, cache_key: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
         preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
         selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
@@ -5319,6 +5403,13 @@ class AgentResourceOfficer(_PluginBase):
         elif kind == "assistant_mp":
             templates.extend([
                 self._assistant_action_template(
+                    name="query_mp_search_result_detail",
+                    description="按编号查看 MP 原生搜索结果详情和 PT 评分理由",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_search_result_detail", "choice": "<1-N>"},
+                ),
+                self._assistant_action_template(
                     name="pick_mp_download",
                     description="按编号选择 MP 原生搜索结果并下载；写入动作建议先 dry_run 生成计划",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
@@ -6329,6 +6420,7 @@ class AgentResourceOfficer(_PluginBase):
             "1. choice=1",
             "2. action=详情",
             "3. action=下一页",
+            "MP 搜索结果里，choice=1 会先展示 PT 详情和评分理由；确认下载再发 text=下载1。",
             "说明：同一个 session 会自动串起候选列表、资源列表、115 待任务与扫码续跑。",
             self._format_p115_next_actions(self._p115_status_snapshot()),
         ]
@@ -7254,6 +7346,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query_mp_download_history",
                 "query_mp_lifecycle_status",
                 "query_mp_media_detail",
+                "query_mp_search_result_detail",
                 "query_mp_downloaders",
                 "query_mp_sites",
                 "query_mp_subscribes",
@@ -7422,6 +7515,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_media_detail", "keyword": "蜘蛛侠", "media_type": "auto", "session": "assistant", "compact": True},
                 "body": {"workflow": "mp_media_detail", "keyword": "蜘蛛侠", "media_type": "auto", "session": "assistant", "compact": True},
+            },
+            "mp_search_detail": {
+                "description": "执行 MP 原生搜索并查看指定编号的 PT 详情和评分理由；只读，不下载。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "session_cache",
+                "cache_ttl_seconds": 600,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search_detail", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_search_detail", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "compact": True},
             },
             "mp_search_download_plan": {
                 "description": "MP 原生搜索并选择编号下载；写入动作默认只生成 plan_id，确认后执行。",
@@ -11380,6 +11485,18 @@ class AgentResourceOfficer(_PluginBase):
                 media_type=self._clean_text(body.get("media_type") or body.get("type") or "auto"),
                 year=self._clean_text(body.get("year")),
             ))
+        if name == "query_mp_search_result_detail":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            return await finish(self._assistant_mp_result_detail(
+                choice=self._safe_int(body.get("choice") or body.get("index"), 0),
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
         if name == "pick_mp_download":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -11801,6 +11918,11 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "media_type", "year", "compact"],
                 },
                 {
+                    "name": "mp_search_detail",
+                    "description": "执行 MP 原生搜索并按编号查看 PT 详情与评分理由，只读",
+                    "fields": ["session", "keyword", "choice", "compact"],
+                },
+                {
                     "name": "mp_search_download",
                     "description": "执行 MP 原生搜索并按编号下载，默认先生成 plan_id",
                     "fields": ["session", "keyword", "choice", "compact", "dry_run"],
@@ -11966,6 +12088,15 @@ class AgentResourceOfficer(_PluginBase):
                 "media_type": media_type,
                 "year": year,
             })], ""
+
+        if workflow_name == "mp_search_detail":
+            if not keyword:
+                return [], "mp_search_detail 缺少 keyword"
+            choice = self._safe_int(body.get("choice"), 1)
+            return [
+                base({"name": "start_mp_media_search", "keyword": keyword}),
+                base({"name": "query_mp_search_result_detail", "choice": max(1, choice)}),
+            ], ""
 
         if workflow_name == "mp_search_download":
             if not keyword:
@@ -12459,6 +12590,17 @@ class AgentResourceOfficer(_PluginBase):
                     "path": target_path,
                     "apikey": self._extract_apikey(request, body),
                 })
+            ))
+
+        if kind == "assistant_mp":
+            if action == "detail" and index <= 0:
+                return {"success": False, "message": "MP 搜索结果详情需要编号，例如：选择 1。"}
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            return finish(await self._assistant_mp_result_detail(
+                choice=index,
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
             ))
 
         if kind == "assistant_hdhive":
