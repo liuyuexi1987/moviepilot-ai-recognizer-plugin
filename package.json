@@ -17,7 +17,7 @@
     "description": "直接复用 MoviePilot 当前 LLM 配置，在原生识别失败后做本地结构化识别兜底，并交回原生链路继续二次识别。",
     "labels": "AI,识别,LLM,本地兜底,MoviePilot,TMDB",
     "version": "0.1.11",
-    "icon": "airecoginzerforwarder.png",
+    "icon": "airecognizerenhancer.png",
     "author": "liuyuexi1987",
     "level": 1,
     "v2": true,
