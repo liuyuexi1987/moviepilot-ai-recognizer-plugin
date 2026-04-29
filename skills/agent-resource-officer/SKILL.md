@@ -320,6 +320,7 @@ For MP native workflows:
 
 ```bash
 python3 scripts/aro_request.py workflow --workflow mp_search --keyword "蜘蛛侠"
+python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword "蜘蛛侠"
 python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword "蜘蛛侠" --choice 1
 python3 scripts/aro_request.py workflow --workflow mp_download_history --keyword "蜘蛛侠" --limit 10
 python3 scripts/aro_request.py workflow --workflow mp_lifecycle_status --keyword "蜘蛛侠" --limit 5
@@ -337,6 +338,8 @@ python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source 
 `mp_download_history` is read-only. Use it before `mp_transfer_history` when the user asks whether a PT/native MP resource was ever submitted for download. It also reports a compact transfer status when the download hash can be linked to MoviePilot transfer history.
 
 `mp_lifecycle_status` is read-only and should be the default troubleshooting query for “where is this resource now?”. It combines active download tasks, download history, and transfer/import history in one call.
+
+`mp_media_detail` is read-only. Use it before search/download/subscribe when the title is ambiguous or the agent needs to confirm MoviePilot's native media recognition, TMDB/Douban/IMDB IDs, year, and media type.
 
 `mp_recommend_search` is the low-token recommendation chain. Without `choice`, it returns a recommendation list and stores the session. With `choice`, it immediately continues the selected title into `mode=mp`, `mode=hdhive`, or `mode=pansou`.
 
@@ -365,6 +368,7 @@ Download task management also uses the same route. Querying tasks is read-only. 
 下载历史
 下载历史 蜘蛛侠
 追踪 蜘蛛侠
+识别 蜘蛛侠
 暂停下载 1
 恢复下载 1
 删除下载 1

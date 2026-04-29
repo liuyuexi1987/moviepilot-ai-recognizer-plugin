@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.17"
+    plugin_version = "0.2.18"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3452,6 +3452,41 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("下载/订阅属于写入动作，默认请先用 dry_run 生成 plan_id，再确认执行。")
         return "\n".join(line for line in lines if line)
 
+    async def _assistant_mp_media_detail(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        cache_key: str,
+        media_type: str = "",
+        year: str = "",
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_media_detail(
+            keyword=keyword,
+            media_type=media_type,
+            year=year,
+        )
+        item = result.get("item") if isinstance(result.get("item"), dict) else {}
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_media_detail",
+            "stage": "media_detail",
+            "keyword": keyword,
+            "items": [item] if item else [],
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "媒体识别完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_media_detail",
+                "ok": bool(result.get("success")),
+                "keyword": keyword,
+                "media_type": media_type,
+                "year": year,
+                "item": item,
+            }),
+        }
+
     async def _assistant_mp_media_search(
         self,
         *,
@@ -5170,6 +5205,13 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "mode": "mp", "keyword": "<关键词>"},
                 ),
                 self._assistant_action_template(
+                    name="query_mp_media_detail",
+                    description="使用 MoviePilot 原生识别确认媒体信息和 TMDB/Douban/IMDB ID",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_media_detail", "keyword": "<关键词>", "media_type": "auto"},
+                ),
+                self._assistant_action_template(
                     name="start_mp_recommendations",
                     description="查看 MP 原生热门推荐，例如 TMDB、豆瓣或 Bangumi",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
@@ -6280,8 +6322,9 @@ class AgentResourceOfficer(_PluginBase):
             "9. text=站点状态；下载器状态 用于排查 PT 搜索/下载环境",
             "10. text=下载历史 片名 用于判断资源是否提交过下载并进入整理流程",
             "11. text=追踪 片名 一次查看下载任务、下载历史和入库历史",
-            "12. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
-            "13. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
+            "12. text=识别 片名 使用 MoviePilot 原生识别确认 TMDB/Douban/IMDB 信息",
+            "13. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
+            "14. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -6326,6 +6369,7 @@ class AgentResourceOfficer(_PluginBase):
                     "p115_cancel",
                     "hdhive_checkin",
                     "hdhive_checkin_history",
+                    "mp_media_detail",
                     "mp_download_tasks",
                     "mp_download_history",
                     "mp_lifecycle_status",
@@ -7209,6 +7253,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query_mp_download_tasks",
                 "query_mp_download_history",
                 "query_mp_lifecycle_status",
+                "query_mp_media_detail",
                 "query_mp_downloaders",
                 "query_mp_sites",
                 "query_mp_subscribes",
@@ -7225,6 +7270,7 @@ class AgentResourceOfficer(_PluginBase):
                 "选择 1",
                 "详情",
                 "下一页",
+                "识别 蜘蛛侠",
                 "115登录",
             ],
             "request_templates": self._assistant_request_templates_public_data(limit=100),
@@ -7364,6 +7410,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_search", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
                 "body": {"workflow": "mp_search", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+            },
+            "mp_media_detail": {
+                "description": "使用 MoviePilot 原生识别确认片名、年份、类型和 TMDB/Douban/IMDB ID；适合搜索前消歧。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 300,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_media_detail", "keyword": "蜘蛛侠", "media_type": "auto", "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_media_detail", "keyword": "蜘蛛侠", "media_type": "auto", "session": "assistant", "compact": True},
             },
             "mp_search_download_plan": {
                 "description": "MP 原生搜索并选择编号下载；写入动作默认只生成 plan_id，确认后执行。",
@@ -8456,6 +8514,17 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
+            "识别",
+            "媒体识别",
+            "媒体详情",
+            "mp识别",
+            "mp媒体识别",
+            "mpmediadetail",
+        }:
+            options["action"] = "mp_media_detail"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "下载器",
             "下载器状态",
             "下载器列表",
@@ -8555,6 +8624,13 @@ class AgentResourceOfficer(_PluginBase):
                 for prefix in ["资源追踪", "下载追踪", "媒体状态", "落库状态", "追踪"]:
                     if raw.startswith(prefix + " "):
                         options["action"] = "mp_lifecycle_status"
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
+            if not options.get("action"):
+                for prefix in ["MP识别", "mp识别", "媒体识别", "媒体详情", "详情媒体", "识别"]:
+                    if raw.startswith(prefix + " "):
+                        options["action"] = "mp_media_detail"
                         options["mode"] = ""
                         options["keyword"] = raw[len(prefix):].strip()
                         break
@@ -10491,6 +10567,24 @@ class AgentResourceOfficer(_PluginBase):
                     "history": self._hdhive_checkin_history_public_data(limit=10),
                 }),
             })
+        if assistant_action == "mp_media_detail":
+            if not keyword:
+                return finish({
+                    "success": False,
+                    "message": "媒体识别失败：缺少片名。用法：识别 蜘蛛侠",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_media_detail",
+                        "ok": False,
+                        "error_code": "missing_keyword",
+                    }),
+                })
+            return finish(await self._assistant_mp_media_detail(
+                keyword=keyword,
+                session=session,
+                cache_key=cache_key,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or parsed.get("type") or "auto"),
+                year=self._clean_text(body.get("year") or parsed.get("year")),
+            ))
         if assistant_action == "mp_downloaders":
             return finish(await self._assistant_mp_downloaders(session=session))
         if assistant_action == "mp_sites":
@@ -11274,6 +11368,18 @@ class AgentResourceOfficer(_PluginBase):
                 "keyword": body.get("keyword"),
             })
             return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
+        if name == "query_mp_media_detail":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_media_detail(
+                keyword=self._clean_text(body.get("keyword") or body.get("title")),
+                session=session_name,
+                cache_key=cache_key,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or "auto"),
+                year=self._clean_text(body.get("year")),
+            ))
         if name == "pick_mp_download":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -11690,6 +11796,11 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "compact"],
                 },
                 {
+                    "name": "mp_media_detail",
+                    "description": "使用 MoviePilot 原生识别确认媒体详情、年份、类型和 TMDB/Douban/IMDB ID",
+                    "fields": ["session", "keyword", "media_type", "year", "compact"],
+                },
+                {
                     "name": "mp_search_download",
                     "description": "执行 MP 原生搜索并按编号下载，默认先生成 plan_id",
                     "fields": ["session", "keyword", "choice", "compact", "dry_run"],
@@ -11845,6 +11956,16 @@ class AgentResourceOfficer(_PluginBase):
             if not keyword:
                 return [], "mp_search 缺少 keyword"
             return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
+
+        if workflow_name == "mp_media_detail":
+            if not keyword:
+                return [], "mp_media_detail 缺少 keyword"
+            return [base({
+                "name": "query_mp_media_detail",
+                "keyword": keyword,
+                "media_type": media_type,
+                "year": year,
+            })], ""
 
         if workflow_name == "mp_search_download":
             if not keyword:

@@ -652,6 +652,55 @@ class FeishuChannel:
             logger.error(f"[AgentResourceOfficer][Feishu] 搜索资源失败：{keyword} {exc}\n{traceback.format_exc()}")
             return f"搜索资源失败：{keyword}\n错误：{exc}"
 
+    def _query_media_detail(self, keyword: str, media_type: str = "", year: str = "") -> Dict[str, Any]:
+        if not all([MetaInfo, MediaChain]):
+            return {"success": False, "message": "媒体识别失败：当前环境缺少 MoviePilot 媒体识别依赖。", "item": {}}
+        title_text = str(keyword or "").strip()
+        if not title_text:
+            return {"success": False, "message": "媒体识别失败：缺少片名。", "item": {}}
+        try:
+            meta = MetaInfo(title_text)
+            if year:
+                try:
+                    meta.year = str(year)
+                except Exception:
+                    pass
+            mediainfo = MediaChain().recognize_media(meta=meta)
+            if not mediainfo:
+                return {"success": False, "message": f"未识别到媒体信息：{title_text}", "item": {"keyword": title_text}}
+            season = meta.begin_season if meta.begin_season else getattr(mediainfo, "season", None)
+            media_type_value = getattr(mediainfo, "type", None)
+            media_type_name = getattr(media_type_value, "name", "") or str(media_type_value or "")
+            item = {
+                "keyword": title_text,
+                "title": str(getattr(mediainfo, "title", "") or ""),
+                "original_title": str(getattr(mediainfo, "original_title", "") or ""),
+                "year": str(getattr(mediainfo, "year", "") or ""),
+                "type": media_type_name,
+                "tmdb_id": getattr(mediainfo, "tmdb_id", None),
+                "douban_id": getattr(mediainfo, "douban_id", None),
+                "imdb_id": str(getattr(mediainfo, "imdb_id", "") or ""),
+                "season": season,
+                "category": str(getattr(mediainfo, "category", "") or ""),
+                "overview": str(getattr(mediainfo, "overview", "") or "")[:300],
+            }
+            lines = [
+                f"媒体识别：{title_text}",
+                f"结果：{item.get('title') or '-'} ({item.get('year') or '-'})",
+                f"类型：{item.get('type') or '-'} | TMDB：{item.get('tmdb_id') or '-'} | 豆瓣：{item.get('douban_id') or '-'}",
+            ]
+            if item.get("original_title") and item.get("original_title") != item.get("title"):
+                lines.append(f"原标题：{item.get('original_title')}")
+            if season:
+                lines.append(f"季：S{int(season):02d}" if isinstance(season, int) else f"季：{season}")
+            if item.get("overview"):
+                lines.append(f"简介：{item.get('overview')}")
+            lines.append("说明：这是 MoviePilot 原生识别结果，后续 MP 搜索、订阅和 PT 评分会以它为准。")
+            return {"success": True, "message": "\n".join(lines), "item": item}
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 媒体识别失败：{title_text} {exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"媒体识别失败：{exc}", "item": {"keyword": title_text}}
+
     def _execute_media_download(self, index: int, cache_key: str) -> str:
         if DownloadChain is None:
             return "下载资源失败：当前环境缺少 MoviePilot 下载依赖。"
