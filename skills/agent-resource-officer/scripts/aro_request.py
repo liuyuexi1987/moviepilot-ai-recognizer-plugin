@@ -52,6 +52,7 @@ WRITE_WORKFLOWS = {
     "mp_search_download",
     "mp_download_control",
     "mp_subscribe",
+    "mp_subscribe_control",
     "mp_subscribe_and_search",
 }
 

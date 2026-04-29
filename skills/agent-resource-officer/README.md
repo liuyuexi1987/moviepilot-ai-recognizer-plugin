@@ -226,6 +226,18 @@ python3 scripts/aro_request.py workflow --workflow mp_sites --status active --li
 python3 scripts/aro_request.py workflow --workflow mp_downloaders
 ```
 
+MP 订阅也可以交给资源官统一调度。查询是读操作；搜索、暂停、恢复、删除订阅会先返回 `plan_id`：
+
+```bash
+python3 scripts/aro_request.py route --text "订阅列表"
+python3 scripts/aro_request.py route --text "搜索订阅 1"
+python3 scripts/aro_request.py route --text "暂停订阅 1"
+python3 scripts/aro_request.py route --text "恢复订阅 1"
+python3 scripts/aro_request.py route --text "删除订阅 1"
+python3 scripts/aro_request.py workflow --workflow mp_subscribes --status all --limit 20
+python3 scripts/aro_request.py workflow --workflow mp_subscribe_control --control search --target 1
+```
+
 - 云盘资源按清晰度、HDR/DV、字幕、完整度、目录和网盘类型评分；影巢额外受积分上限保护。
 - PT 资源按做种数、免费/促销、下载折算、清晰度、HDR/DV、字幕和标题匹配评分；做种低于阈值不会自动下载。
 - 下载、订阅、影巢解锁、网盘转存默认先生成 `plan_id`，确认后再执行。

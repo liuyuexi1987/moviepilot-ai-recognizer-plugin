@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.13`
+- `AgentResourceOfficer`: `0.2.14`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.14`：新增 MP 订阅列表查询与订阅控制计划；智能体可查看订阅规则，并对搜索、暂停、恢复、删除订阅生成 `plan_id` 后确认执行。
 - `AgentResourceOfficer 0.2.13`：新增 MP 下载器与 PT 站点环境诊断入口；只返回启用状态、优先级、绑定下载器和 Cookie 是否存在，不暴露 Cookie 明文。
 - `AgentResourceOfficer 0.2.12`：补齐 MP 原生下载任务查询与任务控制入口；智能体可查看下载中任务，并对暂停、恢复、删除生成 `plan_id` 后确认执行。
 - `AgentResourceOfficer 0.2.11`：MP 下载/订阅命令支持无空格自然写法，例如“下载1”“下载第1个”“订阅蜘蛛侠”“订阅并搜索蜘蛛侠”；自然语言写入默认生成 `plan_id`，确认后才执行。

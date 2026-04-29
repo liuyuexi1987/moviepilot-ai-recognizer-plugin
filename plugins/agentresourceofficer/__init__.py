@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.13"
+    plugin_version = "0.2.14"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3689,6 +3689,90 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    def _resolve_mp_subscribe_target(self, *, target: str, cache_key: str) -> Dict[str, Any]:
+        target_text = self._clean_text(target)
+        state = self._load_session(cache_key) or {}
+        items = state.get("items") if isinstance(state.get("items"), list) else []
+        index = self._safe_int(target_text, 0)
+        if index > 0:
+            for item in items:
+                if self._safe_int(item.get("index"), 0) == index or self._safe_int(item.get("id"), 0) == index:
+                    return dict(item)
+            return {"id": index}
+        return {}
+
+    async def _assistant_mp_subscribes(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        status: str = "all",
+        media_type: str = "all",
+        name: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_subscribes(
+            status=status or "all",
+            media_type=media_type or "all",
+            name=name,
+            limit=max(1, min(100, self._safe_int(limit, 20))),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_subscribes",
+            "stage": "subscribe_list",
+            "keyword": name or status or "all",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "订阅查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_subscribes",
+                "ok": bool(result.get("success")),
+                "status": result.get("status") or status,
+                "items": items,
+                "total": self._safe_int(result.get("total"), len(items)),
+            }),
+        }
+
+    async def _assistant_mp_subscribe_control(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        control: str,
+        target: str,
+    ) -> Dict[str, Any]:
+        selected = self._resolve_mp_subscribe_target(target=target, cache_key=cache_key)
+        subscribe_id = self._safe_int(selected.get("id") or target, 0)
+        if subscribe_id <= 0:
+            return {
+                "success": False,
+                "message": "操作订阅失败：请先发送“订阅列表”获取列表，再按编号操作，例如“搜索订阅 1”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_control",
+                    "ok": False,
+                    "error_code": "missing_subscribe_id",
+                    "target": target,
+                }),
+            }
+        result = self._ensure_feishu_channel()._control_subscribe(action=control, subscribe_id=subscribe_id)
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "订阅操作完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_subscribe_control",
+                "ok": bool(result.get("success")),
+                "control": control,
+                "target": target,
+                "selected": selected,
+                "result": result,
+                "write_effect": "write",
+            }),
+        }
+
     async def _assistant_mp_recommendations(
         self,
         *,
@@ -4561,6 +4645,24 @@ class AgentResourceOfficer(_PluginBase):
                 ],
                 "suggested_actions": ["mp_download_control.pause", "mp_download_control.resume", "mp_download_control.delete", "session_clear"],
             })
+        elif kind == "assistant_mp_subscribes":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "id": self._safe_int(item.get("id"), 0),
+                        "title": self._clean_text(item.get("name")),
+                        "year": self._clean_text(item.get("year")),
+                        "state": self._clean_text(item.get("state")),
+                        "lack_episode": item.get("lack_episode"),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_subscribe_control.search", "mp_subscribe_control.pause", "mp_subscribe_control.resume", "mp_subscribe_control.delete", "session_clear"],
+            })
         elif kind == "assistant_mp_recommend":
             items = state.get("items") or []
             payload.update({
@@ -4928,6 +5030,13 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "name": "query_mp_sites", "status": "active", "limit": 30},
                 ),
                 self._assistant_action_template(
+                    name="query_mp_subscribes",
+                    description="查看 MP 订阅列表",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_subscribes", "status": "all", "limit": 20},
+                ),
+                self._assistant_action_template(
                     name="start_115_login",
                     description="发起新的 115 扫码登录",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
@@ -5015,6 +5124,37 @@ class AgentResourceOfficer(_PluginBase):
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
                     body={**base_state, "name": "mp_download_control", "control": "delete", "target": "<1-N>", "delete_files": False},
+                ),
+            ])
+        elif kind == "assistant_mp_subscribes":
+            templates.extend([
+                self._assistant_action_template(
+                    name="search_mp_subscribe",
+                    description="按编号触发订阅搜索；写入动作建议先 dry_run 生成计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "mp_subscribe_control", "control": "search", "target": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="pause_mp_subscribe",
+                    description="按编号暂停订阅；写入动作建议先 dry_run 生成计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "mp_subscribe_control", "control": "pause", "target": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="resume_mp_subscribe",
+                    description="按编号恢复订阅；写入动作建议先 dry_run 生成计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "mp_subscribe_control", "control": "resume", "target": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="delete_mp_subscribe",
+                    description="按编号删除订阅",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "mp_subscribe_control", "control": "delete", "target": "<1-N>"},
                 ),
             ])
         elif kind == "assistant_mp_recommend":
@@ -5949,6 +6089,7 @@ class AgentResourceOfficer(_PluginBase):
             "7. text=MP搜索 蜘蛛侠；下载1 会先生成计划",
             "8. text=下载任务；暂停下载 1 / 恢复下载 1 / 删除下载 1 会先生成计划",
             "9. text=站点状态；下载器状态 用于排查 PT 搜索/下载环境",
+            "10. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -5997,6 +6138,8 @@ class AgentResourceOfficer(_PluginBase):
                     "mp_download_control",
                     "mp_downloaders",
                     "mp_sites",
+                    "mp_subscribes",
+                    "mp_subscribe_control",
                     "mp_download",
                     "mp_subscribe",
                     "mp_subscribe_search",
@@ -6019,8 +6162,11 @@ class AgentResourceOfficer(_PluginBase):
                     "hash",
                     "name",
                     "site_name",
+                    "subscribe_id",
+                    "subscribe_name",
                     "downloader",
                     "download_control",
+                    "subscribe_control",
                     "delete_files",
                     "compact",
                 ],
@@ -6073,7 +6219,10 @@ class AgentResourceOfficer(_PluginBase):
                     "target",
                     "name",
                     "site_name",
+                    "subscribe_id",
+                    "subscribe_name",
                     "control",
+                    "subscribe_control",
                     "downloader",
                     "delete_files",
                     "kind",
@@ -7826,6 +7975,7 @@ class AgentResourceOfficer(_PluginBase):
             "mp_download",
             "mp_download_control",
             "mp_subscribe",
+            "mp_subscribe_control",
             "mp_subscribe_search",
             "pick_mp_download",
             "start_mp_subscribe",
@@ -7877,6 +8027,9 @@ class AgentResourceOfficer(_PluginBase):
         download_control = self._clean_text(body.get("download_control") or body.get("control") or body.get("operation"))
         if download_control:
             merged["download_control"] = download_control
+        subscribe_control = self._clean_text(body.get("subscribe_control") or body.get("control") or body.get("operation"))
+        if subscribe_control:
+            merged["subscribe_control"] = subscribe_control
         return merged
 
     @staticmethod
@@ -8060,6 +8213,16 @@ class AgentResourceOfficer(_PluginBase):
             options["action"] = "mp_sites"
             options["mode"] = ""
             options["keyword"] = ""
+        elif compact in {
+            "订阅列表",
+            "订阅状态",
+            "查看订阅",
+            "mp订阅",
+            "subscribes",
+        }:
+            options["action"] = "mp_subscribes"
+            options["mode"] = ""
+            options["keyword"] = ""
         else:
             for prefix, control in [
                 ("暂停下载", "pause"),
@@ -8089,6 +8252,30 @@ class AgentResourceOfficer(_PluginBase):
                 for prefix in ["站点状态", "站点列表", "PT站点", "pt站点", "站点"]:
                     if raw.startswith(prefix + " "):
                         options["action"] = "mp_sites"
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
+            if not options.get("action"):
+                for prefix, control in [
+                    ("搜索订阅", "search"),
+                    ("刷新订阅", "search"),
+                    ("暂停订阅", "pause"),
+                    ("恢复订阅", "resume"),
+                    ("删除订阅", "delete"),
+                    ("移除订阅", "delete"),
+                ]:
+                    if raw.startswith(prefix):
+                        target_text = raw[len(prefix):].strip()
+                        if target_text:
+                            options["action"] = "mp_subscribe_control"
+                            options["mode"] = ""
+                            options["keyword"] = target_text
+                            options["subscribe_control"] = control
+                        break
+            if not options.get("action"):
+                for prefix in ["订阅列表", "订阅状态", "查看订阅", "MP订阅", "mp订阅"]:
+                    if raw.startswith(prefix + " "):
+                        options["action"] = "mp_subscribes"
                         options["mode"] = ""
                         options["keyword"] = raw[len(prefix):].strip()
                         break
@@ -9978,6 +10165,105 @@ class AgentResourceOfficer(_PluginBase):
                 name=keyword,
                 limit=self._safe_int(body.get("limit"), 30),
             ))
+        if assistant_action == "mp_subscribes":
+            return finish(await self._assistant_mp_subscribes(
+                session=session,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "all"),
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or parsed.get("type") or "all"),
+                name=keyword,
+                limit=self._safe_int(body.get("limit"), 20),
+            ))
+        if assistant_action == "mp_subscribe_control":
+            control = self._clean_text(parsed.get("subscribe_control") or body.get("subscribe_control") or body.get("control") or body.get("operation")).lower()
+            control_aliases = {
+                "搜索": "search",
+                "刷新": "search",
+                "search": "search",
+                "run": "search",
+                "暂停": "pause",
+                "停止": "pause",
+                "pause": "pause",
+                "stop": "pause",
+                "恢复": "resume",
+                "继续": "resume",
+                "resume": "resume",
+                "start": "resume",
+                "删除": "delete",
+                "移除": "delete",
+                "delete": "delete",
+                "remove": "delete",
+            }
+            control = control_aliases.get(control, control)
+            target = self._clean_text(keyword or body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+            if control not in {"search", "pause", "resume", "delete"} or not target:
+                return finish({
+                    "success": False,
+                    "message": "用法：先发“订阅列表”，再发“搜索订阅 1”“暂停订阅 1”“恢复订阅 1”或“删除订阅 1”。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_subscribe_control",
+                        "ok": False,
+                        "error_code": "invalid_subscribe_control_args",
+                    }),
+                })
+            if not self._resolve_mp_subscribe_target(target=target, cache_key=cache_key):
+                return finish({
+                    "success": False,
+                    "message": "未找到可操作的订阅。请先发送“订阅列表”获取列表，再按编号操作；也可以直接传订阅 ID。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_subscribe_control",
+                        "ok": False,
+                        "error_code": "subscribe_target_not_found",
+                        "target": target,
+                    }),
+                })
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                actions = [{
+                    "name": "mp_subscribe_control",
+                    "session": session,
+                    "session_id": cache_key,
+                    "control": control,
+                    "target": target,
+                }]
+                plan = self._save_workflow_plan(
+                    workflow="mp_subscribe_control",
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": "mp_subscribe_control",
+                        "session": session,
+                        "session_id": cache_key,
+                        "control": control,
+                        "target": target,
+                        "dry_run": False,
+                    },
+                )
+                full_data = self._assistant_response_data(session=session, data={
+                    "action": "workflow_plan",
+                    "ok": True,
+                    "plan_id": plan.get("plan_id"),
+                    "workflow": "mp_subscribe_control",
+                    "dry_run": True,
+                    "workflow_actions": actions,
+                    "estimated_steps": len(actions),
+                    "ready_to_execute": True,
+                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
+                    "plan_created_at": plan.get("created_at"),
+                    "plan_created_at_text": plan.get("created_at_text"),
+                })
+                return {
+                    "success": True,
+                    "message": f"订阅操作计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动修改订阅。",
+                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
+                }
+            return finish(await self._assistant_mp_subscribe_control(
+                session=session,
+                cache_key=cache_key,
+                control=control,
+                target=target,
+            ))
         if assistant_action == "mp_download_tasks":
             return finish(await self._assistant_mp_download_tasks(
                 session=session,
@@ -10670,6 +10956,30 @@ class AgentResourceOfficer(_PluginBase):
                 name=self._clean_text(body.get("site_name") or body.get("keyword") or body.get("title")),
                 limit=self._safe_int(body.get("limit"), 30),
             ))
+        if name == "query_mp_subscribes":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_subscribes(
+                session=session_name,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or "all"),
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or "all"),
+                name=self._clean_text(body.get("subscribe_name") or body.get("keyword") or body.get("title")),
+                limit=self._safe_int(body.get("limit"), 20),
+            ))
+        if name == "mp_subscribe_control":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_subscribe_control(
+                session=session_name,
+                cache_key=cache_key,
+                control=self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation")),
+                target=self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice")),
+            ))
         if name == "mp_download_control":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -11016,6 +11326,16 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "compact", "dry_run"],
                 },
                 {
+                    "name": "mp_subscribes",
+                    "description": "查询 MP 订阅列表，可按 status/media_type/keyword 过滤",
+                    "fields": ["session", "status", "media_type", "keyword", "limit", "compact"],
+                },
+                {
+                    "name": "mp_subscribe_control",
+                    "description": "触发订阅搜索、暂停、恢复或删除订阅，默认先生成 plan_id",
+                    "fields": ["session", "control", "target", "compact", "dry_run"],
+                },
+                {
                     "name": "mp_recommend",
                     "description": "读取 MP 原生推荐，例如 TMDB、豆瓣、Bangumi",
                     "fields": ["session", "source", "media_type", "limit", "compact"],
@@ -11165,6 +11485,26 @@ class AgentResourceOfficer(_PluginBase):
                 return [], "mp_subscribe_and_search 缺少 keyword"
             return [base({"name": "start_mp_subscribe_search", "keyword": keyword})], ""
 
+        if workflow_name == "mp_subscribes":
+            return [base({
+                "name": "query_mp_subscribes",
+                "status": self._clean_text(body.get("status")) or "all",
+                "media_type": self._clean_text(body.get("media_type") or body.get("type")) or "all",
+                "keyword": keyword,
+                "limit": self._safe_int(body.get("limit"), 20),
+            })], ""
+
+        if workflow_name == "mp_subscribe_control":
+            control = self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+            if not control or not target:
+                return [], "mp_subscribe_control 需要 control 和 target"
+            return [base({
+                "name": "mp_subscribe_control",
+                "control": control,
+                "target": target,
+            })], ""
+
         if workflow_name == "mp_recommend":
             source_name, inferred_media_type = self._normalize_mp_recommend_request(source)
             return [
@@ -11260,6 +11600,7 @@ class AgentResourceOfficer(_PluginBase):
             "mp_search_download",
             "mp_download_control",
             "mp_subscribe",
+            "mp_subscribe_control",
             "mp_subscribe_and_search",
         }
         dry_run = self._parse_bool_value(

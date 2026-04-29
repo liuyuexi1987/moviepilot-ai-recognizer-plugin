@@ -365,6 +365,16 @@ PT environment diagnostics are read-only and safe. Site results are sanitized an
 下载器状态
 ```
 
+MP subscription management follows the same rule. Querying subscriptions is read-only; searching, pausing, resuming, and deleting subscriptions are write actions and should return a saved `plan_id` first:
+
+```text
+订阅列表
+搜索订阅 1
+暂停订阅 1
+恢复订阅 1
+删除订阅 1
+```
+
 Natural-language route examples that should call recommendations:
 
 ```text

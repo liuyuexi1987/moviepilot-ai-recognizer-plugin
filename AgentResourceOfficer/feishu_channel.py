@@ -34,7 +34,9 @@ try:
     from app.core.metainfo import MetaInfo
     from app.db.downloadhistory_oper import DownloadHistoryOper
     from app.db.site_oper import SiteOper
+    from app.db.subscribe_oper import SubscribeOper
     from app.db.systemconfig_oper import SystemConfigOper
+    from app.helper.subscribe import SubscribeHelper
     from app.core.plugin import PluginManager
     from app.log import logger
     from app.scheduler import Scheduler
@@ -48,6 +50,8 @@ except Exception:
     SearchChain = None
     SiteOper = None
     SubscribeChain = None
+    SubscribeHelper = None
+    SubscribeOper = None
     SystemConfigOper = None
     eventmanager = None
     MetaInfo = None
@@ -891,6 +895,121 @@ class FeishuChannel:
         except Exception as exc:
             logger.error(f"[AgentResourceOfficer][Feishu] 查询站点失败：{exc}\n{traceback.format_exc()}")
             return {"success": False, "message": f"查询站点失败：{exc}", "items": []}
+
+    def _query_subscribes(
+        self,
+        *,
+        status: str = "all",
+        media_type: str = "all",
+        name: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        if SubscribeOper is None:
+            return {"success": False, "message": "查询订阅失败：当前环境缺少 MoviePilot 订阅依赖。", "items": []}
+        try:
+            status_name = str(status or "all").strip()
+            media_type_name = str(media_type or "all").strip().lower()
+            name_filter = str(name or "").strip().lower()
+            subscribes = SubscribeOper().list() or []
+            items: List[Dict[str, Any]] = []
+            for sub in subscribes:
+                state = str(getattr(sub, "state", "") or "")
+                if status_name != "all" and state != status_name:
+                    continue
+                sub_type = str(getattr(sub, "type", "") or "").lower()
+                if media_type_name != "all" and media_type_name not in {sub_type, "movie" if sub_type == "电影" else sub_type, "tv" if sub_type == "电视剧" else sub_type}:
+                    continue
+                title = str(getattr(sub, "name", "") or "")
+                if name_filter and name_filter not in title.lower():
+                    continue
+                items.append({
+                    "index": len(items) + 1,
+                    "id": getattr(sub, "id", None),
+                    "name": title or "未命名订阅",
+                    "year": str(getattr(sub, "year", "") or ""),
+                    "type": str(getattr(sub, "type", "") or ""),
+                    "season": getattr(sub, "season", None),
+                    "state": state,
+                    "total_episode": getattr(sub, "total_episode", None),
+                    "lack_episode": getattr(sub, "lack_episode", None),
+                    "start_episode": getattr(sub, "start_episode", None),
+                    "quality": str(getattr(sub, "quality", "") or ""),
+                    "resolution": str(getattr(sub, "resolution", "") or ""),
+                    "effect": str(getattr(sub, "effect", "") or ""),
+                    "include": str(getattr(sub, "include", "") or ""),
+                    "exclude": str(getattr(sub, "exclude", "") or ""),
+                    "sites": getattr(sub, "sites", None),
+                    "downloader": str(getattr(sub, "downloader", "") or ""),
+                    "save_path": str(getattr(sub, "save_path", "") or ""),
+                    "best_version": getattr(sub, "best_version", None),
+                    "tmdbid": getattr(sub, "tmdbid", None),
+                    "doubanid": str(getattr(sub, "doubanid", "") or ""),
+                    "last_update": str(getattr(sub, "last_update", "") or ""),
+                })
+            total = len(items)
+            items = items[:max(1, min(100, int(limit or 20)))]
+            status_label = {"R": "启用", "S": "暂停", "P": "待处理", "N": "完成", "all": "全部"}.get(status_name, status_name)
+            if not items:
+                return {"success": True, "message": f"未找到{status_label}订阅。", "items": [], "total": total}
+            lines = [f"MP 订阅：{status_label}，共 {total} 条，展示前 {len(items)} 条："]
+            for item in items:
+                season = f" S{int(item.get('season')):02d}" if item.get("season") else ""
+                lack = item.get("lack_episode")
+                lack_text = f"缺 {lack} 集" if lack not in (None, "", 0) else "无缺集"
+                filters = " / ".join(value for value in [item.get("resolution"), item.get("effect"), item.get("quality")] if value) or "默认规则"
+                lines.append(f"{item.get('index')}. #{item.get('id')} {item.get('name')} ({item.get('year') or '-'}){season}")
+                lines.append(f"   状态:{item.get('state') or '-'} | {lack_text} | 规则:{filters} | 下载器:{item.get('downloader') or '默认'}")
+            lines.append("写入操作需确认：可发“搜索订阅 1”“暂停订阅 1”“恢复订阅 1”“删除订阅 1”。")
+            return {"success": True, "message": "\n".join(lines), "items": items, "total": total, "status": status_name}
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询订阅失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询订阅失败：{exc}", "items": []}
+
+    def _control_subscribe(self, *, action: str, subscribe_id: int) -> Dict[str, Any]:
+        if SubscribeOper is None:
+            return {"success": False, "message": "操作订阅失败：当前环境缺少 MoviePilot 订阅依赖。"}
+        sid = int(subscribe_id or 0)
+        if sid <= 0:
+            return {"success": False, "message": "操作订阅失败：订阅 ID 无效。"}
+        action_name = str(action or "").strip().lower()
+        try:
+            oper = SubscribeOper()
+            sub = oper.get(sid)
+            if not sub:
+                return {"success": False, "message": f"操作订阅失败：订阅 #{sid} 不存在。"}
+            old_info = sub.to_dict() if hasattr(sub, "to_dict") else {}
+            if action_name in {"search", "run"}:
+                if Scheduler is None:
+                    return {"success": False, "message": "搜索订阅失败：当前环境缺少调度器。"}
+                Scheduler().start(job_id="subscribe_search", **{"sid": sid, "state": None, "manual": True})
+                return {"success": True, "message": f"已触发订阅搜索：#{sid} {getattr(sub, 'name', '')}", "subscribe_id": sid, "action": action_name}
+            if action_name in {"pause", "stop"}:
+                updated = oper.update(sid, {"state": "S"})
+                label = "暂停"
+            elif action_name in {"resume", "start"}:
+                updated = oper.update(sid, {"state": "R"})
+                label = "恢复"
+            elif action_name in {"delete", "remove"}:
+                sub_name = str(getattr(sub, "name", "") or "")
+                sub_year = str(getattr(sub, "year", "") or "")
+                oper.delete(sid)
+                if eventmanager and EventType:
+                    eventmanager.send_event(EventType.SubscribeDeleted, {"subscribe_id": sid, "subscribe_info": old_info})
+                if SubscribeHelper:
+                    SubscribeHelper().sub_done_async({"tmdbid": getattr(sub, "tmdbid", None), "doubanid": getattr(sub, "doubanid", None)})
+                return {"success": True, "message": f"成功删除订阅：#{sid} {sub_name} ({sub_year})", "subscribe_id": sid, "action": action_name}
+            else:
+                return {"success": False, "message": f"操作订阅失败：不支持的动作 {action}"}
+            if eventmanager and EventType:
+                eventmanager.send_event(EventType.SubscribeModified, {
+                    "subscribe_id": sid,
+                    "old_subscribe_info": old_info,
+                    "subscribe_info": updated.to_dict() if updated and hasattr(updated, "to_dict") else {},
+                })
+            return {"success": True, "message": f"{label}订阅成功：#{sid} {getattr(sub, 'name', '')}", "subscribe_id": sid, "action": action_name}
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 操作订阅失败：{sid} {exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"操作订阅失败：{exc}", "subscribe_id": sid}
 
     def _execute_media_subscribe(self, keyword: str, immediate_search: bool) -> str:
         if not all([MetaInfo, SubscribeChain]):
