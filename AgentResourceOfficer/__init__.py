@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.23"
+    plugin_version = "0.2.24"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3772,6 +3772,21 @@ class AgentResourceOfficer(_PluginBase):
                     "score_summary": self._score_summary([best], limit=1),
                 }),
             }
+        if self._parse_bool_value(score.get("can_auto_execute"), False):
+            result = await self._assistant_mp_download(
+                choice=choice,
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            )
+            data = dict(result.get("data") or {})
+            data["action"] = "mp_best_download_auto"
+            data["best_choice"] = choice
+            data["score_summary"] = self._score_summary([best], limit=1)
+            result["data"] = data
+            prefix = "最佳片源已按偏好自动提交下载" if result.get("success") else "最佳片源自动下载失败"
+            result["message"] = f"{prefix}\n{result.get('message') or ''}".strip()
+            return result
         actions = [{
             "name": "pick_mp_download",
             "session": session,
@@ -11416,9 +11431,27 @@ class AgentResourceOfficer(_PluginBase):
                 return finish({
                     "success": False,
                     "message": "用法：下载资源 1",
-                    "data": self._assistant_response_data(session=session, data={"action": "mp_download", "ok": False}),
+                        "data": self._assistant_response_data(session=session, data={"action": "mp_download", "ok": False}),
                 })
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
             if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+                selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
+                score = selected.get("score") if isinstance(selected.get("score"), dict) else {}
+                if self._parse_bool_value(score.get("can_auto_execute"), False):
+                    auto_result = await self._assistant_mp_download(
+                        choice=choice,
+                        session=session,
+                        cache_key=cache_key,
+                        preferences=preferences,
+                    )
+                    data = dict(auto_result.get("data") or {})
+                    data["action"] = "mp_download_auto"
+                    data["score_summary"] = self._score_summary([selected], limit=1) if selected else {}
+                    auto_result["data"] = data
+                    prefix = "已按偏好自动提交下载" if auto_result.get("success") else "自动下载失败"
+                    auto_result["message"] = f"{prefix}\n{auto_result.get('message') or ''}".strip()
+                    return finish(auto_result)
                 actions = [{
                     "name": "pick_mp_download",
                     "session": session,
@@ -11457,7 +11490,6 @@ class AgentResourceOfficer(_PluginBase):
                     "message": f"下载计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动下载。",
                     "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
                 }
-            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
             return finish(await self._assistant_mp_download(
                 choice=choice,
                 session=session,

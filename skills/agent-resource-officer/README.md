@@ -92,6 +92,8 @@ python3 scripts/aro_request.py pick --choice 1
 
 注意：`workflow` 会直接执行只读工作流；涉及下载、订阅、解锁或转存的写入工作流会默认保存待确认执行的 `plan_id`。
 
+例外：如果用户偏好里明确开启 `auto_ingest_enabled=true`，并且 PT 候选评分达到自动阈值且没有硬风险，`下载1` 和 `下载最佳` 可以直接提交下载。默认偏好关闭自动入库。
+
 首次交给外部智能体使用时，建议先运行 `preferences`。如果返回需要初始化偏好，智能体应询问用户：清晰度、杜比视界/HDR、字幕、电视剧是否全集优先、PT 最低做种、影巢积分上限、默认目录、是否允许高分资源自动入库。偏好会用于云盘和 PT 分源评分。
 
 `route`、`pick`、`workflow` 等主响应会带上低 token 的 `preference_status`。如果其中 `needs_onboarding=true`，智能体应先完成偏好询问与保存，再继续自动选择或入库。
