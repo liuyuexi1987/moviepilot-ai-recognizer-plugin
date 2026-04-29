@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.10`
+- `AgentResourceOfficer`: `0.2.11`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.11`：MP 下载/订阅命令支持无空格自然写法，例如“下载1”“下载第1个”“订阅蜘蛛侠”“订阅并搜索蜘蛛侠”；自然语言写入默认生成 `plan_id`，确认后才执行。
 - `AgentResourceOfficer 0.2.10`：推荐列表选择支持自然语言指定后续来源，例如“选择 1 盘搜”“选择1影巢”“选 2 mp”，飞书与智能体可不用结构化 mode 参数。
 - `AgentResourceOfficer 0.2.09`：热门推荐入口支持自然语言别名，例如“看看最近有什么热门影视”“豆瓣热门电影”“正在热映”“今日番剧”，智能体和飞书可直接用人话触发 MP 推荐。
 - `AgentResourceOfficer 0.2.08`：MP 热门推荐列表支持保存会话并按编号继续搜索，智能体可把推荐条目直接转入 MP 原生搜索、影巢或盘搜。

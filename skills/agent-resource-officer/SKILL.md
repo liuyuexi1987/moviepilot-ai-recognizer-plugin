@@ -340,6 +340,15 @@ After a recommendation list, natural-language picks are valid:
 选 2 mp
 ```
 
+After an MP native search result, natural-language write commands are valid. They still follow the plugin's confirmation/plan rules:
+
+```text
+下载1
+下载第1个
+订阅蜘蛛侠
+订阅并搜索蜘蛛侠
+```
+
 Natural-language route examples that should call recommendations:
 
 ```text

@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.10"
+    plugin_version = "0.2.11"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -7811,6 +7811,22 @@ class AgentResourceOfficer(_PluginBase):
                     options["mode"] = ""
                     options["keyword"] = raw[len(prefix):].strip()
                     break
+                if raw.startswith(prefix):
+                    remain_text = raw[len(prefix):].strip()
+                    if not remain_text:
+                        continue
+                    if action == "mp_download":
+                        download_match = re.search(r"\d+", remain_text)
+                        if not download_match:
+                            continue
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = download_match.group(0)
+                        break
+                    options["action"] = action
+                    options["mode"] = ""
+                    options["keyword"] = remain_text
+                    break
             if not options.get("action") and any(
                 marker in compact
                 for marker in [
@@ -9660,6 +9676,45 @@ class AgentResourceOfficer(_PluginBase):
                     "message": "用法：下载资源 1",
                     "data": self._assistant_response_data(session=session, data={"action": "mp_download", "ok": False}),
                 })
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                actions = [{
+                    "name": "pick_mp_download",
+                    "session": session,
+                    "session_id": cache_key,
+                    "choice": choice,
+                }]
+                plan = self._save_workflow_plan(
+                    workflow="mp_download",
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": "mp_download",
+                        "session": session,
+                        "session_id": cache_key,
+                        "choice": choice,
+                        "dry_run": False,
+                    },
+                )
+                full_data = self._assistant_response_data(session=session, data={
+                    "action": "workflow_plan",
+                    "ok": True,
+                    "plan_id": plan.get("plan_id"),
+                    "workflow": "mp_download",
+                    "dry_run": True,
+                    "workflow_actions": actions,
+                    "estimated_steps": len(actions),
+                    "ready_to_execute": True,
+                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
+                    "plan_created_at": plan.get("created_at"),
+                    "plan_created_at_text": plan.get("created_at_text"),
+                })
+                return {
+                    "success": True,
+                    "message": f"下载计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动下载。",
+                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
+                }
             preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
             return finish(await self._assistant_mp_download(
                 choice=choice,
@@ -9674,6 +9729,47 @@ class AgentResourceOfficer(_PluginBase):
                     "message": "用法：订阅媒体 片名 或 订阅并搜索 片名",
                     "data": self._assistant_response_data(session=session, data={"action": assistant_action, "ok": False}),
                 })
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                action_name = "start_mp_subscribe_search" if assistant_action == "mp_subscribe_search" else "start_mp_subscribe"
+                workflow_name = "mp_subscribe_and_search" if assistant_action == "mp_subscribe_search" else "mp_subscribe"
+                actions = [{
+                    "name": action_name,
+                    "session": session,
+                    "session_id": cache_key,
+                    "keyword": keyword,
+                }]
+                plan = self._save_workflow_plan(
+                    workflow=workflow_name,
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": workflow_name,
+                        "session": session,
+                        "session_id": cache_key,
+                        "keyword": keyword,
+                        "dry_run": False,
+                    },
+                )
+                full_data = self._assistant_response_data(session=session, data={
+                    "action": "workflow_plan",
+                    "ok": True,
+                    "plan_id": plan.get("plan_id"),
+                    "workflow": workflow_name,
+                    "dry_run": True,
+                    "workflow_actions": actions,
+                    "estimated_steps": len(actions),
+                    "ready_to_execute": True,
+                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
+                    "plan_created_at": plan.get("created_at"),
+                    "plan_created_at_text": plan.get("created_at_text"),
+                })
+                return {
+                    "success": True,
+                    "message": f"订阅计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动订阅。",
+                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
+                }
             return finish(await self._assistant_mp_subscribe(
                 keyword=keyword,
                 session=session,
