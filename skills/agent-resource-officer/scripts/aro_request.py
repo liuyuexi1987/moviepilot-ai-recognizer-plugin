@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.18"
+HELPER_VERSION = "0.1.19"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -50,6 +50,7 @@ WRITE_WORKFLOWS = {
     "hdhive_unlock",
     "share_transfer",
     "mp_search_download",
+    "mp_download_control",
     "mp_subscribe",
     "mp_subscribe_and_search",
 }
@@ -622,6 +623,12 @@ def main():
     parser.add_argument("--media-type", default="auto")
     parser.add_argument("--mode", default="")
     parser.add_argument("--source", default="")
+    parser.add_argument("--status", default="")
+    parser.add_argument("--hash", dest="hash_value", default="")
+    parser.add_argument("--target", default="")
+    parser.add_argument("--control", default="")
+    parser.add_argument("--downloader", default="")
+    parser.add_argument("--delete-files", action="store_true")
     parser.add_argument("--preferences-json")
     parser.add_argument("--reset", action="store_true")
     parser.add_argument("--execute", action="store_true")
@@ -998,6 +1005,12 @@ def main():
             "choice": args.choice,
             "path": args.target_path or "",
             "source": args.source or "",
+            "status": args.status or "",
+            "hash": args.hash_value or "",
+            "target": args.target or "",
+            "control": args.control or "",
+            "downloader": args.downloader or "",
+            "delete_files": bool(args.delete_files),
             "limit": args.limit,
             "dry_run": args.workflow in WRITE_WORKFLOWS,
             "compact": True,

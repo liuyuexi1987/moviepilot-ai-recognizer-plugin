@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.18`
+当前 helper 版本：`0.1.19`
 
 公开仓库：
 
@@ -206,6 +206,15 @@ python3 scripts/aro_request.py route --text "下载1"
 python3 scripts/aro_request.py route --text "下载第1个"
 python3 scripts/aro_request.py route --text "订阅蜘蛛侠"
 python3 scripts/aro_request.py route --text "订阅并搜索蜘蛛侠"
+```
+
+下载任务也可以走同一入口。查询是读操作；暂停、恢复、删除会先返回 `plan_id`，确认后再执行：
+
+```bash
+python3 scripts/aro_request.py route --text "下载任务"
+python3 scripts/aro_request.py route --text "暂停下载 1"
+python3 scripts/aro_request.py route --text "恢复下载 1"
+python3 scripts/aro_request.py route --text "删除下载 1"
 ```
 
 - 云盘资源按清晰度、HDR/DV、字幕、完整度、目录和网盘类型评分；影巢额外受积分上限保护。

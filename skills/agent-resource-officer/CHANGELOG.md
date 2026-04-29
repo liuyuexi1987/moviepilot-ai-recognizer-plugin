@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.19
+
+- Added workflow helper flags for MP download task management: `--status`, `--hash`, `--target`, `--control`, `--downloader`, and `--delete-files`.
+- Added examples for querying, pausing, resuming, and deleting MP download tasks through AgentResourceOfficer.
+
 ## 0.1.18
 
 - Added `--mode` to the workflow helper so `mp_recommend_search` can continue a recommended title into MP, HDHive, or PanSou.

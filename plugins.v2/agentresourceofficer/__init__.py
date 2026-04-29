@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.11"
+    plugin_version = "0.2.12"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3548,6 +3548,109 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    def _resolve_mp_download_task_target(self, *, target: str, cache_key: str) -> Dict[str, Any]:
+        target_text = self._clean_text(target)
+        state = self._load_session(cache_key) or {}
+        items = state.get("items") if isinstance(state.get("items"), list) else []
+        index = self._safe_int(target_text, 0)
+        if index > 0:
+            for item in items:
+                if self._safe_int(item.get("index"), 0) == index:
+                    return dict(item)
+        hash_match = re.search(r"\b[0-9a-fA-F]{40}\b", target_text)
+        if hash_match:
+            task_hash = hash_match.group(0)
+            return {"hash": task_hash, "hash_short": task_hash[:8]}
+        short_hash_match = re.search(r"\b[0-9a-fA-F]{6,12}\b", target_text)
+        if short_hash_match:
+            short_hash = short_hash_match.group(0).lower()
+            for item in items:
+                task_hash = self._clean_text(item.get("hash")).lower()
+                if task_hash.startswith(short_hash):
+                    return dict(item)
+        return {}
+
+    async def _assistant_mp_download_tasks(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        status: str = "downloading",
+        title: str = "",
+        hash_value: str = "",
+        downloader: str = "",
+        limit: int = 10,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_download_tasks(
+            downloader=downloader,
+            status=status or "downloading",
+            title=title,
+            hash_value=hash_value,
+            limit=max(1, min(30, self._safe_int(limit, 10))),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_download_tasks",
+            "stage": "download_tasks",
+            "keyword": title or hash_value or status or "downloading",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载任务查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download_tasks",
+                "ok": bool(result.get("success")),
+                "status": result.get("status") or status,
+                "items": items,
+                "total": result.get("total", len(items)),
+            }),
+        }
+
+    async def _assistant_mp_download_control(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        control: str,
+        target: str,
+        downloader: str = "",
+        delete_files: bool = False,
+    ) -> Dict[str, Any]:
+        selected = self._resolve_mp_download_task_target(target=target, cache_key=cache_key)
+        task_hash = self._clean_text(selected.get("hash"))
+        if not task_hash:
+            return {
+                "success": False,
+                "message": "操作下载任务失败：请先发送“下载任务”获取列表，再按编号操作，例如“暂停下载 1”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download_control",
+                    "ok": False,
+                    "error_code": "missing_download_task_hash",
+                    "target": target,
+                }),
+            }
+        result = self._ensure_feishu_channel()._control_download_task(
+            action=control,
+            hash_value=task_hash,
+            downloader=downloader or self._clean_text(selected.get("downloader")),
+            delete_files=delete_files,
+        )
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载任务操作完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download_control",
+                "ok": bool(result.get("success")),
+                "control": control,
+                "target": target,
+                "selected": selected,
+                "result": result,
+                "write_effect": "write",
+            }),
+        }
+
     async def _assistant_mp_recommendations(
         self,
         *,
@@ -4402,6 +4505,24 @@ class AgentResourceOfficer(_PluginBase):
                 "score_summary": self._score_summary(items, limit=5),
                 "suggested_actions": ["mp_download.choice", "mp_subscribe.keyword", "session_clear"],
             })
+        elif kind == "assistant_mp_download_tasks":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(item.get("title")),
+                        "hash_short": self._clean_text(item.get("hash_short")),
+                        "downloader": self._clean_text(item.get("downloader")),
+                        "progress": self._clean_text(item.get("progress")),
+                        "state": self._clean_text(item.get("state")),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_download_control.pause", "mp_download_control.resume", "mp_download_control.delete", "session_clear"],
+            })
         elif kind == "assistant_mp_recommend":
             items = state.get("items") or []
             payload.update({
@@ -4646,6 +4767,12 @@ class AgentResourceOfficer(_PluginBase):
             "url",
             "access_code",
             "client_type",
+            "status",
+            "hash",
+            "target",
+            "control",
+            "downloader",
+            "delete_files",
             "kind",
             "has_pending_p115",
             "stale_only",
@@ -4742,6 +4869,13 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "name": "start_mp_recommendations", "source": "tmdb_trending", "media_type": "all"},
                 ),
                 self._assistant_action_template(
+                    name="query_mp_download_tasks",
+                    description="查看 MP 下载任务状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_download_tasks", "status": "downloading"},
+                ),
+                self._assistant_action_template(
                     name="start_115_login",
                     description="发起新的 115 扫码登录",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
@@ -4805,6 +4939,30 @@ class AgentResourceOfficer(_PluginBase):
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
                     body={**base_state, "name": "start_mp_subscribe", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_download_tasks":
+            templates.extend([
+                self._assistant_action_template(
+                    name="pause_mp_download",
+                    description="按编号暂停下载任务；写入动作建议先 dry_run 生成计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "mp_download_control", "control": "pause", "target": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="resume_mp_download",
+                    description="按编号恢复下载任务；写入动作建议先 dry_run 生成计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "mp_download_control", "control": "resume", "target": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="delete_mp_download",
+                    description="按编号删除下载任务；默认不删除文件",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "mp_download_control", "control": "delete", "target": "<1-N>", "delete_files": False},
                 ),
             ])
         elif kind == "assistant_mp_recommend":
@@ -5736,6 +5894,8 @@ class AgentResourceOfficer(_PluginBase):
             "4. text=检查115登录",
             "5. text=链接 https://115cdn.com/s/xxxx path=/待整理",
             "6. text=链接 https://pan.quark.cn/s/xxxx 位置=分享",
+            "7. text=MP搜索 蜘蛛侠；下载1 会先生成计划",
+            "8. text=下载任务；暂停下载 1 / 恢复下载 1 / 删除下载 1 会先生成计划",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -5780,6 +5940,8 @@ class AgentResourceOfficer(_PluginBase):
                     "p115_cancel",
                     "hdhive_checkin",
                     "hdhive_checkin_history",
+                    "mp_download_tasks",
+                    "mp_download_control",
                     "mp_download",
                     "mp_subscribe",
                     "mp_subscribe_search",
@@ -5798,6 +5960,11 @@ class AgentResourceOfficer(_PluginBase):
                     "client_type",
                     "is_gambler",
                     "action",
+                    "status",
+                    "hash",
+                    "downloader",
+                    "download_control",
+                    "delete_files",
                     "compact",
                 ],
             },
@@ -5844,6 +6011,12 @@ class AgentResourceOfficer(_PluginBase):
                     "access_code",
                     "client_type",
                     "source",
+                    "status",
+                    "hash",
+                    "target",
+                    "control",
+                    "downloader",
+                    "delete_files",
                     "kind",
                     "has_pending_p115",
                     "stale_only",
@@ -7592,6 +7765,7 @@ class AgentResourceOfficer(_PluginBase):
             "p115_qrcode_check",
             "hdhive_checkin",
             "mp_download",
+            "mp_download_control",
             "mp_subscribe",
             "mp_subscribe_search",
             "pick_mp_download",
@@ -7641,6 +7815,9 @@ class AgentResourceOfficer(_PluginBase):
         action = self._clean_text(body.get("action"))
         if action:
             merged["action"] = action
+        download_control = self._clean_text(body.get("download_control") or body.get("control") or body.get("operation"))
+        if download_control:
+            merged["download_control"] = download_control
         return merged
 
     @staticmethod
@@ -7790,7 +7967,44 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
             options["is_gambler"] = "true"
+        elif compact in {
+            "下载任务",
+            "下载状态",
+            "正在下载",
+            "下载列表",
+            "查看下载",
+            "下载进度",
+            "downloadtasks",
+            "downloadstatus",
+        }:
+            options["action"] = "mp_download_tasks"
+            options["mode"] = ""
+            options["keyword"] = ""
         else:
+            for prefix, control in [
+                ("暂停下载", "pause"),
+                ("停止下载", "pause"),
+                ("恢复下载", "resume"),
+                ("继续下载", "resume"),
+                ("开始下载", "resume"),
+                ("删除下载", "delete"),
+                ("移除下载", "delete"),
+            ]:
+                if raw.startswith(prefix):
+                    target_text = raw[len(prefix):].strip()
+                    if target_text:
+                        options["action"] = "mp_download_control"
+                        options["mode"] = ""
+                        options["keyword"] = target_text
+                        options["download_control"] = control
+                    break
+            if not options.get("action"):
+                for prefix in ["下载任务", "下载状态", "下载列表", "查看下载", "下载进度"]:
+                    if raw.startswith(prefix + " "):
+                        options["action"] = "mp_download_tasks"
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
             for prefix, action in [
                 ("下载资源", "mp_download"),
                 ("下载", "mp_download"),
@@ -9668,6 +9882,107 @@ class AgentResourceOfficer(_PluginBase):
                     "history": self._hdhive_checkin_history_public_data(limit=10),
                 }),
             })
+        if assistant_action == "mp_download_tasks":
+            return finish(await self._assistant_mp_download_tasks(
+                session=session,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "downloading"),
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                downloader=self._clean_text(body.get("downloader")),
+                limit=self._safe_int(body.get("limit"), 10),
+            ))
+        if assistant_action == "mp_download_control":
+            control = self._clean_text(parsed.get("download_control") or body.get("download_control") or body.get("control") or body.get("operation")).lower()
+            control_aliases = {
+                "暂停": "pause",
+                "停止": "pause",
+                "pause": "pause",
+                "stop": "pause",
+                "恢复": "resume",
+                "继续": "resume",
+                "开始": "resume",
+                "resume": "resume",
+                "start": "resume",
+                "删除": "delete",
+                "移除": "delete",
+                "delete": "delete",
+                "remove": "delete",
+            }
+            control = control_aliases.get(control, control)
+            target = self._clean_text(keyword or body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+            if control not in {"pause", "resume", "delete"} or not target:
+                return finish({
+                    "success": False,
+                    "message": "用法：先发“下载任务”，再发“暂停下载 1”“恢复下载 1”或“删除下载 1”。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_download_control",
+                        "ok": False,
+                        "error_code": "invalid_download_control_args",
+                    }),
+                })
+            if not self._resolve_mp_download_task_target(target=target, cache_key=cache_key):
+                return finish({
+                    "success": False,
+                    "message": "未找到可操作的下载任务。请先发送“下载任务”获取列表，再按编号操作；也可以直接传 40 位任务 hash。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_download_control",
+                        "ok": False,
+                        "error_code": "download_task_target_not_found",
+                        "target": target,
+                    }),
+                })
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                actions = [{
+                    "name": "mp_download_control",
+                    "session": session,
+                    "session_id": cache_key,
+                    "control": control,
+                    "target": target,
+                    "downloader": self._clean_text(body.get("downloader")),
+                    "delete_files": self._parse_bool_value(body.get("delete_files"), False),
+                }]
+                plan = self._save_workflow_plan(
+                    workflow="mp_download_control",
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": "mp_download_control",
+                        "session": session,
+                        "session_id": cache_key,
+                        "control": control,
+                        "target": target,
+                        "dry_run": False,
+                    },
+                )
+                full_data = self._assistant_response_data(session=session, data={
+                    "action": "workflow_plan",
+                    "ok": True,
+                    "plan_id": plan.get("plan_id"),
+                    "workflow": "mp_download_control",
+                    "dry_run": True,
+                    "workflow_actions": actions,
+                    "estimated_steps": len(actions),
+                    "ready_to_execute": True,
+                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
+                    "plan_created_at": plan.get("created_at"),
+                    "plan_created_at_text": plan.get("created_at_text"),
+                })
+                return {
+                    "success": True,
+                    "message": f"下载任务操作计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动操作下载器。",
+                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
+                }
+            return finish(await self._assistant_mp_download_control(
+                session=session,
+                cache_key=cache_key,
+                control=control,
+                target=target,
+                downloader=self._clean_text(body.get("downloader")),
+                delete_files=self._parse_bool_value(body.get("delete_files"), False),
+            ))
         if assistant_action == "mp_download":
             choice = self._safe_int(parsed.get("keyword") or body.get("choice") or body.get("index"), 0)
             if choice <= 0:
@@ -10228,6 +10543,33 @@ class AgentResourceOfficer(_PluginBase):
                 cache_key=cache_key,
                 preferences=prefs,
             ))
+        if name == "query_mp_download_tasks":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_download_tasks(
+                session=session_name,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or "downloading"),
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                downloader=self._clean_text(body.get("downloader")),
+                limit=self._safe_int(body.get("limit"), 10),
+            ))
+        if name == "mp_download_control":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_download_control(
+                session=session_name,
+                cache_key=cache_key,
+                control=self._clean_text(body.get("control") or body.get("download_control") or body.get("operation")),
+                target=self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice")),
+                downloader=self._clean_text(body.get("downloader")),
+                delete_files=self._parse_bool_value(body.get("delete_files"), False),
+            ))
         if name in {"start_mp_subscribe", "start_mp_subscribe_search"}:
             keyword = self._clean_text(body.get("keyword") or body.get("title"))
             if not keyword:
@@ -10531,6 +10873,16 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "choice", "compact", "dry_run"],
                 },
                 {
+                    "name": "mp_download_tasks",
+                    "description": "查询 MP 下载任务状态，可按 status/title/hash/downloader 过滤",
+                    "fields": ["session", "status", "title", "hash", "downloader", "limit", "compact"],
+                },
+                {
+                    "name": "mp_download_control",
+                    "description": "暂停、恢复或删除 MP 下载任务，默认先生成 plan_id",
+                    "fields": ["session", "control", "target", "downloader", "delete_files", "compact", "dry_run"],
+                },
+                {
                     "name": "mp_subscribe",
                     "description": "按关键词创建 MP 订阅，默认先生成 plan_id",
                     "fields": ["session", "keyword", "compact", "dry_run"],
@@ -10646,6 +10998,29 @@ class AgentResourceOfficer(_PluginBase):
                 base({"name": "pick_mp_download", "choice": max(1, choice)}),
             ], ""
 
+        if workflow_name == "mp_download_tasks":
+            return [base({
+                "name": "query_mp_download_tasks",
+                "status": self._clean_text(body.get("status")) or "downloading",
+                "title": self._clean_text(body.get("title") or body.get("keyword")),
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "downloader": self._clean_text(body.get("downloader")),
+                "limit": self._safe_int(body.get("limit"), 10),
+            })], ""
+
+        if workflow_name == "mp_download_control":
+            control = self._clean_text(body.get("control") or body.get("download_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+            if not control or not target:
+                return [], "mp_download_control 需要 control 和 target"
+            return [base({
+                "name": "mp_download_control",
+                "control": control,
+                "target": target,
+                "downloader": self._clean_text(body.get("downloader")),
+                "delete_files": self._parse_bool_value(body.get("delete_files"), False),
+            })], ""
+
         if workflow_name == "mp_subscribe":
             if not keyword:
                 return [], "mp_subscribe 缺少 keyword"
@@ -10749,6 +11124,7 @@ class AgentResourceOfficer(_PluginBase):
             "hdhive_unlock",
             "share_transfer",
             "mp_search_download",
+            "mp_download_control",
             "mp_subscribe",
             "mp_subscribe_and_search",
         }

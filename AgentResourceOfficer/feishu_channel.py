@@ -32,14 +32,16 @@ try:
     from app.chain.subscribe import SubscribeChain
     from app.core.event import eventmanager
     from app.core.metainfo import MetaInfo
+    from app.db.downloadhistory_oper import DownloadHistoryOper
     from app.core.plugin import PluginManager
     from app.log import logger
     from app.scheduler import Scheduler
-    from app.schemas.types import EventType
+    from app.schemas.types import EventType, TorrentStatus
     from app.utils.http import RequestUtils
     from app.utils.string import StringUtils
 except Exception:
     DownloadChain = None
+    DownloadHistoryOper = None
     MediaChain = None
     SearchChain = None
     SubscribeChain = None
@@ -48,6 +50,7 @@ except Exception:
     PluginManager = None
     Scheduler = None
     EventType = None
+    TorrentStatus = None
     RequestUtils = None
     StringUtils = None
 
@@ -653,6 +656,146 @@ class FeishuChannel:
         except Exception as exc:
             logger.error(f"[AgentResourceOfficer][Feishu] 下载资源失败：{torrent.title} {exc}\n{traceback.format_exc()}")
             return f"下载资源失败：{torrent.title}\n错误：{exc}"
+
+    def _query_download_tasks(
+        self,
+        *,
+        downloader: str = "",
+        status: str = "downloading",
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 10,
+    ) -> Dict[str, Any]:
+        if DownloadChain is None:
+            return {"success": False, "message": "查询下载任务失败：当前环境缺少 MoviePilot 下载依赖。", "items": []}
+        try:
+            chain = DownloadChain()
+            status_name = str(status or "downloading").strip().lower()
+            downloader_name = str(downloader or "").strip() or None
+            tasks: List[Any] = []
+            if hash_value:
+                tasks = chain.list_torrents(downloader=downloader_name, hashs=[hash_value]) or []
+            elif status_name == "downloading":
+                tasks = chain.downloading(name=downloader_name) or []
+            else:
+                for torrent_status in [TorrentStatus.DOWNLOADING, TorrentStatus.TRANSFER] if TorrentStatus else []:
+                    tasks.extend(chain.list_torrents(downloader=downloader_name, status=torrent_status) or [])
+            if status_name == "completed":
+                tasks = [task for task in tasks if str(getattr(task, "state", "") or "").lower() in {"seeding", "completed"}]
+            elif status_name == "paused":
+                tasks = [task for task in tasks if str(getattr(task, "state", "") or "").lower() == "paused"]
+            if title:
+                title_lower = title.lower()
+                tasks = [
+                    task for task in tasks
+                    if title_lower in str(getattr(task, "title", "") or getattr(task, "name", "") or "").lower()
+                ]
+            items: List[Dict[str, Any]] = []
+            for index, task in enumerate(tasks[:max(1, min(30, int(limit or 10)))], 1):
+                task_hash = str(getattr(task, "hash", "") or "")
+                history = DownloadHistoryOper().get_by_hash(task_hash) if DownloadHistoryOper and task_hash else None
+                title_text = str(getattr(task, "title", "") or getattr(task, "name", "") or "").strip()
+                if history and getattr(history, "title", None):
+                    title_text = title_text or str(history.title)
+                size_value = getattr(task, "size", None)
+                size_text = StringUtils.str_filesize(size_value) if StringUtils and size_value else ""
+                progress = getattr(task, "progress", None)
+                try:
+                    progress_text = f"{float(progress):.1f}%" if progress is not None else ""
+                except Exception:
+                    progress_text = str(progress or "")
+                items.append({
+                    "index": index,
+                    "hash": task_hash,
+                    "hash_short": task_hash[:8],
+                    "downloader": str(getattr(task, "downloader", "") or ""),
+                    "title": title_text or "未命名任务",
+                    "name": str(getattr(task, "name", "") or ""),
+                    "size": size_text,
+                    "progress": progress_text,
+                    "state": str(getattr(task, "state", "") or ""),
+                    "dlspeed": getattr(task, "dlspeed", None),
+                    "upspeed": getattr(task, "upspeed", None),
+                    "left_time": getattr(task, "left_time", None),
+                    "tags": str(getattr(task, "tags", "") or ""),
+                    "media_title": str(getattr(history, "title", "") or "") if history else "",
+                })
+            status_label = {
+                "downloading": "下载中",
+                "completed": "已完成",
+                "paused": "已暂停",
+                "all": "全部",
+            }.get(status_name, status_name)
+            if not items:
+                return {
+                    "success": True,
+                    "message": f"未找到{status_label}下载任务。",
+                    "items": [],
+                    "total": len(tasks),
+                    "status": status_name,
+                }
+            lines = [f"下载任务：{status_label}，共 {len(tasks)} 条，展示前 {len(items)} 条："]
+            for item in items:
+                details = [
+                    item.get("progress") or "进度未知",
+                    item.get("size") or "大小未知",
+                    item.get("state") or "状态未知",
+                    f"下载器:{item.get('downloader') or '默认'}",
+                    f"Hash:{item.get('hash_short')}",
+                ]
+                lines.append(f"{item.get('index')}. {item.get('title')}")
+                lines.append("   " + " | ".join(details))
+            lines.append("写入操作需确认：可发“暂停下载 1”“恢复下载 1”“删除下载 1”。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": len(tasks),
+                "status": status_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询下载任务失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询下载任务失败：{exc}", "items": []}
+
+    def _control_download_task(
+        self,
+        *,
+        action: str,
+        hash_value: str,
+        downloader: str = "",
+        delete_files: bool = False,
+    ) -> Dict[str, Any]:
+        if DownloadChain is None:
+            return {"success": False, "message": "操作下载任务失败：当前环境缺少 MoviePilot 下载依赖。"}
+        task_hash = str(hash_value or "").strip()
+        if len(task_hash) != 40 or not all(ch in "0123456789abcdefABCDEF" for ch in task_hash):
+            return {"success": False, "message": "操作下载任务失败：hash 格式无效，请先查询下载任务后按编号操作。"}
+        downloader_name = str(downloader or "").strip() or None
+        action_name = str(action or "").strip().lower()
+        try:
+            chain = DownloadChain()
+            if action_name in {"pause", "stop"}:
+                ok = chain.set_downloading(task_hash, "stop", name=downloader_name)
+                label = "暂停"
+            elif action_name in {"resume", "start"}:
+                ok = chain.set_downloading(task_hash, "start", name=downloader_name)
+                label = "恢复"
+            elif action_name in {"delete", "remove"}:
+                ok = chain.remove_torrents(hashs=[task_hash], downloader=downloader_name, delete_file=bool(delete_files))
+                label = "删除"
+            else:
+                return {"success": False, "message": f"操作下载任务失败：不支持的动作 {action}"}
+            suffix = "（包含文件）" if action_name in {"delete", "remove"} and delete_files else ""
+            return {
+                "success": bool(ok),
+                "message": f"{label}下载任务{'成功' if ok else '失败'}：{task_hash[:8]}{suffix}",
+                "hash": task_hash,
+                "downloader": downloader_name or "",
+                "action": action_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 操作下载任务失败：{task_hash} {exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"操作下载任务失败：{exc}"}
 
     def _execute_media_subscribe(self, keyword: str, immediate_search: bool) -> str:
         if not all([MetaInfo, SubscribeChain]):

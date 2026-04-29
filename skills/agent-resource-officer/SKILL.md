@@ -349,6 +349,15 @@ After an MP native search result, natural-language write commands are valid. The
 订阅并搜索蜘蛛侠
 ```
 
+Download task management also uses the same route. Querying tasks is read-only. Pausing, resuming, and deleting tasks are write actions and should return a saved `plan_id` first:
+
+```text
+下载任务
+暂停下载 1
+恢复下载 1
+删除下载 1
+```
+
 Natural-language route examples that should call recommendations:
 
 ```text
