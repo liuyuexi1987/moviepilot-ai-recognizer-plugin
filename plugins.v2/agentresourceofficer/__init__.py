@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.24"
+    plugin_version = "0.2.25"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -362,6 +362,7 @@ class AgentResourceOfficer(_PluginBase):
                 suffix.startswith("/")
                 or "=" in suffix
                 or cls._normalize_pick_mode(suffix)
+                or cls._normalize_pick_action(suffix)
                 or suffix.lower() in {"n", "next"}
             ):
                 return 0, "", "", ""
@@ -369,11 +370,14 @@ class AgentResourceOfficer(_PluginBase):
         index = 0
         path = ""
         mode = ""
+        pick_action = ""
         match = re.search(r"\d+", text)
         if match:
             index = cls._safe_int(match.group(0), 0)
         for token in text.split():
             if "=" not in token:
+                if not pick_action:
+                    pick_action = cls._normalize_pick_action(token)
                 continue
             key, token_value = token.split("=", 1)
             key = key.strip().lower()
@@ -384,7 +388,10 @@ class AgentResourceOfficer(_PluginBase):
                 mode = cls._normalize_pick_mode(token_value)
         if not mode:
             mode = cls._normalize_pick_mode(text)
-        return index, path, "", mode
+        if not pick_action:
+            suffix = re.sub(r"\d+", " ", text, count=1).strip()
+            pick_action = cls._normalize_pick_action(suffix)
+        return index, path, pick_action, mode
 
     def init_plugin(self, config: Optional[Dict[str, Any]] = None):
         config = config or {}
@@ -3103,6 +3110,11 @@ class AgentResourceOfficer(_PluginBase):
         risks: List[str] = []
         resolution_pref = self._clean_text(prefs.get("prefer_resolution")).lower()
         provider = self._clean_text(item.get("pan_type") or item.get("channel")).lower()
+        media_type = self._clean_text(item.get("media_type") or item.get("type")).lower()
+        series_like = (
+            media_type in {"tv", "series", "电视剧", "剧集", "番剧"}
+            or bool(re.search(r"\bs\d{1,2}\b|\be\d{1,3}\b|season|第\s*\d+\s*集|[全整]季|全集|完结|更至|更新至|短剧|剧集", text, flags=re.IGNORECASE))
+        )
 
         if "2160" in text or "4k" in text or "uhd" in text:
             score += 25
@@ -3134,7 +3146,7 @@ class AgentResourceOfficer(_PluginBase):
         if self._score_has_any(text, ["全集", "全季", "完结", "complete", "全 ", "更至", "更0", "更新至"]):
             score += 12
             reasons.append("完整度信息 +12")
-        elif self._parse_bool_value(prefs.get("prefer_complete_series"), True):
+        elif series_like and self._parse_bool_value(prefs.get("prefer_complete_series"), True):
             score -= 6
             risks.append("未识别到全集/更新完整度")
 
@@ -3380,6 +3392,64 @@ class AgentResourceOfficer(_PluginBase):
             "best": scored[0] if scored else None,
             "top_recommendations": scored[:max(1, min(10, self._safe_int(limit, 5)))],
         }
+
+    def _best_scored_source_item(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        candidates = [
+            dict(item or {})
+            for item in (items or [])
+            if isinstance(item, dict) and isinstance(item.get("score"), dict)
+        ]
+        if not candidates:
+            return {}
+        return max(
+            candidates,
+            key=lambda item: (
+                1 if (item.get("score") or {}).get("can_auto_execute") else 0,
+                self._safe_int((item.get("score") or {}).get("score"), 0),
+                self._safe_int(item.get("index") or item.get("pick_index"), 0),
+            ),
+        )
+
+    def _format_cloud_item_detail_text(self, item: Dict[str, Any], *, title: str = "云盘资源详情") -> str:
+        current = dict(item or {})
+        score = current.get("score") if isinstance(current.get("score"), dict) else {}
+        index = self._safe_int(current.get("index") or current.get("pick_index"), 0)
+        name = (
+            self._clean_text(current.get("note"))
+            or self._clean_text(current.get("title"))
+            or self._clean_text(current.get("matched_title"))
+            or "未命名资源"
+        )
+        provider = self._clean_text(current.get("channel") or current.get("pan_type") or current.get("provider"))
+        size = self._clean_text(current.get("share_size") or current.get("size"))
+        resolution = self._clean_text(current.get("resolution"))
+        source = self._clean_text(current.get("source") or current.get("source_name"))
+        points = self._resource_points_text(current)
+        lines = [title]
+        if index:
+            lines.append(f"编号：{index}")
+        lines.append(f"资源：{name}")
+        if provider:
+            lines.append(f"网盘：{provider}")
+        if points:
+            lines.append(f"积分：{points}")
+        if resolution:
+            lines.append(f"分辨率：{resolution}")
+        if size:
+            lines.append(f"大小：{size}")
+        if source:
+            lines.append(f"来源：{source}")
+        if score:
+            lines.append(f"评分：{self._safe_int(score.get('score'), 0)} / {self._clean_text(score.get('score_level')) or '-'}")
+            reasons = [self._clean_text(value) for value in (score.get("score_reasons") or []) if self._clean_text(value)]
+            risks = [self._clean_text(value) for value in (score.get("risk_reasons") or []) if self._clean_text(value)]
+            if reasons:
+                lines.append("加分理由：" + "；".join(reasons[:6]))
+            if risks:
+                lines.append("风险：" + "；".join(risks[:6]))
+        if index:
+            lines.append(f"下一步：确认处理请回复“选择 {index}”。")
+        return "\n".join(lines)
 
     def _assistant_scoring_policy_public_data(self) -> Dict[str, Any]:
         prefs = self._default_assistant_preferences()
@@ -13061,6 +13131,49 @@ class AgentResourceOfficer(_PluginBase):
         kind = str(state.get("kind") or "").strip()
         if kind == "assistant_pansou":
             items = state.get("items") or []
+            if action == "best":
+                best = self._best_scored_source_item(items)
+                if not best:
+                    return finish({
+                        "success": False,
+                        "message": "当前盘搜结果没有可评分条目，请直接回复编号选择。",
+                        "data": self._assistant_response_data(session=session, data={
+                            "action": "pansou_best_detail",
+                            "ok": False,
+                            "error_code": "best_item_not_found",
+                        }),
+                    })
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(best, title="盘搜当前最佳候选"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "pansou_best_detail",
+                        "ok": True,
+                        "item": best,
+                        "score_summary": self._score_summary([best], limit=1),
+                    }),
+                })
+            if action == "detail":
+                if index <= 0:
+                    return {"success": False, "message": "盘搜详情需要编号，例如：选择 1 详情。"}
+                if index > len(items):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
+                selected = dict(items[index - 1])
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(selected, title="盘搜资源详情"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "pansou_result_detail",
+                        "ok": True,
+                        "choice": index,
+                        "item": selected,
+                        "score_summary": self._score_summary([selected], limit=1),
+                    }),
+                })
+            if action:
+                return {"success": False, "message": "盘搜结果当前只支持：选择 编号、选择 编号 详情、最佳片源。"}
+            if index <= 0:
+                return {"success": False, "message": "请选择有效序号，例如：选择 1"}
             if index > len(items):
                 return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
             selected = dict(items[index - 1])
@@ -13240,6 +13353,12 @@ class AgentResourceOfficer(_PluginBase):
                             "total_pages": total_pages,
                         }),
                     })
+                if action == "best":
+                    return {"success": False, "message": "影巢候选影片阶段没有评分，不能用“最佳片源”；请先回复编号选择影片，进入资源列表后再用“最佳片源”。"}
+                if action:
+                    return {"success": False, "message": "影巢候选阶段只支持：选择 编号、详情/审查、下一页。"}
+                if index <= 0:
+                    return {"success": False, "message": "请选择有效影片编号，例如：选择 1"}
                 if index > len(candidates):
                     return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(candidates)} 之间的数字。"}
                 candidate = dict(candidates[index - 1])
@@ -13278,6 +13397,49 @@ class AgentResourceOfficer(_PluginBase):
                     }),
                 })
             resources = state.get("resources") or []
+            if action == "best":
+                best = self._best_scored_source_item(resources)
+                if not best:
+                    return finish({
+                        "success": False,
+                        "message": "当前影巢资源没有可评分条目，请直接回复编号选择。",
+                        "data": self._assistant_response_data(session=session, data={
+                            "action": "hdhive_best_resource_detail",
+                            "ok": False,
+                            "error_code": "best_item_not_found",
+                        }),
+                    })
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(best, title="影巢当前最佳资源"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "hdhive_best_resource_detail",
+                        "ok": True,
+                        "item": best,
+                        "score_summary": self._score_summary([best], limit=1),
+                    }),
+                })
+            if action == "detail":
+                if index <= 0:
+                    return {"success": False, "message": "影巢资源详情需要编号，例如：选择 1 详情。"}
+                if index > len(resources):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(resources)} 之间的数字。"}
+                resource = dict(resources[index - 1])
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(resource, title="影巢资源详情"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "hdhive_resource_detail",
+                        "ok": True,
+                        "choice": index,
+                        "item": resource,
+                        "score_summary": self._score_summary([resource], limit=1),
+                    }),
+                })
+            if action:
+                return {"success": False, "message": "影巢资源阶段只支持：选择 编号、选择 编号 详情、最佳片源。"}
+            if index <= 0:
+                return {"success": False, "message": "请选择有效资源编号，例如：选择 1"}
             if index > len(resources):
                 return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(resources)} 之间的数字。"}
             resource = dict(resources[index - 1])

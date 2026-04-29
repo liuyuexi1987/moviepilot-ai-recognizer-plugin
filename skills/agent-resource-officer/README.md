@@ -222,6 +222,8 @@ python3 scripts/aro_request.py route --text "执行计划" --session agent:demo
 python3 scripts/aro_request.py route --text "执行 plan-xxxx" --session agent:demo
 ```
 
+盘搜和影巢资源列表里的 `最佳片源`、`选择 1 详情` 是只读查看，不会转存或解锁；确认后再发 `选择 1`。
+
 下载任务也可以走同一入口。查询是读操作；暂停、恢复、删除会先返回 `plan_id`，确认后再执行：
 
 ```bash
