@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.16
+
+- Added `scoring-policy` helper command so external agents can explain plugin-owned scoring rules without re-scoring.
+
 ## 0.1.15
 
 - Documented compact `score_summary` for choosing scored cloud/PT results without parsing long messages.

@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.05"
+    plugin_version = "0.2.06"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3174,6 +3174,76 @@ class AgentResourceOfficer(_PluginBase):
             "top_recommendations": scored[:max(1, min(10, self._safe_int(limit, 5)))],
         }
 
+    def _assistant_scoring_policy_public_data(self) -> Dict[str, Any]:
+        prefs = self._default_assistant_preferences()
+        return {
+            "schema_version": "scoring_policy.v1",
+            "owner": "plugin_rules",
+            "agent_role": "explain_and_confirm_only",
+            "summary": "评分由插件内置规则执行；外部智能体只读取 score_summary、解释原因、请求确认，不能绕过硬风险。",
+            "global_decision": {
+                "auto_execute_requires": [
+                    "auto_ingest_enabled=true",
+                    "score >= auto_ingest_score_threshold",
+                    "risk_reasons 为空",
+                ],
+                "confirm_range": "confirm_score_threshold <= score < auto_ingest_score_threshold 且无硬风险",
+                "default_confirm_score_threshold": prefs.get("confirm_score_threshold"),
+                "default_auto_ingest_score_threshold": prefs.get("auto_ingest_score_threshold"),
+                "auto_ingest_default": prefs.get("auto_ingest_enabled"),
+            },
+            "cloud": {
+                "source_types": ["hdhive", "pansou", "115", "quark"],
+                "positive_signals": [
+                    "4K/UHD",
+                    "杜比视界/HDR",
+                    "中文字幕",
+                    "全集/完整季/更新完整度",
+                    "REMUX/原盘/Web-DL/高码率",
+                    "匹配网盘偏好",
+                    "匹配默认目录",
+                ],
+                "hard_gates": [
+                    "影巢积分超过 hdhive_max_unlock_points 时禁止自动解锁",
+                    "影巢积分未知时禁止自动解锁",
+                ],
+                "default_hdhive_max_unlock_points": prefs.get("hdhive_max_unlock_points"),
+                "pansou_cost": "无积分成本，主要按质量、完整度、字幕和网盘类型评分",
+            },
+            "pt": {
+                "source_types": ["moviepilot_native_search", "torrent_search", "subscribe_search"],
+                "positive_signals": [
+                    "做种数高",
+                    "免费/促销/FreeLeech",
+                    "4K/UHD",
+                    "杜比视界/HDR",
+                    "字幕信息",
+                    "REMUX/原盘/Web-DL/高码率",
+                    "季/全集标识",
+                ],
+                "hard_gates": [
+                    "做种数 0 禁止自动下载",
+                    "做种数低于 pt_min_seeders 禁止自动下载",
+                    "用户要求免费时，非免费资源禁止自动下载",
+                ],
+                "default_pt_min_seeders": prefs.get("pt_min_seeders"),
+                "volume_factor_note": "免费/促销明显加分；普通资源默认中性，不强行判废",
+            },
+            "score_summary_contract": {
+                "read_fields": [
+                    "best",
+                    "top_recommendations",
+                    "score",
+                    "score_level",
+                    "recommended_action",
+                    "can_auto_execute",
+                    "score_reasons",
+                    "risk_reasons",
+                ],
+                "do_not_parse": "不要解析自然语言 message 来判断自动化，优先读取 score_summary",
+            },
+        }
+
     @staticmethod
     def _format_bytes_size(value: Any) -> str:
         try:
@@ -5523,6 +5593,7 @@ class AgentResourceOfficer(_PluginBase):
                 "fields": ["session", "session_id", "user_key", "preferences", "reset", "compact"],
                 "description": "智能体片源偏好画像：云盘与 PT 分源评分都会读取这里；无偏好时建议先完成一次偏好询问。",
             },
+            "scoring_policy": self._assistant_scoring_policy_public_data(),
             "smart_pick": {
                 "fields": ["session", "session_id", "choice", "action", "path", "compact"],
                 "actions": ["detail", "next_page"],
@@ -5743,6 +5814,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_pick_actions": (data.get("smart_pick") or {}).get("actions") or [],
             "workflows": workflows,
             "request_templates": bool(data.get("assistant_request_templates")),
+            "scoring_policy": data.get("scoring_policy") or {},
             "recommended_start": [
                 "assistant/pulse",
                 "assistant/startup",
@@ -6444,6 +6516,19 @@ class AgentResourceOfficer(_PluginBase):
                     "preferences": self._default_assistant_preferences(),
                     "compact": True,
                 },
+            },
+            "scoring_policy": {
+                "description": "读取插件内置云盘/PT 评分策略、硬门槛和 score_summary 使用约定；只读，可缓存。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "medium_lived",
+                "cache_ttl_seconds": 3600,
+                "method": "GET",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/capabilities",
+                "tool": "agent_resource_officer_capabilities",
+                "tool_args": {"compact": True},
+                "query": {"compact": True},
+                "response_field": "scoring_policy",
             },
             "workflow_dry_run": {
                 "description": "生成并保存工作流计划，不实际执行；适合先让用户确认。",

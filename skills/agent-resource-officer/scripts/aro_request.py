@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.15"
+HELPER_VERSION = "0.1.16"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -24,6 +24,7 @@ HELPER_COMMANDS = [
     "selftest",
     "startup",
     "selfcheck",
+    "scoring-policy",
     "templates",
     "route",
     "pick",
@@ -209,6 +210,7 @@ def compact(data):
             "recommended_recipe_detail",
             "next_actions",
             "recovery",
+            "scoring_policy",
             "preference_status",
             "score_summary",
             "preferences",
@@ -569,6 +571,7 @@ def commands_catalog():
             {"name": "readiness", "network": True, "writes": False, "write_condition": "", "purpose": "run config-check, selftest, and live plugin selfcheck"},
             {"name": "startup", "network": True, "writes": False, "write_condition": "", "purpose": "inspect assistant startup state and recommended recipe"},
             {"name": "selfcheck", "network": True, "writes": False, "write_condition": "", "purpose": "run live AgentResourceOfficer protocol health check"},
+            {"name": "scoring-policy", "network": True, "writes": False, "write_condition": "", "purpose": "read plugin-owned cloud/PT scoring rules and hard gates"},
             {"name": "templates", "network": True, "writes": False, "write_condition": "", "purpose": "fetch low-token assistant request templates by recipe or name"},
             {"name": "decide", "network": True, "writes": False, "write_condition": "", "purpose": "choose continue_session or start_recipe and return next helper command"},
             {"name": "doctor", "network": True, "writes": False, "write_condition": "", "purpose": "return startup, selfcheck, sessions, and recovery snapshot"},
@@ -919,6 +922,9 @@ def main():
         path = assistant_path("startup")
     elif args.command == "selfcheck":
         path = assistant_path("selfcheck")
+    elif args.command == "scoring-policy":
+        path = assistant_path("capabilities")
+        query = {"compact": "true"}
     elif args.command == "feishu-health":
         path = "/api/v1/plugin/AgentResourceOfficer/feishu/health"
     elif args.command == "templates":
