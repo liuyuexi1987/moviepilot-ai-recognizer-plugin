@@ -20,7 +20,7 @@ except Exception:
 
 
 class HDHiveOpenApiService:
-    """Reusable HDHive execution layer for Agent资源官."""
+    """Reusable HDHive execution layer for Agent云盘资源整合."""
 
     _signin_action_name = "checkIn"
     _signin_router_tree = ["", {"children": ["(app)", {"children": ["__PAGE__", {}, None, None]}, None, None]}, None, None, True]
@@ -963,7 +963,7 @@ class HDHiveOpenApiService:
             }
             return False, result, message
         if response.status_code in (404, 405):
-            message = f"影巢网页签到入口暂不可用或 Cookie 已失效（HTTP {response.status_code}），请更新资源官里的影巢网页 Cookie 后重试"
+            message = f"影巢网页签到入口暂不可用或 Cookie 已失效（HTTP {response.status_code}），请更新本插件里的影巢网页 Cookie 后重试"
             result = {
                 "time": self.tz_now().strftime("%Y-%m-%d %H:%M:%S"),
                 "ok": False,

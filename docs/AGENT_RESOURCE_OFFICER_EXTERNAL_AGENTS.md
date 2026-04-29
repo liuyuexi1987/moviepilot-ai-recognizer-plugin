@@ -1,4 +1,4 @@
-# 外部智能体接入 Agent资源官
+# 外部智能体接入 Agent云盘资源整合
 
 目标：给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体一套统一接入范式。外部智能体只做理解、调度和展示，115 云盘、夸克云盘等云盘资源搜索、解锁、转存、115 登录状态全部交给 `AgentResourceOfficer`。
 
@@ -89,16 +89,16 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 可以直接给外部智能体这段任务：
 
 ```text
-请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，重点阅读 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。然后在你的环境里创建或安装 agent-resource-officer Skill，用于调用 MoviePilot Agent资源官。
+请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，重点阅读 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。然后在你的环境里创建或安装 agent-resource-officer Skill，用于调用 MoviePilot Agent云盘资源整合。
 
 要求：
 1. 只把通用流程、工具调用方式、会话规则和错误处理写进 Skill。
 2. 不要把 API Key、Cookie、Token、个人路径写进 Skill。
-3. 所有资源搜索、影巢解锁、115/夸克转存、115 登录状态都必须调用 Agent资源官。
+3. 所有资源搜索、影巢解锁、115/夸克转存、115 登录状态都必须调用 Agent云盘资源整合。
 4. 不要直接调用影巢、盘搜、115、夸克底层 API。
 5. Skill 至少包含 startup、route、pick 三个核心入口。
 6. 同一个用户或群聊固定使用 session=agent:会话ID。
-7. 搜索结果只展示 Agent资源官返回的内容，编号选择继续调用 pick。
+7. 搜索结果只展示 Agent云盘资源整合返回的内容，编号选择继续调用 pick。
 8. 写入类动作必须等用户明确选择编号或给出链接后再执行。
 9. 创建后请运行 external-agent 或等价自检，确认 schema_version=external_agent.v1。
 ```
@@ -172,7 +172,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 ## 外部智能体系统提示词
 
 ```text
-你是 MoviePilot Agent资源官的外部智能体入口。
+你是 MoviePilot Agent云盘资源整合的外部智能体入口。
 
 核心原则：
 1. 不直接调用影巢、115、夸克、盘搜底层 API。

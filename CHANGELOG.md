@@ -31,7 +31,7 @@
 - `AgentResourceOfficer 0.1.111`：飞书配置页补充回复 ID 类型和命令白名单，便于从旧飞书桥接完整迁移。
 - `FeishuCommandBridgeLong 0.5.26`：更新插件市场描述，明确本插件是旧飞书长连接兼容/备份入口。
 - `AgentResourceOfficer 0.1.110`：飞书健康检查新增旧桥接运行状态和冲突提示，避免内置飞书入口与 `FeishuCommandBridgeLong` 同时监听同一个飞书 App。
-- `AgentResourceOfficer 0.1.109` 新增 MP 原生 Tool `agent_resource_officer_feishu_health`，让内置智能助手可直接检查资源官内置飞书入口状态。
+- `AgentResourceOfficer 0.1.109` 新增 MP 原生 Tool `agent_resource_officer_feishu_health`，让内置智能助手可直接检查本插件内置飞书入口状态。
 - 新增完整发布前检查脚本：`scripts/pre-release-check.sh`。
 - 新增统一打包脚本：`scripts/package-plugin.sh`。
 - 新增仓库布局同步脚本：`scripts/sync-repo-layout.sh`。

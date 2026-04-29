@@ -158,7 +158,7 @@ class QuarkTransferService:
         try:
             cookie = self.clean_text(self.cookie_refresh_callback())
         except Exception as exc:
-            logger.warning(f"[Agent资源官] 刷新夸克 Cookie 失败: {exc}")
+            logger.warning(f"[Agent云盘资源整合] 刷新夸克 Cookie 失败: {exc}")
             return False
         if not cookie:
             return False
@@ -470,7 +470,7 @@ class QuarkTransferService:
         access_code: str = "",
         target_path: str = "",
         *,
-        trigger: str = "Agent资源官",
+        trigger: str = "Agent云盘资源整合",
     ) -> Tuple[bool, Dict[str, Any], str]:
         share_url, pwd_id, final_code = self.extract_share_info(share_text, access_code)
         ok, message = self.validate_share_url(share_url)

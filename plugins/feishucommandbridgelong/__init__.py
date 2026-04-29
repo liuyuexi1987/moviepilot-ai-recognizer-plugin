@@ -137,7 +137,7 @@ _SMART_CACHE_FILE = Path("/config/plugins/FeishuCommandBridgeLong/.smart_cache.j
 
 class FeishuCommandBridgeLong(_PluginBase):
     plugin_name = "飞书命令桥接"
-    plugin_desc = "旧飞书长连接兼容/备份入口；新用户建议优先使用 Agent资源官 内置飞书入口。"
+    plugin_desc = "旧飞书长连接兼容/备份入口；新用户建议优先使用 Agent云盘资源整合 内置飞书入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
     plugin_version = "0.5.26"
     plugin_author = "liuyuexi1987"
@@ -262,7 +262,7 @@ class FeishuCommandBridgeLong(_PluginBase):
         mapping = {
             "legacy": "旧桥接直连",
             "auto": "自动优先新主线",
-            "agent_resource_officer": "仅走 Agent资源官",
+            "agent_resource_officer": "仅走 Agent云盘资源整合",
         }
         return mapping.get(backend, "旧桥接直连")
 
@@ -536,7 +536,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                                             "items": [
                                                 {"title": "旧桥接直连（推荐保留旧体验）", "value": "legacy"},
                                                 {"title": "自动优先新主线，失败回落旧桥接", "value": "auto"},
-                                                {"title": "仅走 Agent资源官 新主线", "value": "agent_resource_officer"},
+                                                {"title": "仅走 Agent云盘资源整合 新主线", "value": "agent_resource_officer"},
                                             ],
                                         },
                                     },
@@ -2106,7 +2106,7 @@ class FeishuCommandBridgeLong(_PluginBase):
             if path:
                 return path
         except Exception as exc:
-            logger.warning(f"[FeishuCommandBridge] 获取 Agent资源官影巢默认目录失败：{exc}")
+            logger.warning(f"[FeishuCommandBridge] 获取 Agent云盘资源整合影巢默认目录失败：{exc}")
         try:
             config = self.systemconfig.get("plugin.HdhiveOpenApi") or {}
             path = self._normalize_pan_path(config.get("transfer_115_path") or "")
@@ -2123,7 +2123,7 @@ class FeishuCommandBridgeLong(_PluginBase):
             if path:
                 return path
         except Exception as exc:
-            logger.warning(f"[FeishuCommandBridge] 获取 Agent资源官夸克默认目录失败：{exc}")
+            logger.warning(f"[FeishuCommandBridge] 获取 Agent云盘资源整合夸克默认目录失败：{exc}")
         try:
             config = self.systemconfig.get("plugin.QuarkShareSaver") or {}
             path = self._normalize_pan_path(
@@ -2230,7 +2230,7 @@ class FeishuCommandBridgeLong(_PluginBase):
             )
             return ok, {"data": result}, final_message
         if self._requires_agent_resource_officer():
-            return False, {}, "Agent资源官 未加载"
+            return False, {}, "Agent云盘资源整合 未加载"
         plugin = self._get_running_plugin("QuarkShareSaver")
         if not plugin:
             return False, {}, "QuarkShareSaver 未加载"
@@ -2359,7 +2359,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                 },
             )
         if self._requires_agent_resource_officer():
-            return False, {}, "Agent资源官 未加载"
+            return False, {}, "Agent云盘资源整合 未加载"
         return self._call_local_json_get(
             "/api/v1/plugin/HdhiveOpenApi/resources/search",
             params={
@@ -2510,7 +2510,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                 },
             )
         if self._requires_agent_resource_officer():
-            return False, {}, "Agent资源官 未加载"
+            return False, {}, "Agent云盘资源整合 未加载"
         plugin = self._get_running_plugin("HdhiveOpenApi")
         if not plugin:
             return False, {}, "HdhiveOpenApi 未加载"
@@ -2538,7 +2538,7 @@ class FeishuCommandBridgeLong(_PluginBase):
                 },
             )
         if self._requires_agent_resource_officer():
-            return False, {}, "Agent资源官 未加载"
+            return False, {}, "Agent云盘资源整合 未加载"
         plugin = self._get_running_plugin("HdhiveOpenApi")
         if not plugin:
             return False, {}, "HdhiveOpenApi 未加载"

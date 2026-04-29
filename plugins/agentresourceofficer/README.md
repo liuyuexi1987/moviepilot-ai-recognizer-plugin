@@ -1,4 +1,4 @@
-# Agent资源官
+# Agent云盘资源整合
 
 这是重构中的新主插件目录，用来承接当前仓库里和“资源搜索、解锁、转存、签到、远程入口”相关的能力。
 
@@ -70,19 +70,19 @@
 - 智能入口新增 `115帮助`，状态回执会附带下一步建议
 - 待继续的 115 任务已支持持久化保存、状态摘要、手动继续、手动取消，并已下沉为原生 Agent Tool 和标准 API
 - 影巢候选已支持新主线分页、`详情` / `审查` 按需补主演，飞书切 `auto` 时也能复用
-- 影巢签到已收口到资源官：支持普通 / 赌狗签到、OpenAPI Premium 接口、网页 Cookie 兜底和定时任务
-- 影巢网页 Cookie 失效时可由资源官使用账号密码自动登录刷新，并自动重试签到
+- 影巢签到已收口到本插件：支持普通 / 赌狗签到、OpenAPI Premium 接口、网页 Cookie 兜底和定时任务
+- 影巢网页 Cookie 失效时可由插件使用账号密码自动登录刷新，并自动重试签到
 - 影巢签到日志已内置，可通过 `GET /hdhive/checkin/history` 或智能入口 `签到日志` 查看最近记录
 - 影巢部分用户态接口受站点 Premium 权限限制；账号信息会优先回退到 `HDHiveDailySign` 的网页快照，签到会优先尝试 `HDHiveDailySign` 现有 Cookie 做网页兜底
 - `115` 自动转存已具备轻量直转层：可优先使用扫码得到的 115 客户端会话，或复用已加载的 115 客户端直接调用分享转存接口；直转失败时再回退 `P115StrmHelper`
-- 已内置可选 `Feishu Channel`：可直接用飞书长连接接收消息，并复用资源官统一入口执行搜索、选择、转存、115 登录和 STRM 调度
+- 已内置可选 `Feishu Channel`：可直接用飞书长连接接收消息，并复用本插件统一入口执行搜索、选择、转存、115 登录和 STRM 调度
 
-这意味着 `Agent资源官` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
+这意味着 `Agent云盘资源整合` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
 对于登录方式，当前已经不再推荐粘贴网页版 Cookie，而是优先走 `p115client` 同款扫码会话。
 
 ## 飞书入口
 
-`Agent资源官` 现在可以直接作为飞书入口使用。这个入口默认关闭，开启前建议先关闭旧 `FeishuCommandBridgeLong`，避免同一个飞书机器人被两个插件同时监听。
+`Agent云盘资源整合` 现在可以直接作为飞书入口使用。这个入口默认关闭，开启前建议先关闭旧 `FeishuCommandBridgeLong`，避免同一个飞书机器人被两个插件同时监听。
 
 内置飞书入口只负责收消息、权限校验、回复和二维码图片发送；影巢、盘搜、115、夸克这些资源动作仍统一走 `assistant/route` 与 `assistant/pick`。
 
@@ -124,7 +124,7 @@ MP搜索 片名
 指定路径STRM /emby/movie
 ```
 
-`生成STRM`、`全量STRM`、`指定路径STRM` 只调度已安装的 `P115StrmHelper`，不会把 STRM 生成逻辑搬进资源官。
+`生成STRM`、`全量STRM`、`指定路径STRM` 只调度已安装的 `P115StrmHelper`，不会把 STRM 生成逻辑搬进本插件。
 
 如遇到 `P115StrmHelper` 因 `TransferOverwriteCheckEventData` 导入失败而无法加载，可执行仓库脚本：
 
@@ -244,7 +244,7 @@ GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode?client_type=alipaymini&apike
 GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode/check?uid=...&time=...&sign=...&client_type=alipaymini&apikey=你的 MP API Token
 ```
 
-扫码确认成功后，`Agent资源官` 会自动保存扫码会话，不需要再手动粘贴 Cookie。
+扫码确认成功后，`Agent云盘资源整合` 会自动保存扫码会话，不需要再手动粘贴 Cookie。
 
 ### 4. 按关键词搜索影巢资源
 
@@ -470,14 +470,14 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 - `POST /assistant/action`
 - `agent_resource_officer_execute_action`
 
-这样外部智能体不只可以“读模板”，还可以直接把 `action_templates` 里的 `name + action_body` 回传给 Agent资源官 执行，进一步减少上层自定义映射逻辑。
+这样外部智能体不只可以“读模板”，还可以直接把 `action_templates` 里的 `name + action_body` 回传给 Agent云盘资源整合 执行，进一步减少上层自定义映射逻辑。
 
 从 `0.1.37` 开始，还新增了：
 
 - `POST /assistant/actions`
 - `agent_resource_officer_execute_actions`
 
-这样外部智能体可以一次提交多个 `action_body`，让 Agent资源官 在同一个请求里顺序执行多步动作。默认只返回精简执行摘要，进一步减少多次往返和上层 token 消耗；只有显式需要时才附带每一步原始返回。
+这样外部智能体可以一次提交多个 `action_body`，让 Agent云盘资源整合 在同一个请求里顺序执行多步动作。默认只返回精简执行摘要，进一步减少多次往返和上层 token 消耗；只有显式需要时才附带每一步原始返回。
 
 例如：
 

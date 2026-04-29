@@ -475,7 +475,7 @@ class FeishuChannel:
         cache_key = self._cache_key(chat_id, open_id)
 
         if cmd == "/version":
-            self.reply_text(chat_id, open_id, f"Agent资源官 {getattr(self.plugin, 'plugin_version', '')}\n飞书入口：{'运行中' if self.is_running() else '未运行'}")
+            self.reply_text(chat_id, open_id, f"Agent云盘资源整合 {getattr(self.plugin, 'plugin_version', '')}\n飞书入口：{'运行中' if self.is_running() else '未运行'}")
             return True
 
         if cmd == "/media_search":

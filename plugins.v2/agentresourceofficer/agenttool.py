@@ -53,12 +53,12 @@ class HDHiveSearchSessionTool(MoviePilotTool):
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
         keyword = kwargs.get("keyword", "")
-        return f"正在通过 Agent资源官搜索影巢候选：{keyword}"
+        return f"正在通过 Agent云盘资源整合搜索影巢候选：{keyword}"
 
     async def run(self, keyword: str, media_type: str = "movie", year: str = None, path: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_hdhive_search_session(
             keyword=keyword,
             media_type=media_type,
@@ -75,12 +75,12 @@ class HDHiveSessionPickTool(MoviePilotTool):
     def get_tool_message(self, **kwargs) -> Optional[str]:
         session_id = kwargs.get("session_id", "")
         choice = kwargs.get("choice", "")
-        return f"正在继续 Agent资源官 会话：{session_id}，选择 {choice}"
+        return f"正在继续 Agent云盘资源整合 会话：{session_id}，选择 {choice}"
 
     async def run(self, session_id: str, choice: int = 0, path: str = None, action: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_hdhive_pick_session(
             session_id=session_id,
             index=choice,
@@ -95,12 +95,12 @@ class ShareRouteTool(MoviePilotTool):
     args_schema: Type[BaseModel] = ShareRouteToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在通过 Agent资源官 路由分享链接"
+        return "正在通过 Agent云盘资源整合 路由分享链接"
 
     async def run(self, url: str, path: str = None, access_code: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_route_share(
             share_url=url,
             access_code=access_code,
@@ -110,12 +110,12 @@ class ShareRouteTool(MoviePilotTool):
 
 class AssistantRouteTool(MoviePilotTool):
     name: str = "agent_resource_officer_smart_entry"
-    description: str = "Use the unified Agent资源官 smart entry for HDHive search, PanSou search, 115 login, or direct 115/Quark share links."
+    description: str = "Use the unified Agent云盘资源整合 smart entry for HDHive search, PanSou search, 115 login, or direct 115/Quark share links."
     args_schema: Type[BaseModel] = AssistantRouteToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
         text = kwargs.get("text") or kwargs.get("keyword") or kwargs.get("url") or kwargs.get("action") or ""
-        return f"正在通过 Agent资源官 统一入口处理：{text}"
+        return f"正在通过 Agent云盘资源整合 统一入口处理：{text}"
 
     async def run(
         self,
@@ -136,7 +136,7 @@ class AssistantRouteTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_route(
             text=text,
             session=session,
@@ -156,7 +156,7 @@ class AssistantRouteTool(MoviePilotTool):
 
 class AssistantPickTool(MoviePilotTool):
     name: str = "agent_resource_officer_smart_pick"
-    description: str = "Continue the unified Agent资源官 smart-entry session by choosing an item, requesting details, or moving to the next page."
+    description: str = "Continue the unified Agent云盘资源整合 smart-entry session by choosing an item, requesting details, or moving to the next page."
     args_schema: Type[BaseModel] = AssistantPickToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
@@ -164,7 +164,7 @@ class AssistantPickTool(MoviePilotTool):
         choice = kwargs.get("choice", 0)
         action = kwargs.get("action", "")
         tail = f"动作 {action}" if action else f"选择 {choice}"
-        return f"正在继续 Agent资源官 统一会话：{session}，{tail}"
+        return f"正在继续 Agent云盘资源整合 统一会话：{session}，{tail}"
 
     async def run(
         self,
@@ -178,7 +178,7 @@ class AssistantPickTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_pick(
             session=session,
             session_id=session_id,
@@ -191,76 +191,76 @@ class AssistantPickTool(MoviePilotTool):
 
 class AssistantHelpTool(MoviePilotTool):
     name: str = "agent_resource_officer_help"
-    description: str = "Show the recommended Agent资源官 workflow for MoviePilot Agent, including smart-entry examples, pick examples, and 115 login guidance."
+    description: str = "Show the recommended Agent云盘资源整合 workflow for MoviePilot Agent, including smart-entry examples, pick examples, and 115 login guidance."
     args_schema: Type[BaseModel] = AssistantHelpToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在查看 Agent资源官 使用帮助"
+        return "正在查看 Agent云盘资源整合 使用帮助"
 
     async def run(self, session: str = "default", session_id: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_help(session=session, session_id=session_id)
 
 
 class AssistantCapabilitiesTool(MoviePilotTool):
     name: str = "agent_resource_officer_capabilities"
-    description: str = "Show the current Agent资源官 execution capabilities, supported structured smart-entry fields, defaults, and recommended call patterns for external agents."
+    description: str = "Show the current Agent云盘资源整合 execution capabilities, supported structured smart-entry fields, defaults, and recommended call patterns for external agents."
     args_schema: Type[BaseModel] = AssistantCapabilitiesToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在查看 Agent资源官 能力说明"
+        return "正在查看 Agent云盘资源整合 能力说明"
 
     async def run(self, compact: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_capabilities(compact=compact)
 
 
 class AssistantReadinessTool(MoviePilotTool):
     name: str = "agent_resource_officer_readiness"
-    description: str = "Check whether Agent资源官 is ready for external agents, including version, services, suggested entrypoints, and startup warnings."
+    description: str = "Check whether Agent云盘资源整合 is ready for external agents, including version, services, suggested entrypoints, and startup warnings."
     args_schema: Type[BaseModel] = AssistantReadinessToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在检查 Agent资源官 启动就绪状态"
+        return "正在检查 Agent云盘资源整合 启动就绪状态"
 
     async def run(self, compact: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_readiness(compact=compact)
 
 
 class FeishuChannelHealthTool(MoviePilotTool):
     name: str = "agent_resource_officer_feishu_health"
-    description: str = "Check Agent资源官 built-in Feishu Channel status, including whether it is enabled, running, and configured."
+    description: str = "Check Agent云盘资源整合 built-in Feishu Channel status, including whether it is enabled, running, and configured."
     args_schema: Type[BaseModel] = FeishuChannelHealthToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在检查 Agent资源官 内置飞书入口状态"
+        return "正在检查 Agent云盘资源整合 内置飞书入口状态"
 
     async def run(self, compact: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_feishu_health(compact=compact)
 
 
 class AssistantPulseTool(MoviePilotTool):
     name: str = "agent_resource_officer_pulse"
-    description: str = "Return a compact Agent资源官 startup pulse: version, service readiness, warnings, and best recovery hint for external agents."
+    description: str = "Return a compact Agent云盘资源整合 startup pulse: version, service readiness, warnings, and best recovery hint for external agents."
     args_schema: Type[BaseModel] = AssistantPulseToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在检查 Agent资源官 轻量启动状态"
+        return "正在检查 Agent云盘资源整合 轻量启动状态"
 
     async def run(self, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_pulse()
 
 
@@ -270,57 +270,57 @@ class AssistantStartupTool(MoviePilotTool):
     args_schema: Type[BaseModel] = AssistantStartupToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在读取 Agent资源官 启动聚合信息"
+        return "正在读取 Agent云盘资源整合 启动聚合信息"
 
     async def run(self, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_startup()
 
 
 class AssistantMaintainTool(MoviePilotTool):
     name: str = "agent_resource_officer_maintain"
-    description: str = "Inspect or execute low-risk Agent资源官 maintenance: clear stale assistant sessions and executed saved plans."
+    description: str = "Inspect or execute low-risk Agent云盘资源整合 maintenance: clear stale assistant sessions and executed saved plans."
     args_schema: Type[BaseModel] = AssistantMaintainToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在检查 Agent资源官 维护建议"
+        return "正在检查 Agent云盘资源整合 维护建议"
 
     async def run(self, execute: bool = False, limit: int = 100, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_maintain(execute=execute, limit=limit)
 
 
 class AssistantToolboxTool(MoviePilotTool):
     name: str = "agent_resource_officer_toolbox"
-    description: str = "Return a compact Agent资源官 toolbox manifest: recommended tools, endpoints, workflows, actions, defaults, and command examples."
+    description: str = "Return a compact Agent云盘资源整合 toolbox manifest: recommended tools, endpoints, workflows, actions, defaults, and command examples."
     args_schema: Type[BaseModel] = AssistantToolboxToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在读取 Agent资源官 轻量工具清单"
+        return "正在读取 Agent云盘资源整合 轻量工具清单"
 
     async def run(self, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_toolbox()
 
 
 class AssistantRequestTemplatesTool(MoviePilotTool):
     name: str = "agent_resource_officer_request_templates"
-    description: str = "Return compact HTTP request templates for external agents to call Agent资源官 assistant endpoints without guessing request bodies."
+    description: str = "Return compact HTTP request templates for external agents to call Agent云盘资源整合 assistant endpoints without guessing request bodies."
     args_schema: Type[BaseModel] = AssistantRequestTemplatesToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在读取 Agent资源官 请求模板"
+        return "正在读取 Agent云盘资源整合 请求模板"
 
     async def run(self, limit: int = 100, names: str = None, recipe: str = None, include_templates: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_request_templates(
             limit=limit,
             names=names,
@@ -331,26 +331,26 @@ class AssistantRequestTemplatesTool(MoviePilotTool):
 
 class AssistantSelfcheckTool(MoviePilotTool):
     name: str = "agent_resource_officer_selfcheck"
-    description: str = "Run a compact Agent资源官 protocol self-check for compact templates, boolean parsing, and basic assistant protocol health."
+    description: str = "Run a compact Agent云盘资源整合 protocol self-check for compact templates, boolean parsing, and basic assistant protocol health."
     args_schema: Type[BaseModel] = AssistantSelfcheckToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在执行 Agent资源官 协议自检"
+        return "正在执行 Agent云盘资源整合 协议自检"
 
     async def run(self, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_selfcheck()
 
 
 class AssistantHistoryTool(MoviePilotTool):
     name: str = "agent_resource_officer_history"
-    description: str = "Show recent Agent资源官 assistant executions so external agents can debug progress, retries, and the last completed action."
+    description: str = "Show recent Agent云盘资源整合 assistant executions so external agents can debug progress, retries, and the last completed action."
     args_schema: Type[BaseModel] = AssistantHistoryToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在查看 Agent资源官 最近执行历史"
+        return "正在查看 Agent云盘资源整合 最近执行历史"
 
     async def run(
         self,
@@ -362,7 +362,7 @@ class AssistantHistoryTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_history(
             session=session,
             session_id=session_id,
@@ -373,11 +373,11 @@ class AssistantHistoryTool(MoviePilotTool):
 
 class AssistantExecuteActionTool(MoviePilotTool):
     name: str = "agent_resource_officer_execute_action"
-    description: str = "Execute a named Agent资源官 action template directly, so external agents can reuse action_templates without manually mapping each next step."
+    description: str = "Execute a named Agent云盘资源整合 action template directly, so external agents can reuse action_templates without manually mapping each next step."
     args_schema: Type[BaseModel] = AssistantExecuteActionToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return f"正在执行 Agent资源官 动作模板：{kwargs.get('name', '')}"
+        return f"正在执行 Agent云盘资源整合 动作模板：{kwargs.get('name', '')}"
 
     async def run(
         self,
@@ -404,7 +404,7 @@ class AssistantExecuteActionTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_execute_action(
             name=name,
             session=session,
@@ -430,12 +430,12 @@ class AssistantExecuteActionTool(MoviePilotTool):
 
 class AssistantExecuteActionsTool(MoviePilotTool):
     name: str = "agent_resource_officer_execute_actions"
-    description: str = "Execute a sequence of Agent资源官 action templates in one request, so external agents can reduce round trips and reuse action_templates directly."
+    description: str = "Execute a sequence of Agent云盘资源整合 action templates in one request, so external agents can reduce round trips and reuse action_templates directly."
     args_schema: Type[BaseModel] = AssistantExecuteActionsToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
         actions = kwargs.get("actions") or []
-        return f"正在批量执行 Agent资源官 动作模板：{len(actions)} 步"
+        return f"正在批量执行 Agent云盘资源整合 动作模板：{len(actions)} 步"
 
     async def run(
         self,
@@ -449,7 +449,7 @@ class AssistantExecuteActionsTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_execute_actions(
             actions=actions,
             session=session,
@@ -462,11 +462,11 @@ class AssistantExecuteActionsTool(MoviePilotTool):
 
 class AssistantWorkflowTool(MoviePilotTool):
     name: str = "agent_resource_officer_run_workflow"
-    description: str = "Run a preset Agent资源官 workflow such as pansou_transfer, hdhive_candidates, hdhive_unlock, share_transfer, or p115_status with compact inputs."
+    description: str = "Run a preset Agent云盘资源整合 workflow such as pansou_transfer, hdhive_candidates, hdhive_unlock, share_transfer, or p115_status with compact inputs."
     args_schema: Type[BaseModel] = AssistantWorkflowToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return f"正在运行 Agent资源官 预设工作流：{kwargs.get('name', '')}"
+        return f"正在运行 Agent云盘资源整合 预设工作流：{kwargs.get('name', '')}"
 
     async def run(
         self,
@@ -491,7 +491,7 @@ class AssistantWorkflowTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_workflow(
             name=name,
             session=session,
@@ -515,11 +515,11 @@ class AssistantWorkflowTool(MoviePilotTool):
 
 class AssistantExecutePlanTool(MoviePilotTool):
     name: str = "agent_resource_officer_execute_plan"
-    description: str = "Execute a saved Agent资源官 dry-run workflow plan by plan_id, or recover the latest plan by session/session_id."
+    description: str = "Execute a saved Agent云盘资源整合 dry-run workflow plan by plan_id, or recover the latest plan by session/session_id."
     args_schema: Type[BaseModel] = AssistantExecutePlanToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return f"正在执行 Agent资源官 已保存计划：{kwargs.get('plan_id', '') or kwargs.get('session_id', '') or kwargs.get('session', '')}"
+        return f"正在执行 Agent云盘资源整合 已保存计划：{kwargs.get('plan_id', '') or kwargs.get('session_id', '') or kwargs.get('session', '')}"
 
     async def run(
         self,
@@ -534,7 +534,7 @@ class AssistantExecutePlanTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_execute_plan(
             plan_id=plan_id,
             session=session,
@@ -548,11 +548,11 @@ class AssistantExecutePlanTool(MoviePilotTool):
 
 class AssistantPlansTool(MoviePilotTool):
     name: str = "agent_resource_officer_plans"
-    description: str = "List saved Agent资源官 dry-run workflow plans so agents can recover and execute the right plan_id."
+    description: str = "List saved Agent云盘资源整合 dry-run workflow plans so agents can recover and execute the right plan_id."
     args_schema: Type[BaseModel] = AssistantPlansToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在查看 Agent资源官 已保存计划"
+        return "正在查看 Agent云盘资源整合 已保存计划"
 
     async def run(
         self,
@@ -566,7 +566,7 @@ class AssistantPlansTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_plans(
             session=session,
             session_id=session_id,
@@ -579,11 +579,11 @@ class AssistantPlansTool(MoviePilotTool):
 
 class AssistantPlansClearTool(MoviePilotTool):
     name: str = "agent_resource_officer_plans_clear"
-    description: str = "Clear saved Agent资源官 workflow plans by plan_id, session, executed state, or all_plans."
+    description: str = "Clear saved Agent云盘资源整合 workflow plans by plan_id, session, executed state, or all_plans."
     args_schema: Type[BaseModel] = AssistantPlansClearToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在清理 Agent资源官 已保存计划"
+        return "正在清理 Agent云盘资源整合 已保存计划"
 
     async def run(
         self,
@@ -597,7 +597,7 @@ class AssistantPlansClearTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_plans_clear(
             plan_id=plan_id,
             session=session,
@@ -610,13 +610,13 @@ class AssistantPlansClearTool(MoviePilotTool):
 
 class AssistantRecoverTool(MoviePilotTool):
     name: str = "agent_resource_officer_recover"
-    description: str = "Inspect the best Agent资源官 recovery action, or execute it directly, so external agents can resume work through one stable entrypoint."
+    description: str = "Inspect the best Agent云盘资源整合 recovery action, or execute it directly, so external agents can resume work through one stable entrypoint."
     args_schema: Type[BaseModel] = AssistantRecoverToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
         target = kwargs.get("session_id") or kwargs.get("session") or "全局"
         action = "并直接恢复" if kwargs.get("execute") else "恢复建议"
-        return f"正在查看 Agent资源官 {target} 的{action}"
+        return f"正在查看 Agent云盘资源整合 {target} 的{action}"
 
     async def run(
         self,
@@ -632,7 +632,7 @@ class AssistantRecoverTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_recover(
             session=session,
             session_id=session_id,
@@ -647,48 +647,48 @@ class AssistantRecoverTool(MoviePilotTool):
 
 class AssistantSessionStateTool(MoviePilotTool):
     name: str = "agent_resource_officer_session_state"
-    description: str = "Inspect the current Agent资源官 assistant session, including stage, current page, selected candidate, and pending 115 task."
+    description: str = "Inspect the current Agent云盘资源整合 assistant session, including stage, current page, selected candidate, and pending 115 task."
     args_schema: Type[BaseModel] = AssistantSessionStateToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
         session = kwargs.get("session", "default")
-        return f"正在查看 Agent资源官 会话状态：{session}"
+        return f"正在查看 Agent云盘资源整合 会话状态：{session}"
 
     async def run(self, session: str = "default", session_id: str = None, compact: bool = True, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_session_state(session=session, session_id=session_id, compact=compact)
 
 
 class AssistantSessionClearTool(MoviePilotTool):
     name: str = "agent_resource_officer_session_clear"
-    description: str = "Clear the current Agent资源官 assistant session cache."
+    description: str = "Clear the current Agent云盘资源整合 assistant session cache."
     args_schema: Type[BaseModel] = AssistantSessionClearToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
         session = kwargs.get("session", "default")
-        return f"正在清理 Agent资源官 会话：{session}"
+        return f"正在清理 Agent云盘资源整合 会话：{session}"
 
     async def run(self, session: str = "default", session_id: str = None, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_session_clear(session=session, session_id=session_id)
 
 
 class AssistantSessionsTool(MoviePilotTool):
     name: str = "agent_resource_officer_sessions"
-    description: str = "List active Agent资源官 assistant sessions so external agents can recover, inspect, and resume the right workflow."
+    description: str = "List active Agent云盘资源整合 assistant sessions so external agents can recover, inspect, and resume the right workflow."
     args_schema: Type[BaseModel] = AssistantSessionsToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在查看 Agent资源官 活跃会话列表"
+        return "正在查看 Agent云盘资源整合 活跃会话列表"
 
     async def run(self, kind: str = None, has_pending_p115: bool = None, compact: bool = True, limit: int = 20, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_sessions(
             kind=kind,
             has_pending_p115=has_pending_p115,
@@ -699,11 +699,11 @@ class AssistantSessionsTool(MoviePilotTool):
 
 class AssistantSessionsClearTool(MoviePilotTool):
     name: str = "agent_resource_officer_sessions_clear"
-    description: str = "Clear one or more Agent资源官 assistant sessions by session_id, session name, filters, or full reset."
+    description: str = "Clear one or more Agent云盘资源整合 assistant sessions by session_id, session name, filters, or full reset."
     args_schema: Type[BaseModel] = AssistantSessionsClearToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在清理 Agent资源官 活跃会话"
+        return "正在清理 Agent云盘资源整合 活跃会话"
 
     async def run(
         self,
@@ -718,7 +718,7 @@ class AssistantSessionsClearTool(MoviePilotTool):
     ) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_assistant_sessions_clear(
             session=session,
             session_id=session_id,
@@ -737,12 +737,12 @@ class P115QRCodeStartTool(MoviePilotTool):
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
         client_type = kwargs.get("client_type", "alipaymini")
-        return f"正在通过 Agent资源官 生成 115 扫码二维码：{client_type}"
+        return f"正在通过 Agent云盘资源整合 生成 115 扫码二维码：{client_type}"
 
     async def run(self, client_type: str = "alipaymini", **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_p115_qrcode_start(client_type=client_type)
 
 
@@ -752,12 +752,12 @@ class P115QRCodeCheckTool(MoviePilotTool):
     args_schema: Type[BaseModel] = P115QRCodeCheckToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在通过 Agent资源官 检查 115 扫码状态"
+        return "正在通过 Agent云盘资源整合 检查 115 扫码状态"
 
     async def run(self, uid: str, time: str, sign: str, client_type: str = "alipaymini", **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_p115_qrcode_check(
             uid=uid,
             time_value=time,
@@ -772,12 +772,12 @@ class P115StatusTool(MoviePilotTool):
     args_schema: Type[BaseModel] = P115StatusToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在通过 Agent资源官 查看 115 当前状态"
+        return "正在通过 Agent云盘资源整合 查看 115 当前状态"
 
     async def run(self, **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_p115_status()
 
 
@@ -787,12 +787,12 @@ class P115PendingTool(MoviePilotTool):
     args_schema: Type[BaseModel] = P115PendingToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在通过 Agent资源官 查看待继续的 115 任务"
+        return "正在通过 Agent云盘资源整合 查看待继续的 115 任务"
 
     async def run(self, session: str = "default", **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_p115_pending(session=session)
 
 
@@ -802,12 +802,12 @@ class P115ResumePendingTool(MoviePilotTool):
     args_schema: Type[BaseModel] = P115ResumePendingToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在通过 Agent资源官 继续待处理的 115 任务"
+        return "正在通过 Agent云盘资源整合 继续待处理的 115 任务"
 
     async def run(self, session: str = "default", **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_p115_resume(session=session)
 
 
@@ -817,10 +817,10 @@ class P115CancelPendingTool(MoviePilotTool):
     args_schema: Type[BaseModel] = P115CancelPendingToolInput
 
     def get_tool_message(self, **kwargs) -> Optional[str]:
-        return "正在通过 Agent资源官 取消待处理的 115 任务"
+        return "正在通过 Agent云盘资源整合 取消待处理的 115 任务"
 
     async def run(self, session: str = "default", **kwargs) -> str:
         plugin = _get_plugin()
         if not plugin:
-            return "Agent资源官 插件未运行"
+            return "Agent云盘资源整合 插件未运行"
         return await plugin.tool_p115_cancel(session=session)

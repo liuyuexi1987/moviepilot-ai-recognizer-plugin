@@ -97,7 +97,7 @@ python3 scripts/aro_request.py pick --choice 1
 
 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体接入时，可以直接复用：
 
-- [外部智能体接入 Agent资源官](../../docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
+- [外部智能体接入 Agent云盘资源整合](../../docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
 - [Skill 包内外部智能体接入文件](./EXTERNAL_AGENTS.md)
 - `PROMPTS.md` 里的外部智能体提示词段落
 

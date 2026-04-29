@@ -86,7 +86,7 @@ python3 <SKILL_HOME>/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py se
 - 需要旧飞书桥接兼容入口时再装 `FeishuCommandBridgeLong`
 - 需要旧影巢 OpenAPI 页面时再装 `HdhiveOpenApi`
 
-新用户优先使用 `AgentResourceOfficer` 内置飞书入口；同一个飞书 App 不建议同时开启资源官内置飞书和旧 `FeishuCommandBridgeLong`。
+新用户优先使用 `AgentResourceOfficer` 内置飞书入口；同一个飞书 App 不建议同时开启插件内置飞书和旧 `FeishuCommandBridgeLong`。
 
 AI 识别线：
 
@@ -97,7 +97,7 @@ AI 识别线：
 
 - 只需要轻量签到时用 `HDHiveDailySign`
 - OpenAPI 签到如果要求付费接口，普通用户优先保留轻量签到插件
-- 已安装资源官时，也可以在 `AgentResourceOfficer` 内启用影巢签到，由资源官统一承接签到、搜索、解锁和智能入口。
+- 已安装 `AgentResourceOfficer` 时，也可以在插件内启用影巢签到，由插件统一承接签到、搜索、解锁和智能入口。
 
 极影视刷新：
 

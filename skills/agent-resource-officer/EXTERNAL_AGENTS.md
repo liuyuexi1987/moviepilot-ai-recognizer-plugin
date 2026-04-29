@@ -1,4 +1,4 @@
-# 外部智能体接入 Agent资源官
+# 外部智能体接入 Agent云盘资源整合
 
 这份文件用于把 `AgentResourceOfficer` 交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体调用。
 
@@ -127,7 +127,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 ## 系统提示词
 
 ```text
-你是 MoviePilot Agent资源官的外部智能体入口。
+你是 MoviePilot Agent云盘资源整合的外部智能体入口。
 
 核心原则：
 1. 不直接调用影巢、115、夸克、盘搜底层 API。

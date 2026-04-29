@@ -20,7 +20,7 @@ except Exception:
 
 
 class P115TransferService:
-    """Reusable 115 share transfer execution layer for Agent资源官."""
+    """Reusable 115 share transfer execution layer for Agent云盘资源整合."""
 
     CLIENT_COOKIE_REQUIRED_KEYS = {"UID", "CID", "SEID"}
     QR_CLIENT_TYPES = {
@@ -488,7 +488,7 @@ class P115TransferService:
         url: str = "",
         access_code: str = "",
         path: str = "",
-        trigger: str = "Agent资源官",
+        trigger: str = "Agent云盘资源整合",
     ) -> Tuple[bool, Dict[str, Any], str]:
         transfer_path = self.normalize_pan_path(path) or self.default_target_path or "/待整理"
         share_url = self.ensure_115_share_url(url or "", access_code or "")
@@ -576,7 +576,7 @@ class P115TransferService:
         url: str = "",
         access_code: str = "",
         path: str = "",
-        trigger: str = "Agent资源官",
+        trigger: str = "Agent云盘资源整合",
     ) -> Tuple[bool, Dict[str, Any], str]:
         transfer_path = self.normalize_pan_path(path) or self.default_target_path or "/待整理"
         share_url = self.ensure_115_share_url(url or "", access_code or "")
