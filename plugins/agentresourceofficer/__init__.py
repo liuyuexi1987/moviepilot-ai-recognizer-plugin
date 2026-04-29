@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.26"
+    plugin_version = "0.2.27"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -9543,10 +9543,11 @@ class AgentResourceOfficer(_PluginBase):
                     lines.append("   风险：" + "；".join(str(item) for item in risks[:2]))
             lines.append(f"   {cached['url']}")
         next_quark_hint = count_115 + 1 if count_quark else 1
-        lines.append("下一步：回复“选择 1”即可直接转存支持的 115 / 夸克结果。")
+        lines.append("下一步：建议先回复“计划选择 1”生成待确认计划；确认后再回复“执行计划”。")
         if count_quark:
-            lines.append(f"夸克结果从 {next_quark_hint} 开始编号；例如“选择 {next_quark_hint}”可直接处理第 1 条夸克结果。")
-        lines.append(f"如需改目录，可发“选择 1 path=/目录”或“选择 {next_quark_hint} path=/目录”。")
+            lines.append(f"夸克结果从 {next_quark_hint} 开始编号；例如“计划选择 {next_quark_hint}”会为第 1 条夸克结果生成计划。")
+        lines.append(f"如需改目录，可发“计划选择 1 path=/目录”或“计划选择 {next_quark_hint} path=/目录”。")
+        lines.append("只有明确要立即转存时，才直接回复“选择 编号”。")
         return "\n".join(lines)
 
     @classmethod
@@ -9806,6 +9807,8 @@ class AgentResourceOfficer(_PluginBase):
                 lines.append(f"   字幕：{subtitle}")
             if remark:
                 lines.append(f"   详情：{remark}")
+        lines.append("下一步：建议先回复“计划选择 1”生成待确认计划；确认后再回复“执行计划”。")
+        lines.append("只有明确要立即解锁/转存时，才直接回复“选择 编号”。")
         return "\n".join(lines)
 
     @staticmethod

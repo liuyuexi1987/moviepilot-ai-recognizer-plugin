@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.26`
+- `AgentResourceOfficer`: `0.2.27`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.27`：优化盘搜和影巢资源列表的下一步提示；默认引导外部智能体先生成计划，再确认执行。
 - `AgentResourceOfficer 0.2.26`：新增云盘写入计划入口；盘搜和影巢资源可用“计划选择 1”先生成 `plan_id`，再确认执行。
 - `AgentResourceOfficer 0.2.25`：修复云盘会话最佳/详情选择安全；盘搜和影巢资源阶段的“最佳片源”只展示详情，不会误选最后一条执行。
 - `AgentResourceOfficer 0.2.24`：补齐 PT 下载自动化闭环；仅在用户开启自动入库且评分达标、无硬风险时，下载选择和下载最佳才会直接提交。
