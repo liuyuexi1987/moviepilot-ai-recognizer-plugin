@@ -347,6 +347,8 @@ python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source 
 
 `mp_search_best` is read-only and token-efficient. Use it when the user asks the agent to recommend the best PT candidate after MP native search. It searches, ranks by the plugin-owned score, and returns the best candidate detail. It still does not download.
 
+After an MP search session, `下载最佳` generates a saved download plan for the current highest-scoring PT candidate. It does not download immediately; execute the returned `plan_id` only after user confirmation.
+
 `mp_recommend_search` is the low-token recommendation chain. Without `choice`, it returns a recommendation list and stores the session. With `choice`, it immediately continues the selected title into `mode=mp`, `mode=hdhive`, or `mode=pansou`.
 
 After a recommendation list, natural-language picks are valid:
@@ -377,6 +379,7 @@ Download task management also uses the same route. Querying tasks is read-only. 
 识别 蜘蛛侠
 选择 1
 最佳片源
+下载最佳
 暂停下载 1
 恢复下载 1
 删除下载 1

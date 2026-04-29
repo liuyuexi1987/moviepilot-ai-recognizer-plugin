@@ -212,6 +212,7 @@ python3 scripts/aro_request.py route --text "订阅并搜索蜘蛛侠"
 python3 scripts/aro_request.py route --text "MP搜索 蜘蛛侠" --session agent:demo
 python3 scripts/aro_request.py pick --choice 1 --session agent:demo
 python3 scripts/aro_request.py route --text "最佳片源" --session agent:demo
+python3 scripts/aro_request.py route --text "下载最佳" --session agent:demo
 ```
 
 下载任务也可以走同一入口。查询是读操作；暂停、恢复、删除会先返回 `plan_id`，确认后再执行：

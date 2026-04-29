@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.20"
+    plugin_version = "0.2.21"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3650,6 +3650,98 @@ class AgentResourceOfficer(_PluginBase):
             result["data"] = data
         return result
 
+    async def _assistant_mp_best_download_plan(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        scored = [
+            item for item in preview
+            if isinstance(item, dict) and isinstance(item.get("score"), dict)
+        ]
+        if not scored:
+            return {
+                "success": False,
+                "message": "没有可评分的 MP 搜索结果，请先发送“MP搜索 片名”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_best_download_plan",
+                    "ok": False,
+                    "error_code": "mp_best_result_not_found",
+                }),
+            }
+        best = max(
+            scored,
+            key=lambda item: (
+                self._safe_int((item.get("score") or {}).get("score"), 0),
+                self._safe_int(((item.get("torrent_info") or {}).get("seeders")), 0),
+            ),
+        )
+        choice = self._safe_int(best.get("index"), 0)
+        score = best.get("score") or {}
+        risks = [str(value) for value in (score.get("risk_reasons") or []) if value]
+        if risks:
+            return {
+                "success": False,
+                "message": f"已阻止最佳候选自动生成下载计划：{'；'.join(risks)}",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_best_download_plan",
+                    "ok": False,
+                    "error_code": "mp_best_result_blocked",
+                    "choice": choice,
+                    "item": best,
+                    "score_summary": self._score_summary([best], limit=1),
+                }),
+            }
+        actions = [{
+            "name": "pick_mp_download",
+            "session": session,
+            "session_id": cache_key,
+            "choice": choice,
+        }]
+        plan = self._save_workflow_plan(
+            workflow="mp_best_download",
+            session=session,
+            session_id=cache_key,
+            actions=actions,
+            execute_body={
+                "workflow": "mp_best_download",
+                "session": session,
+                "session_id": cache_key,
+                "choice": choice,
+                "dry_run": False,
+            },
+        )
+        title = ((best.get("torrent_info") or {}).get("title")) or "未命名资源"
+        score_value = self._safe_int(score.get("score"), 0)
+        level = self._clean_text(score.get("score_level")) or "-"
+        message = "\n".join([
+            f"最佳片源下载计划已生成：{plan.get('plan_id')}",
+            f"选择：#{choice} {title}",
+            f"评分：{score_value} / {level}",
+            "确认后再执行 plan_id；当前不会静默下载。",
+        ])
+        full_data = self._assistant_response_data(session=session, data={
+            "action": "workflow_plan",
+            "ok": True,
+            "plan_id": plan.get("plan_id"),
+            "workflow": "mp_best_download",
+            "dry_run": True,
+            "workflow_actions": actions,
+            "estimated_steps": len(actions),
+            "ready_to_execute": True,
+            "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+            "execute_plan_body": {"plan_id": plan.get("plan_id")},
+            "choice": choice,
+            "item": best,
+            "score_summary": self._score_summary([best], limit=1),
+            "plan_created_at": plan.get("created_at"),
+            "plan_created_at_text": plan.get("created_at_text"),
+        })
+        return {"success": True, "message": message, "data": full_data}
+
     async def _assistant_mp_download(self, *, choice: int, session: str, cache_key: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
         preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
         selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
@@ -5456,6 +5548,13 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_state, "name": "query_mp_best_result_detail"},
                 ),
                 self._assistant_action_template(
+                    name="pick_mp_best_download",
+                    description="按当前评分最高的 MP 搜索结果生成下载计划；不会静默下载",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "pick_mp_best_download"},
+                ),
+                self._assistant_action_template(
                     name="query_mp_search_result_detail",
                     description="按编号查看 MP 原生搜索结果详情和 PT 评分理由",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
@@ -6475,6 +6574,7 @@ class AgentResourceOfficer(_PluginBase):
             "3. action=下一页",
             "MP 搜索结果里，choice=1 会先展示 PT 详情和评分理由；确认下载再发 text=下载1。",
             "MP 搜索结果里，action=最佳 会展示当前评分最高候选，适合智能体省 token 决策。",
+            "MP 搜索结果里，text=下载最佳 会按当前最高分候选生成下载计划，不会静默下载。",
             "说明：同一个 session 会自动串起候选列表、资源列表、115 待任务与扫码续跑。",
             self._format_p115_next_actions(self._p115_status_snapshot()),
         ]
@@ -6526,6 +6626,7 @@ class AgentResourceOfficer(_PluginBase):
                     "mp_subscribe_control",
                     "mp_transfer_history",
                     "mp_download",
+                    "mp_download_best",
                     "mp_subscribe",
                     "mp_subscribe_search",
                     "mp_recommendations",
@@ -7402,6 +7503,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query_mp_media_detail",
                 "query_mp_search_result_detail",
                 "query_mp_best_result_detail",
+                "pick_mp_best_download",
                 "query_mp_downloaders",
                 "query_mp_sites",
                 "query_mp_subscribes",
@@ -7594,6 +7696,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_search_best", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
                 "body": {"workflow": "mp_search_best", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+            },
+            "mp_best_download_plan": {
+                "description": "在已有 MP 搜索会话中按当前最高分候选生成下载计划；不会直接下载。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                "tool": "agent_resource_officer_execute_action",
+                "tool_args": {"name": "pick_mp_best_download", "session": "assistant", "compact": True},
+                "body": {"name": "pick_mp_best_download", "session": "assistant", "compact": True},
             },
             "mp_search_download_plan": {
                 "description": "MP 原生搜索并选择编号下载；写入动作默认只生成 plan_id，确认后执行。",
@@ -8662,6 +8776,17 @@ class AgentResourceOfficer(_PluginBase):
             "downloadstatus",
         }:
             options["action"] = "mp_download_tasks"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "下载最佳",
+            "下载推荐",
+            "下载最好",
+            "下载最佳片源",
+            "下载推荐片源",
+            "downloadbest",
+        }:
+            options["action"] = "mp_download_best"
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
@@ -10992,6 +11117,13 @@ class AgentResourceOfficer(_PluginBase):
                 downloader=self._clean_text(body.get("downloader")),
                 delete_files=self._parse_bool_value(body.get("delete_files"), False),
             ))
+        if assistant_action == "mp_download_best":
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            return finish(await self._assistant_mp_best_download_plan(
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            ))
         if assistant_action == "mp_download":
             choice = self._safe_int(parsed.get("keyword") or body.get("choice") or body.get("index"), 0)
             if choice <= 0:
@@ -11571,6 +11703,17 @@ class AgentResourceOfficer(_PluginBase):
             )
             prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
             return await finish(self._assistant_mp_best_result_detail(
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
+        if name == "pick_mp_best_download":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            return await finish(self._assistant_mp_best_download_plan(
                 session=session_name,
                 cache_key=cache_key,
                 preferences=prefs,
