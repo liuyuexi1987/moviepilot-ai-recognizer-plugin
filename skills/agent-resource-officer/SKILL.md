@@ -322,12 +322,15 @@ For MP native workflows:
 python3 scripts/aro_request.py workflow --workflow mp_search --keyword "蜘蛛侠"
 python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword "蜘蛛侠" --choice 1
 python3 scripts/aro_request.py workflow --workflow mp_subscribe --keyword "蜘蛛侠"
+python3 scripts/aro_request.py workflow --workflow mp_transfer_history --keyword "蜘蛛侠" --status all --limit 10
 python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20
 python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source tmdb_trending --media-type all --choice 1 --mode mp
 python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source tmdb_trending --media-type all --choice 1 --mode pansou
 ```
 
 `mp_search_download`, `mp_subscribe`, and `mp_subscribe_and_search` are write-side-effect workflows. They should return a saved `plan_id` first; execute with `plan-execute` only after the user confirms.
+
+`mp_transfer_history` is read-only. Use it after downloads or transfers to check whether MoviePilot has already organized the media into the library. Prefer the structured `items` fields and path previews; do not ask for full local paths unless the user explicitly needs troubleshooting detail.
 
 `mp_recommend_search` is the low-token recommendation chain. Without `choice`, it returns a recommendation list and stores the session. With `choice`, it immediately continues the selected title into `mode=mp`, `mode=hdhive`, or `mode=pansou`.
 
@@ -373,6 +376,14 @@ MP subscription management follows the same rule. Querying subscriptions is read
 暂停订阅 1
 恢复订阅 1
 删除订阅 1
+```
+
+Transfer/import history is read-only and safe. Use it to answer “did this land in the library?”:
+
+```text
+入库历史
+入库失败 蜘蛛侠
+整理成功 地狱乐
 ```
 
 Natural-language route examples that should call recommendations:

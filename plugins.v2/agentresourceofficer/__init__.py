@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.14"
+    plugin_version = "0.2.15"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3773,6 +3773,46 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    async def _assistant_mp_transfer_history(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        status: str = "all",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_transfer_history(
+            title=title,
+            status=status or "all",
+            limit=max(1, min(50, self._safe_int(limit, 10))),
+            page=max(1, self._safe_int(page, 1)),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_transfer_history",
+            "stage": "transfer_history",
+            "keyword": title or status or "all",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "整理历史查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_transfer_history",
+                "ok": bool(result.get("success")),
+                "source_type": "moviepilot_transfer_history",
+                "status": result.get("status") or status,
+                "title": title,
+                "items": items,
+                "total": self._safe_int(result.get("total"), len(items)),
+                "page": self._safe_int(result.get("page"), page),
+                "limit": self._safe_int(result.get("limit"), limit),
+            }),
+        }
+
     async def _assistant_mp_recommendations(
         self,
         *,
@@ -4918,6 +4958,7 @@ class AgentResourceOfficer(_PluginBase):
             "stale_only",
             "all_sessions",
             "limit",
+            "page",
             "plan_id",
             "prefer_unexecuted",
             "preferences",
@@ -5035,6 +5076,13 @@ class AgentResourceOfficer(_PluginBase):
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
                     body={**base_route, "name": "query_mp_subscribes", "status": "all", "limit": 20},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_transfer_history",
+                    description="查看 MP 最近整理/入库历史，用于判断下载后是否已落库",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_transfer_history", "status": "all", "limit": 10},
                 ),
                 self._assistant_action_template(
                     name="start_115_login",
@@ -6090,6 +6138,7 @@ class AgentResourceOfficer(_PluginBase):
             "8. text=下载任务；暂停下载 1 / 恢复下载 1 / 删除下载 1 会先生成计划",
             "9. text=站点状态；下载器状态 用于排查 PT 搜索/下载环境",
             "10. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
+            "11. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -6140,6 +6189,7 @@ class AgentResourceOfficer(_PluginBase):
                     "mp_sites",
                     "mp_subscribes",
                     "mp_subscribe_control",
+                    "mp_transfer_history",
                     "mp_download",
                     "mp_subscribe",
                     "mp_subscribe_search",
@@ -6168,6 +6218,7 @@ class AgentResourceOfficer(_PluginBase):
                     "download_control",
                     "subscribe_control",
                     "delete_files",
+                    "page",
                     "compact",
                 ],
             },
@@ -6230,6 +6281,7 @@ class AgentResourceOfficer(_PluginBase):
                     "stale_only",
                     "all_sessions",
                     "limit",
+                    "page",
                     "plan_id",
                     "prefer_unexecuted",
                     "compact",
@@ -7009,6 +7061,11 @@ class AgentResourceOfficer(_PluginBase):
                 "resume_pending_115",
                 "execute_latest_plan",
                 "execute_session_latest_plan",
+                "query_mp_download_tasks",
+                "query_mp_downloaders",
+                "query_mp_sites",
+                "query_mp_subscribes",
+                "query_mp_transfer_history",
                 "clear_stale_sessions",
                 "clear_executed_plans",
             ],
@@ -7172,6 +7229,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
                 "body": {"workflow": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_transfer_history": {
+                "description": "查询 MP 最近整理/入库历史，判断下载后是否已经落库；只返回摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_transfer_history", "keyword": "蜘蛛侠", "status": "all", "limit": 10, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_transfer_history", "keyword": "蜘蛛侠", "status": "all", "limit": 10, "session": "assistant", "compact": True},
             },
             "mp_recommend": {
                 "description": "读取 MP 原生热门推荐，例如 TMDB、豆瓣或 Bangumi。",
@@ -8050,6 +8119,7 @@ class AgentResourceOfficer(_PluginBase):
             "year": "",
             "action": "",
             "client_type": "",
+            "status": "",
         }
         if compact in {
             "帮助",
@@ -8223,6 +8293,39 @@ class AgentResourceOfficer(_PluginBase):
             options["action"] = "mp_subscribes"
             options["mode"] = ""
             options["keyword"] = ""
+        elif compact in {
+            "入库历史",
+            "整理历史",
+            "转移历史",
+            "最近入库",
+            "最近整理",
+            "transferhistory",
+        }:
+            options["action"] = "mp_transfer_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "入库失败",
+            "整理失败",
+            "失败入库",
+            "失败整理",
+            "transferfailed",
+        }:
+            options["action"] = "mp_transfer_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["status"] = "failed"
+        elif compact in {
+            "入库成功",
+            "整理成功",
+            "成功入库",
+            "成功整理",
+            "transfersuccess",
+        }:
+            options["action"] = "mp_transfer_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["status"] = "success"
         else:
             for prefix, control in [
                 ("暂停下载", "pause"),
@@ -8278,6 +8381,28 @@ class AgentResourceOfficer(_PluginBase):
                         options["action"] = "mp_subscribes"
                         options["mode"] = ""
                         options["keyword"] = raw[len(prefix):].strip()
+                        break
+            if not options.get("action"):
+                for prefix, status_name in [
+                    ("入库失败", "failed"),
+                    ("整理失败", "failed"),
+                    ("失败入库", "failed"),
+                    ("失败整理", "failed"),
+                    ("入库成功", "success"),
+                    ("整理成功", "success"),
+                    ("成功入库", "success"),
+                    ("成功整理", "success"),
+                    ("入库历史", "all"),
+                    ("整理历史", "all"),
+                    ("转移历史", "all"),
+                    ("最近入库", "all"),
+                    ("最近整理", "all"),
+                ]:
+                    if raw.startswith(prefix + " "):
+                        options["action"] = "mp_transfer_history"
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        options["status"] = status_name
                         break
             for prefix, action in [
                 ("下载资源", "mp_download"),
@@ -10174,6 +10299,15 @@ class AgentResourceOfficer(_PluginBase):
                 name=keyword,
                 limit=self._safe_int(body.get("limit"), 20),
             ))
+        if assistant_action == "mp_transfer_history":
+            return finish(await self._assistant_mp_transfer_history(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "all"),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
         if assistant_action == "mp_subscribe_control":
             control = self._clean_text(parsed.get("subscribe_control") or body.get("subscribe_control") or body.get("control") or body.get("operation")).lower()
             control_aliases = {
@@ -10969,6 +11103,19 @@ class AgentResourceOfficer(_PluginBase):
                 name=self._clean_text(body.get("subscribe_name") or body.get("keyword") or body.get("title")),
                 limit=self._safe_int(body.get("limit"), 20),
             ))
+        if name == "query_mp_transfer_history":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_transfer_history(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                status=self._clean_text(body.get("status") or "all"),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
         if name == "mp_subscribe_control":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -11336,6 +11483,11 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "control", "target", "compact", "dry_run"],
                 },
                 {
+                    "name": "mp_transfer_history",
+                    "description": "查询 MP 最近整理/入库历史，可按标题和成功/失败状态过滤，只读",
+                    "fields": ["session", "keyword", "status", "limit", "page", "compact"],
+                },
+                {
                     "name": "mp_recommend",
                     "description": "读取 MP 原生推荐，例如 TMDB、豆瓣、Bangumi",
                     "fields": ["session", "source", "media_type", "limit", "compact"],
@@ -11503,6 +11655,15 @@ class AgentResourceOfficer(_PluginBase):
                 "name": "mp_subscribe_control",
                 "control": control,
                 "target": target,
+            })], ""
+
+        if workflow_name == "mp_transfer_history":
+            return [base({
+                "name": "query_mp_transfer_history",
+                "keyword": keyword,
+                "status": self._clean_text(body.get("status")) or "all",
+                "limit": self._safe_int(body.get("limit"), 10),
+                "page": self._safe_int(body.get("page"), 1),
             })], ""
 
         if workflow_name == "mp_recommend":

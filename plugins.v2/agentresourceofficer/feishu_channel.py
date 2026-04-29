@@ -13,6 +13,11 @@ from base64 import b64decode
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    import jieba
+except Exception:
+    jieba = None
+
 for _site_path in (
     "/usr/local/lib/python3.12/site-packages",
     "/usr/local/lib/python3.11/site-packages",
@@ -33,6 +38,7 @@ try:
     from app.core.event import eventmanager
     from app.core.metainfo import MetaInfo
     from app.db.downloadhistory_oper import DownloadHistoryOper
+    from app.db.models.transferhistory import TransferHistory
     from app.db.site_oper import SiteOper
     from app.db.subscribe_oper import SubscribeOper
     from app.db.systemconfig_oper import SystemConfigOper
@@ -40,12 +46,13 @@ try:
     from app.core.plugin import PluginManager
     from app.log import logger
     from app.scheduler import Scheduler
-    from app.schemas.types import EventType, SystemConfigKey, TorrentStatus
+    from app.schemas.types import EventType, SystemConfigKey, TorrentStatus, media_type_to_agent
     from app.utils.http import RequestUtils
     from app.utils.string import StringUtils
 except Exception:
     DownloadChain = None
     DownloadHistoryOper = None
+    TransferHistory = None
     MediaChain = None
     SearchChain = None
     SiteOper = None
@@ -60,6 +67,7 @@ except Exception:
     EventType = None
     SystemConfigKey = None
     TorrentStatus = None
+    media_type_to_agent = None
     RequestUtils = None
     StringUtils = None
 
@@ -1010,6 +1018,137 @@ class FeishuChannel:
         except Exception as exc:
             logger.error(f"[AgentResourceOfficer][Feishu] 操作订阅失败：{sid} {exc}\n{traceback.format_exc()}")
             return {"success": False, "message": f"操作订阅失败：{exc}", "subscribe_id": sid}
+
+    @staticmethod
+    def _path_preview(value: Any, max_parts: int = 4) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        normalized = text.replace("\\", "/")
+        parts = [part for part in normalized.split("/") if part]
+        if len(parts) <= max_parts:
+            return normalized
+        prefix = "/" if normalized.startswith("/") else ""
+        return f"{prefix}.../" + "/".join(parts[-max_parts:])
+
+    @staticmethod
+    def _transfer_status_bool(status: str) -> Optional[bool]:
+        name = str(status or "all").strip().lower()
+        if name in {"success", "succeeded", "ok", "true", "成功", "已成功"}:
+            return True
+        if name in {"failed", "fail", "error", "false", "失败", "错误"}:
+            return False
+        return None
+
+    def _query_transfer_history(
+        self,
+        *,
+        title: str = "",
+        status: str = "all",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        if TransferHistory is None:
+            return {"success": False, "message": "查询整理历史失败：当前环境缺少 MoviePilot 整理历史依赖。", "items": []}
+        try:
+            page_num = max(1, int(page or 1))
+            page_size = max(1, min(50, int(limit or 10)))
+            status_bool = self._transfer_status_bool(status)
+            title_text = str(title or "").strip()
+            search_text = title_text
+            if title_text and jieba is not None:
+                try:
+                    search_text = "%".join(jieba.cut(title_text, HMM=False))
+                except Exception:
+                    search_text = title_text
+
+            if search_text:
+                records = TransferHistory.list_by_title(title=search_text, page=1, count=-1, status=None) or []
+                if status_bool is not None:
+                    records = [item for item in records if bool(getattr(item, "status", False)) is status_bool]
+            else:
+                records = TransferHistory.list_by_page(page=1, count=-1, status=status_bool) or []
+
+            total = len(records)
+            start = (page_num - 1) * page_size
+            selected_records = records[start:start + page_size]
+            items: List[Dict[str, Any]] = []
+            for index, record in enumerate(selected_records, start=start + 1):
+                media_type = str(getattr(record, "type", "") or "")
+                if media_type_to_agent is not None:
+                    try:
+                        media_type = media_type_to_agent(media_type)
+                    except Exception:
+                        pass
+                status_ok = bool(getattr(record, "status", False))
+                item = {
+                    "index": index,
+                    "id": getattr(record, "id", None),
+                    "title": str(getattr(record, "title", "") or "未命名媒体"),
+                    "year": str(getattr(record, "year", "") or ""),
+                    "type": media_type,
+                    "category": str(getattr(record, "category", "") or ""),
+                    "season": str(getattr(record, "seasons", "") or ""),
+                    "episode": str(getattr(record, "episodes", "") or ""),
+                    "mode": str(getattr(record, "mode", "") or ""),
+                    "status": "success" if status_ok else "failed",
+                    "status_text": "成功" if status_ok else "失败",
+                    "date": str(getattr(record, "date", "") or ""),
+                    "downloader": str(getattr(record, "downloader", "") or ""),
+                    "download_hash_short": str(getattr(record, "download_hash", "") or "")[:8],
+                    "src_preview": self._path_preview(getattr(record, "src", "")),
+                    "dest_preview": self._path_preview(getattr(record, "dest", "")),
+                    "tmdbid": getattr(record, "tmdbid", None),
+                    "doubanid": str(getattr(record, "doubanid", "") or ""),
+                }
+                errmsg = str(getattr(record, "errmsg", "") or "").strip()
+                if errmsg and not status_ok:
+                    item["errmsg"] = errmsg[:300]
+                items.append(item)
+
+            status_name = str(status or "all").strip().lower()
+            status_label = "成功" if status_bool is True else "失败" if status_bool is False else "全部"
+            title_label = f"：{title_text}" if title_text else ""
+            if not items:
+                return {
+                    "success": True,
+                    "message": f"未找到{status_label}整理历史{title_label}。",
+                    "items": [],
+                    "total": total,
+                    "page": page_num,
+                    "limit": page_size,
+                    "status": status_name,
+                }
+
+            total_pages = (total + page_size - 1) // page_size if total else 1
+            lines = [f"整理历史{title_label}：{status_label}，第 {page_num}/{total_pages} 页，共 {total} 条，展示 {len(items)} 条："]
+            for item in items:
+                season_episode = " ".join(value for value in [item.get("season"), item.get("episode")] if value)
+                label_parts = [
+                    item.get("status_text") or "-",
+                    item.get("type") or "-",
+                    item.get("mode") or "-",
+                    item.get("date") or "-",
+                ]
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) {season_episode}".rstrip())
+                lines.append("   " + " | ".join(label_parts))
+                if item.get("dest_preview"):
+                    lines.append(f"   目标：{item.get('dest_preview')}")
+                if item.get("errmsg"):
+                    lines.append(f"   错误：{item.get('errmsg')}")
+            lines.append("说明：这是只读查询，用于判断下载后是否已经整理入库。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": total,
+                "page": page_num,
+                "limit": page_size,
+                "status": status_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询整理历史失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询整理历史失败：{exc}", "items": []}
 
     def _execute_media_subscribe(self, keyword: str, immediate_search: bool) -> str:
         if not all([MetaInfo, SubscribeChain]):
