@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.04`
+- `AgentResourceOfficer`: `0.2.05`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.05`：新增低 token `score_summary`，让智能体直接读取云盘和 PT 评分推荐、风险与确认建议。
 - `AgentResourceOfficer 0.2.04`：增强智能体偏好引导协议，主响应返回低 token `preference_status`，未初始化时优先提示保存偏好。
 - `AgentResourceOfficer 0.2.03`：新增智能体偏好画像、云盘/PT 分源评分、MP 原生搜索下载订阅推荐工作流，并让写入动作优先生成 `plan_id`。
 - `AgentResourceOfficer 0.2.02`：新增影巢资源搜索/解锁总开关与单资源积分上限，降低外部智能体误解锁高积分资源的风险。

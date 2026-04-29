@@ -300,6 +300,8 @@ python3 scripts/aro_request.py preferences --session agent:<用户ID>
 
 Most assistant responses also include compact `preference_status`. If `preference_status.needs_onboarding=true`, pause automation, ask the user for preferences, then save them before choosing downloads, unlocks, or transfers.
 
+Search responses may include compact `score_summary`. Prefer `score_summary.best` and `score_summary.top_recommendations` over parsing the natural-language message. If `risk_reasons` is non-empty, do not auto-execute that item. If `score_level=confirm`, explain the reasons and ask the user before executing.
+
 If `needs_onboarding=true`, ask the user for a compact preference profile and save it:
 
 ```bash

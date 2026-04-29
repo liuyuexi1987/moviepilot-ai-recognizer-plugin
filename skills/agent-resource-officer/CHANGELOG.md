@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.15
+
+- Documented compact `score_summary` for choosing scored cloud/PT results without parsing long messages.
+
 ## 0.1.14
 
 - Added compact `preference_status` to assistant responses so external agents can detect onboarding without a separate verbose call.

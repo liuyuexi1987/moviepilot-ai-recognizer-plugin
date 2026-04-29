@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.04"
+    plugin_version = "0.2.05"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3101,6 +3101,79 @@ class AgentResourceOfficer(_PluginBase):
             suffix = "不建议自动"
         return f"{value}分 {suffix}"
 
+    def _score_brief_item(self, item: Dict[str, Any], fallback_index: int = 0) -> Dict[str, Any]:
+        current = dict(item or {})
+        score = current.get("score") if isinstance(current.get("score"), dict) else {}
+        if not score:
+            return {}
+        torrent = current.get("torrent_info") if isinstance(current.get("torrent_info"), dict) else {}
+        index = self._safe_int(
+            current.get("pick_index") or current.get("index") or fallback_index,
+            fallback_index,
+        )
+        title = (
+            self._clean_text(torrent.get("title"))
+            or self._clean_text(current.get("note"))
+            or self._clean_text(current.get("title") or current.get("matched_title"))
+            or "未命名资源"
+        )
+        provider = (
+            self._clean_text(current.get("pan_type") or current.get("channel"))
+            or self._clean_text(torrent.get("site_name"))
+            or self._clean_text(current.get("site"))
+        )
+        reasons = [self._clean_text(value) for value in (score.get("score_reasons") or []) if self._clean_text(value)]
+        risks = [self._clean_text(value) for value in (score.get("risk_reasons") or []) if self._clean_text(value)]
+        brief = {
+            "index": index,
+            "title": title[:160],
+            "provider": provider,
+            "source_type": self._clean_text(score.get("source_type")),
+            "score": self._safe_int(score.get("score"), 0),
+            "score_level": self._clean_text(score.get("score_level")),
+            "recommended_action": self._clean_text(score.get("recommended_action")),
+            "can_auto_execute": bool(score.get("can_auto_execute")),
+            "score_reasons": reasons[:3],
+            "risk_reasons": risks[:2],
+        }
+        points_text = self._resource_points_text(current) if current and brief.get("source_type") != "pt" else ""
+        if points_text and points_text != "积分未知":
+            brief["points_text"] = points_text
+        seeders = torrent.get("seeders") if torrent else score.get("seeders")
+        if seeders is not None:
+            brief["seeders"] = seeders
+        volume = self._clean_text(torrent.get("volume_factor") if torrent else score.get("volume_factor"))
+        if volume:
+            brief["volume_factor"] = volume
+        size = self._clean_text(current.get("share_size") or current.get("size") or torrent.get("size"))
+        if size:
+            brief["size"] = size
+        return brief
+
+    def _score_summary(self, items: List[Dict[str, Any]], *, limit: int = 5) -> Dict[str, Any]:
+        scored: List[Dict[str, Any]] = []
+        for index, item in enumerate(items or [], 1):
+            if not isinstance(item, dict):
+                continue
+            brief = self._score_brief_item(item, fallback_index=index)
+            if brief:
+                scored.append(brief)
+        scored.sort(key=lambda value: (
+            1 if value.get("can_auto_execute") else 0,
+            self._safe_int(value.get("score"), 0),
+        ), reverse=True)
+        auto_count = len([item for item in scored if item.get("can_auto_execute")])
+        confirm_count = len([item for item in scored if item.get("score_level") == "confirm"])
+        blocked_count = len([item for item in scored if item.get("risk_reasons")])
+        return {
+            "total_scored": len(scored),
+            "auto_count": auto_count,
+            "confirm_count": confirm_count,
+            "blocked_count": blocked_count,
+            "best": scored[0] if scored else None,
+            "top_recommendations": scored[:max(1, min(10, self._safe_int(limit, 5)))],
+        }
+
     @staticmethod
     def _format_bytes_size(value: Any) -> str:
         try:
@@ -3209,6 +3282,7 @@ class AgentResourceOfficer(_PluginBase):
                 "keyword": keyword,
                 "source_type": "pt",
                 "items": preview,
+                "score_summary": self._score_summary(preview, limit=5),
                 "preferences": preferences,
             }),
         }
@@ -4075,6 +4149,7 @@ class AgentResourceOfficer(_PluginBase):
                     for idx, item in enumerate(items[:6])
                     if isinstance(item, dict)
                 ],
+                "score_summary": self._score_summary(items, limit=5),
                 "suggested_actions": ["smart_pick.choice", "session_clear"],
             })
         elif kind == "assistant_mp":
@@ -4090,10 +4165,13 @@ class AgentResourceOfficer(_PluginBase):
                         "volume_factor": self._clean_text((item.get("torrent_info") or {}).get("volume_factor")),
                         "score": (item.get("score") or {}).get("score") if isinstance(item.get("score"), dict) else None,
                         "score_level": (item.get("score") or {}).get("score_level") if isinstance(item.get("score"), dict) else "",
+                        "recommended_action": (item.get("score") or {}).get("recommended_action") if isinstance(item.get("score"), dict) else "",
+                        "risk_reasons": (item.get("score") or {}).get("risk_reasons", [])[:2] if isinstance(item.get("score"), dict) else [],
                     }
                     for idx, item in enumerate(items[:8])
                     if isinstance(item, dict)
                 ],
+                "score_summary": self._score_summary(items, limit=5),
                 "suggested_actions": ["mp_download.choice", "mp_subscribe.keyword", "session_clear"],
             })
         elif kind == "assistant_hdhive":
@@ -4152,10 +4230,13 @@ class AgentResourceOfficer(_PluginBase):
                             "remark": self._resource_remark_text(item),
                             "score": (item.get("score") or {}).get("score") if isinstance(item.get("score"), dict) else None,
                             "score_level": (item.get("score") or {}).get("score_level") if isinstance(item.get("score"), dict) else "",
+                            "recommended_action": (item.get("score") or {}).get("recommended_action") if isinstance(item.get("score"), dict) else "",
+                            "risk_reasons": (item.get("score") or {}).get("risk_reasons", [])[:2] if isinstance(item.get("score"), dict) else [],
                         }
                         for idx, item in enumerate(resources[:8])
                         if isinstance(item, dict)
                     ],
+                    "score_summary": self._score_summary(resources, limit=5),
                     "suggested_actions": ["smart_pick.choice", "session_clear"],
                 })
         elif kind == "assistant_p115_login":
@@ -4814,6 +4895,7 @@ class AgentResourceOfficer(_PluginBase):
             "total_resources",
             "resource_count_115",
             "resource_count_quark",
+            "score_summary",
             "client_type",
         ]:
             if key in state:
@@ -4962,7 +5044,7 @@ class AgentResourceOfficer(_PluginBase):
                 "has_pending_p115": bool(item.get("has_pending_p115")),
                 "next_actions": item.get("next_actions") or [],
             })
-        return {
+        payload = {
             "protocol_version": "assistant.v1",
             "action": self._clean_text(data.get("action")) or "execute_actions",
             "ok": bool(data.get("ok")),
@@ -4980,6 +5062,10 @@ class AgentResourceOfficer(_PluginBase):
         if isinstance(data.get("preference_status"), dict):
             payload["preference_status"] = data.get("preference_status")
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        elif isinstance(session_state.get("score_summary"), dict):
+            payload["score_summary"] = session_state.get("score_summary")
         return payload
 
     def _assistant_single_action_compact_response(self, name: str, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -5006,6 +5092,10 @@ class AgentResourceOfficer(_PluginBase):
         if isinstance(data.get("preference_status"), dict):
             payload["preference_status"] = data.get("preference_status")
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        elif isinstance(session_state.get("score_summary"), dict):
+            payload["score_summary"] = session_state.get("score_summary")
         pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
         if pending_p115:
             payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
@@ -5036,6 +5126,10 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
             "action_templates": data.get("action_templates") or [],
         }
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        elif isinstance(session_state.get("score_summary"), dict):
+            payload["score_summary"] = session_state.get("score_summary")
         for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource"]:
             if key in data:
                 payload[key] = data.get(key)
@@ -5083,6 +5177,7 @@ class AgentResourceOfficer(_PluginBase):
             "plan_created_at_text": data.get("plan_created_at_text"),
             "preference_status": data.get("preference_status") or {},
             "needs_onboarding": bool((data.get("preference_status") or {}).get("needs_onboarding")),
+            "score_summary": data.get("score_summary") or {},
             "next_actions": ["execute_plan"] if plan_id else [],
             "action_templates": [template] if template else [],
         }
@@ -9593,11 +9688,12 @@ class AgentResourceOfficer(_PluginBase):
                 "success": True,
                 "message": text_message,
                 "data": self._assistant_response_data(session=session, data={
-                    "action": "pansou_search",
-                    "ok": True,
-                    "items": items,
-                }),
-            })
+                "action": "pansou_search",
+                "ok": True,
+                "items": items,
+                "score_summary": self._score_summary(items, limit=5),
+            }),
+        })
 
         allowed, disabled = self._ensure_hdhive_resource_enabled()
         if not allowed:
@@ -9845,7 +9941,7 @@ class AgentResourceOfficer(_PluginBase):
             or "suggested_actions" in data
         ):
             session_state = dict(data)
-        return {
+        summary = {
             "index": index,
             "name": self._clean_text(name),
             "success": bool((result or {}).get("success")),
@@ -9859,6 +9955,11 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
             "has_pending_p115": bool(((session_state.get("pending_p115") or {}).get("has_pending"))),
         }
+        if isinstance(data.get("score_summary"), dict):
+            summary["score_summary"] = data.get("score_summary")
+        elif isinstance(session_state.get("score_summary"), dict):
+            summary["score_summary"] = session_state.get("score_summary")
+        return summary
 
     async def api_assistant_actions(self, request: Request):
         body = await request.json()
@@ -10536,6 +10637,7 @@ class AgentResourceOfficer(_PluginBase):
                         "ok": True,
                         "selected_candidate": candidate,
                         "resources": preview,
+                        "score_summary": self._score_summary(preview, limit=5),
                     }),
                 })
             resources = state.get("resources") or []
