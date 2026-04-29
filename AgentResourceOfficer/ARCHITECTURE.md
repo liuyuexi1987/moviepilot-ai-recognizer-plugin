@@ -1,6 +1,6 @@
-# Agent云盘资源整合架构草案
+# Agent影视助手架构草案
 
-`Agent云盘资源整合` 是重构后的资源工作流主插件，重点不是把旧代码简单拼一起，而是把职责重新压平。
+`Agent影视助手` 是重构后的资源工作流主插件，重点不是把旧代码简单拼一起，而是把职责重新压平。
 
 ## 设计目标
 
@@ -160,7 +160,7 @@
 ## 暂不迁入的内容
 
 - PT 搜索/订阅工作流仍保持在旧桥接插件，后续单独评估
-- `P115StrmHelper` 仍作为 115 落地执行层保留，不直接并入 `Agent云盘资源整合`
+- `P115StrmHelper` 仍作为 115 落地执行层保留，不直接并入 `Agent影视助手`
 
 ## P115StrmHelper 兼容补丁
 
@@ -176,7 +176,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 
 ## 115 轻量直转层
 
-`Agent云盘资源整合` 从 `0.1.17` 开始支持 115 分享链接轻量直转 + 扫码会话登录：
+`Agent影视助手` 从 `0.1.17` 开始支持 115 分享链接轻量直转 + 扫码会话登录：
 
 - 支持生成和轮询 `p115client` 同款 115 扫码二维码，拿到 `UID / CID / SEID / KID` 这类客户端会话后自动写回插件配置
 - 配置扫码得到的 115 会话时，直接用该会话创建 115 客户端并调用 `share_receive`
@@ -199,7 +199,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - 已拆出夸克执行服务
 - 已拆出影巢基础 OpenAPI 服务
 - 已拆出 115 转存执行服务
-- 已补上 Agent云盘资源整合 自己的统一智能入口（assistant route / pick）
+- 已补上 Agent影视助手 自己的统一智能入口（assistant route / pick）
 - 主插件已具备：
   - 夸克健康检查
   - 夸克转存

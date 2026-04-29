@@ -10,7 +10,7 @@
 
 ## 目标插件
 
-### 1. Agent云盘资源整合
+### 1. Agent影视助手
 
 定位：
 
@@ -73,7 +73,7 @@
 
 建议按下面顺序逐步迁移，避免同时重写太多链路：
 
-1. `Agent云盘资源整合` 先完成目录骨架、配置模型和入口设计
+1. `Agent影视助手` 先完成目录骨架、配置模型和入口设计
 2. 先搬入 `QuarkShareSaver` 的稳定执行能力
 3. 再搬入 `HdhiveOpenApi` 的搜索、解锁、转存能力
 4. 接入原生 Agent Tool 与统一 API
@@ -108,19 +108,19 @@
 
 - 仓库快照备份
 - 重构分支创建
-- `Agent云盘资源整合` 目录、配置模型、执行层、统一 API 已落地
-- `Agent云盘资源整合` 已接通影巢搜索/解锁、115 转存、夸克转存、盘搜搜索与直链路由
-- `Agent云盘资源整合` 已接通原生 Agent Tool 和智能体会话式 API
-- `Agent云盘资源整合` 已补齐影巢候选分页与 `详情` / `审查` 按需补主演，飞书新主线不再缺这段交互
-- `Agent云盘资源整合` 已补齐 `P115StrmHelper` 新版 MoviePilot 兼容补丁脚本，115 健康检查已验证 `p115_ready=true`
-- `Agent云盘资源整合` 已新增 115 轻量直转层，分享链接落盘可优先不走 `P115StrmHelper.sharetransferhelper`，失败时再回退旧执行层
+- `Agent影视助手` 目录、配置模型、执行层、统一 API 已落地
+- `Agent影视助手` 已接通影巢搜索/解锁、115 转存、夸克转存、盘搜搜索与直链路由
+- `Agent影视助手` 已接通原生 Agent Tool 和智能体会话式 API
+- `Agent影视助手` 已补齐影巢候选分页与 `详情` / `审查` 按需补主演，飞书新主线不再缺这段交互
+- `Agent影视助手` 已补齐 `P115StrmHelper` 新版 MoviePilot 兼容补丁脚本，115 健康检查已验证 `p115_ready=true`
+- `Agent影视助手` 已新增 115 轻量直转层，分享链接落盘可优先不走 `P115StrmHelper.sharetransferhelper`，失败时再回退旧执行层
 - `FeishuCommandBridgeLong` 保持线上可运行，默认继续走 `legacy` 快路径
-- `FeishuCommandBridgeLong` 已支持切换到 `auto`，把智能入口委托给 `Agent云盘资源整合`
+- `FeishuCommandBridgeLong` 已支持切换到 `auto`，把智能入口委托给 `Agent影视助手`
 - 运行环境已完成双链路验证：`legacy` 日常可用，`auto` 可接手统一资源工作流
 - `AIRecognizerEnhancer` 已进入 `0.1.11` 阶段，可直接复用 MoviePilot 当前 LLM 配置，在 `NameRecognize` 阶段做本地结构化兜底，并支持失败样本维护、样本洞察、精简摘要、直接转建议、批量建议、写入动作、样本出队、样本复查和批量复查；当识别词建议模型退化时会自动切到精确规则兜底
 
 下一步重点：
 
-1. 继续把影巢签到、用户态、配额态能力评估是否并入 `Agent云盘资源整合`
+1. 继续把影巢签到、用户态、配额态能力评估是否并入 `Agent影视助手`
 2. 继续打磨 `AIRecognizerEnhancer` 的提示词、失败样本洞察和识别词建议质量
 3. 继续完善 `AgentResourceOfficer` Skill 与外部智能体的低 token、可恢复、可审计调用链路

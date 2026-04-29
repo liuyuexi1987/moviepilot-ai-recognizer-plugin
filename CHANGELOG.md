@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.27`
+- `AgentResourceOfficer`: `0.2.28`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.28`：插件展示名统一改为 `Agent影视助手`，并同步仓库文档、Skill 文案和兼容插件引用。
 - `AgentResourceOfficer 0.2.27`：优化盘搜和影巢资源列表的下一步提示；默认引导外部智能体先生成计划，再确认执行。
 - `AgentResourceOfficer 0.2.26`：新增云盘写入计划入口；盘搜和影巢资源可用“计划选择 1”先生成 `plan_id`，再确认执行。
 - `AgentResourceOfficer 0.2.25`：修复云盘会话最佳/详情选择安全；盘搜和影巢资源阶段的“最佳片源”只展示详情，不会误选最后一条执行。
@@ -49,7 +50,7 @@
 - `AgentResourceOfficer 0.2.04`：增强智能体偏好引导协议，主响应返回低 token `preference_status`，未初始化时优先提示保存偏好。
 - `AgentResourceOfficer 0.2.03`：新增智能体偏好画像、云盘/PT 分源评分、MP 原生搜索下载订阅推荐工作流，并让写入动作优先生成 `plan_id`。
 - `AgentResourceOfficer 0.2.02`：新增影巢资源搜索/解锁总开关与单资源积分上限，降低外部智能体误解锁高积分资源的风险。
-- `AgentResourceOfficer 0.2.01`：减少状态轮询时的重复工具加载日志，并同步新展示名 `Agent云盘资源整合`、专属图标、外部智能体文档和飞书/Skill 接入口说明。
+- `AgentResourceOfficer 0.2.01`：减少状态轮询时的重复工具加载日志，并同步新展示名 `Agent影视助手`、专属图标、外部智能体文档和飞书/Skill 接入口说明。
 - `AgentResourceOfficer 0.1.119`：新增本插件内置影巢签到日志，可通过 API、飞书或智能体查看最近签到、自动刷新 Cookie 和失败原因。
 - `AgentResourceOfficer 0.1.118`：本插件内置影巢 Cookie 自动刷新：签到兜底失败时可使用账号密码自动登录、保存新 Cookie 并重试。
 - `AgentResourceOfficer 0.1.117`：影巢签到收口到本插件：新增定时签到配置、默认赌狗模式、网页 Cookie 兜底和智能入口签到命令。

@@ -20,7 +20,7 @@ except Exception:
 
 
 class HDHiveOpenApiService:
-    """Reusable HDHive execution layer for Agent云盘资源整合."""
+    """Reusable HDHive execution layer for Agent影视助手."""
 
     _signin_action_name = "checkIn"
     _signin_router_tree = ["", {"children": ["(app)", {"children": ["__PAGE__", {}, None, None]}, None, None]}, None, None, True]

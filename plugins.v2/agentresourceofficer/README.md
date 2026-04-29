@@ -1,4 +1,4 @@
-# Agent云盘资源整合
+# Agent影视助手
 
 这是重构中的新主插件目录，用来承接当前仓库里和“资源搜索、解锁、转存、签到、远程入口”相关的能力。
 
@@ -62,7 +62,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.2.27`
+- 当前版本：`0.2.28`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -104,12 +104,12 @@
 - MP 整理/入库历史支持只读查询：`入库历史`、`入库失败 片名`、`整理成功 片名`，用于判断下载后是否已经落库
 - 智能入口支持自然语言热门探索：`看看最近有什么热门影视`、`热门电影`、`豆瓣热门电影`、`正在热映`、`今日番剧`
 
-这意味着 `Agent云盘资源整合` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
+这意味着 `Agent影视助手` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
 对于登录方式，当前已经不再推荐粘贴网页版 Cookie，而是优先走 `p115client` 同款扫码会话。
 
 ## 飞书入口
 
-`Agent云盘资源整合` 现在可以直接作为飞书入口使用。这个入口默认关闭，开启前建议先关闭旧 `FeishuCommandBridgeLong`，避免同一个飞书机器人被两个插件同时监听。
+`Agent影视助手` 现在可以直接作为飞书入口使用。这个入口默认关闭，开启前建议先关闭旧 `FeishuCommandBridgeLong`，避免同一个飞书机器人被两个插件同时监听。
 
 内置飞书入口只负责收消息、权限校验、回复和二维码图片发送；影巢、盘搜、115、夸克这些资源动作仍统一走 `assistant/route` 与 `assistant/pick`。
 
@@ -276,7 +276,7 @@ GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode?client_type=alipaymini&apike
 GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode/check?uid=...&time=...&sign=...&client_type=alipaymini&apikey=你的 MP API Token
 ```
 
-扫码确认成功后，`Agent云盘资源整合` 会自动保存扫码会话，不需要再手动粘贴 Cookie。
+扫码确认成功后，`Agent影视助手` 会自动保存扫码会话，不需要再手动粘贴 Cookie。
 
 ### 4. 按关键词搜索影巢资源
 
@@ -507,14 +507,14 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 - `POST /assistant/action`
 - `agent_resource_officer_execute_action`
 
-这样外部智能体不只可以“读模板”，还可以直接把 `action_templates` 里的 `name + action_body` 回传给 Agent云盘资源整合 执行，进一步减少上层自定义映射逻辑。
+这样外部智能体不只可以“读模板”，还可以直接把 `action_templates` 里的 `name + action_body` 回传给 Agent影视助手 执行，进一步减少上层自定义映射逻辑。
 
 从 `0.1.37` 开始，还新增了：
 
 - `POST /assistant/actions`
 - `agent_resource_officer_execute_actions`
 
-这样外部智能体可以一次提交多个 `action_body`，让 Agent云盘资源整合 在同一个请求里顺序执行多步动作。默认只返回精简执行摘要，进一步减少多次往返和上层 token 消耗；只有显式需要时才附带每一步原始返回。
+这样外部智能体可以一次提交多个 `action_body`，让 Agent影视助手 在同一个请求里顺序执行多步动作。默认只返回精简执行摘要，进一步减少多次往返和上层 token 消耗；只有显式需要时才附带每一步原始返回。
 
 例如：
 

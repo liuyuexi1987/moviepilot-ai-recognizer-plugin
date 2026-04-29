@@ -112,10 +112,10 @@ class _RequestContextShim:
 
 
 class AgentResourceOfficer(_PluginBase):
-    plugin_name = "Agent云盘资源整合"
+    plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.27"
+    plugin_version = "0.2.28"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -689,10 +689,10 @@ class AgentResourceOfficer(_PluginBase):
         try:
             self.update_config(self._build_config())
         except Exception as exc:
-            logger.warning(f"[Agent云盘资源整合] 影巢自动登录已获取 Cookie，但保存配置失败：{exc}")
+            logger.warning(f"[Agent影视助手] 影巢自动登录已获取 Cookie，但保存配置失败：{exc}")
         return True, cookie_string, login_message or "影巢自动登录成功"
 
-    def _run_hdhive_checkin(self, *, is_gambler: Optional[bool] = None, trigger: str = "Agent云盘资源整合") -> Dict[str, Any]:
+    def _run_hdhive_checkin(self, *, is_gambler: Optional[bool] = None, trigger: str = "Agent影视助手") -> Dict[str, Any]:
         if not self._hdhive_checkin_enabled:
             return self._hdhive_checkin_disabled_response()
         service = self._ensure_hdhive_service()
@@ -835,24 +835,24 @@ class AgentResourceOfficer(_PluginBase):
     def _scheduled_hdhive_checkin(self):
         if not self._enabled or not self._hdhive_checkin_enabled:
             return
-        result = self._run_hdhive_checkin(trigger="Agent云盘资源整合 定时签到")
+        result = self._run_hdhive_checkin(trigger="Agent影视助手 定时签到")
         status = "成功" if result.get("success") else "失败"
-        logger.info(f"[Agent云盘资源整合] 影巢定时签到{status}: {result.get('message')}")
+        logger.info(f"[Agent影视助手] 影巢定时签到{status}: {result.get('message')}")
 
     def get_service(self) -> List[Dict[str, Any]]:
         if not self._enabled or not self._hdhive_checkin_enabled or not self._hdhive_checkin_cron:
             return []
         if CronTrigger is None:
-            logger.warning("[Agent云盘资源整合] apscheduler 不可用，无法注册影巢定时签到")
+            logger.warning("[Agent影视助手] apscheduler 不可用，无法注册影巢定时签到")
             return []
         try:
             trigger = CronTrigger.from_crontab(self._hdhive_checkin_cron)
         except Exception as exc:
-            logger.warning(f"[Agent云盘资源整合] 影巢签到 Cron 配置无效：{self._hdhive_checkin_cron} {exc}")
+            logger.warning(f"[Agent影视助手] 影巢签到 Cron 配置无效：{self._hdhive_checkin_cron} {exc}")
             return []
         return [{
             "id": "agentresourceofficer_hdhive_checkin",
-            "name": "Agent云盘资源整合影巢签到",
+            "name": "Agent影视助手影巢签到",
             "trigger": trigger,
             "func": self._scheduled_hdhive_checkin,
             "kwargs": {},
@@ -1079,19 +1079,19 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/quark/health",
                 "endpoint": self.api_quark_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的夸克配置",
+                "summary": "检查 Agent影视助手 的夸克配置",
             },
             {
                 "path": "/quark/transfer",
                 "endpoint": self.api_quark_transfer,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行夸克分享转存",
+                "summary": "通过 Agent影视助手 执行夸克分享转存",
             },
             {
                 "path": "/hdhive/health",
                 "endpoint": self.api_hdhive_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的影巢配置",
+                "summary": "检查 Agent影视助手 的影巢配置",
             },
             {
                 "path": "/hdhive/account",
@@ -1133,49 +1133,49 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/hdhive/search",
                 "endpoint": self.api_hdhive_search,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行影巢资源搜索",
+                "summary": "通过 Agent影视助手 执行影巢资源搜索",
             },
             {
                 "path": "/hdhive/search_by_keyword",
                 "endpoint": self.api_hdhive_search_by_keyword,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行影巢关键词候选搜索",
+                "summary": "通过 Agent影视助手 执行影巢关键词候选搜索",
             },
             {
                 "path": "/hdhive/unlock",
                 "endpoint": self.api_hdhive_unlock,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行影巢资源解锁",
+                "summary": "通过 Agent影视助手 执行影巢资源解锁",
             },
             {
                 "path": "/hdhive/unlock_and_route",
                 "endpoint": self.api_hdhive_unlock_and_route,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 解锁影巢资源并尝试自动路由到对应网盘执行层",
+                "summary": "通过 Agent影视助手 解锁影巢资源并尝试自动路由到对应网盘执行层",
             },
             {
                 "path": "/p115/health",
                 "endpoint": self.api_p115_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的 115 转存依赖状态",
+                "summary": "检查 Agent影视助手 的 115 转存依赖状态",
             },
             {
                 "path": "/p115/qrcode",
                 "endpoint": self.api_p115_qrcode,
                 "methods": ["GET"],
-                "summary": "获取 Agent云盘资源整合 的 115 扫码登录二维码",
+                "summary": "获取 Agent影视助手 的 115 扫码登录二维码",
             },
             {
                 "path": "/p115/qrcode/check",
                 "endpoint": self.api_p115_qrcode_check,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的 115 扫码登录状态",
+                "summary": "检查 Agent影视助手 的 115 扫码登录状态",
             },
             {
                 "path": "/p115/transfer",
                 "endpoint": self.api_p115_transfer,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行 115 分享转存",
+                "summary": "通过 Agent影视助手 执行 115 分享转存",
             },
             {
                 "path": "/p115/pending",
@@ -1199,13 +1199,13 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/share/route",
                 "endpoint": self.api_share_route,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 自动识别 115 / 夸克分享链接并执行对应转存",
+                "summary": "通过 Agent影视助手 自动识别 115 / 夸克分享链接并执行对应转存",
             },
             {
                 "path": "/feishu/health",
                 "endpoint": self.api_feishu_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 内置飞书入口状态",
+                "summary": "检查 Agent影视助手 内置飞书入口状态",
             },
             {
                 "path": "/assistant/route",
@@ -1229,7 +1229,7 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/assistant/readiness",
                 "endpoint": self.api_assistant_readiness,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 是否已准备好给外部智能体调用",
+                "summary": "检查 Agent影视助手 是否已准备好给外部智能体调用",
             },
             {
                 "path": "/assistant/pulse",
@@ -1473,7 +1473,7 @@ class AgentResourceOfficer(_PluginBase):
                         },
                         "content": [
                             text_line(
-                                "Agent云盘资源整合支持三种接入模式：外部智能体调用 Skill/API、MP 内置智能体调用 Agent Tool、飞书 Channel 直接收命令。",
+                                "Agent影视助手支持三种接入模式：外部智能体调用 Skill/API、MP 内置智能体调用 Agent Tool、飞书 Channel 直接收命令。",
                                 "text-body-2 mb-3",
                             ),
                             text_line(
@@ -1488,10 +1488,10 @@ class AgentResourceOfficer(_PluginBase):
                                 },
                                 "text": (
                                     "把下面这段话直接发给 WorkBuddy、Hermes、OpenClaw（小龙虾）或其他外部智能体：\n"
-                                    "请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，并按 Agent云盘资源整合文档接入我的 MoviePilot。"
+                                    "请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，并按 Agent影视助手文档接入我的 MoviePilot。"
                                     "重点看 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。"
                                     "读完后请在你的环境里创建或安装一个 agent-resource-officer Skill，把这些规则固化下来，不要只依赖普通聊天记忆。"
-                                    "你的职责是理解我的需求、展示候选结果、让我选择编号；资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent云盘资源整合。"
+                                    "你的职责是理解我的需求、展示候选结果、让我选择编号；资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent影视助手。"
                                     "不要自己拼影巢、盘搜、115 或夸克底层接口，也不要在 Skill 或聊天里写入 API Key、Cookie、Token。"
                                 ),
                             },
@@ -2344,7 +2344,7 @@ class AgentResourceOfficer(_PluginBase):
         channel = self._ensure_feishu_channel()
         return {
             "success": True,
-            "message": "Agent云盘资源整合 内置飞书入口状态",
+            "message": "Agent影视助手 内置飞书入口状态",
             "data": {
                 "plugin_version": self.plugin_version,
                 "plugin_enabled": self._enabled,
@@ -2383,7 +2383,7 @@ class AgentResourceOfficer(_PluginBase):
         share_text = self._clean_text(body.get("url") or body.get("share_url") or body.get("share_text"))
         access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        trigger = self._clean_text(body.get("trigger") or "Agent云盘资源整合 API")
+        trigger = self._clean_text(body.get("trigger") or "Agent影视助手 API")
 
         service = self._ensure_quark_service()
         transfer_ok, result, transfer_message = service.transfer_share(
@@ -2455,7 +2455,7 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": "插件未启用"}
 
         is_gambler = self._parse_bool_value(body.get("is_gambler"), self._hdhive_checkin_gambler_mode)
-        return self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent云盘资源整合 API")
+        return self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent影视助手 API")
 
     async def api_hdhive_checkin_history(self, request: Request):
         ok, message = self._check_api_access(request)
@@ -4737,7 +4737,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         items = data.get("items") or []
         if not items:
-            return "当前没有 Agent云盘资源整合 保存计划。"
+            return "当前没有 Agent影视助手 保存计划。"
         lines = [f"已保存计划：{len(items)} 条"]
         for index, item in enumerate(items, 1):
             status = "已执行" if item.get("executed") else "待执行"
@@ -4875,7 +4875,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
         items = data.get("items") or []
         if not items:
-            return "当前没有 Agent云盘资源整合 执行历史。"
+            return "当前没有 Agent影视助手 执行历史。"
         lines = [f"最近执行历史：{len(items)} 条"]
         for index, item in enumerate(items, 1):
             status = "成功" if item.get("success") else "失败"
@@ -6141,7 +6141,7 @@ class AgentResourceOfficer(_PluginBase):
         recovery = dict((data or {}).get("recovery") or {})
         selected = dict((data or {}).get("selected_session") or {})
         lines = [
-            "Agent云盘资源整合 恢复入口",
+            "Agent影视助手 恢复入口",
             f"范围：{(data or {}).get('scope') or 'session'}",
             f"会话：{(data or {}).get('session') or 'default'}",
             f"模式：{recovery.get('mode') or 'unknown'}",
@@ -6542,7 +6542,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         items = data.get("items") or []
         if not items:
-            return "当前没有活跃的 Agent云盘资源整合 会话。"
+            return "当前没有活跃的 Agent影视助手 会话。"
         lines = [
             f"当前活跃会话：{data.get('total') or 0} 个",
             "可直接用 assistant/session 查看单个会话详情，也可按 session_id 直接恢复最近计划。",
@@ -6741,7 +6741,7 @@ class AgentResourceOfficer(_PluginBase):
         return self._execute_pending_p115_share(
             session_id=session_id,
             state=state,
-            trigger="Agent云盘资源整合 115 登录后自动继续",
+            trigger="Agent影视助手 115 登录后自动继续",
         )
 
     def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
@@ -6790,7 +6790,7 @@ class AgentResourceOfficer(_PluginBase):
     def _format_assistant_help_text(self, session: str = "default") -> str:
         session_name = self._clean_text(session) or "default"
         lines = [
-            "Agent云盘资源整合 使用帮助",
+            "Agent影视助手 使用帮助",
             f"当前会话：{session_name}",
             "推荐优先使用原生 Tool：agent_resource_officer_smart_entry 与 agent_resource_officer_smart_pick。",
             "smart_entry 常用示例：",
@@ -7163,7 +7163,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_capabilities_public_data()
         defaults = data.get("defaults") or {}
         lines = [
-            "Agent云盘资源整合 能力说明",
+            "Agent影视助手 能力说明",
             f"版本：{data.get('version')}",
             "推荐上层调用顺序：",
             "1. 先看 capabilities 或 assistant/startup",
@@ -7366,7 +7366,7 @@ class AgentResourceOfficer(_PluginBase):
         hdhive = services.get("hdhive") or {}
         quark = services.get("quark") or {}
         lines = [
-            "Agent云盘资源整合 启动就绪",
+            "Agent影视助手 启动就绪",
             f"版本：{data.get('version')}",
             f"插件：{'已启用' if data.get('enabled') else '未启用'}",
             f"外部智能体：{'可以启动' if data.get('can_start') else '暂不可启动'}",
@@ -7436,7 +7436,7 @@ class AgentResourceOfficer(_PluginBase):
         services = data.get("services") or {}
         recovery = data.get("recovery") or {}
         lines = [
-            "Agent云盘资源整合 轻量启动状态",
+            "Agent影视助手 轻量启动状态",
             f"版本：{data.get('version')}",
             f"插件：{'已启用' if data.get('enabled') else '未启用'}",
             f"115：{'可用' if services.get('p115_ready') else '不可用'}",
@@ -7548,7 +7548,7 @@ class AgentResourceOfficer(_PluginBase):
         before = payload.get("before") or {}
         after = payload.get("after") or before
         lines = [
-            "Agent云盘资源整合 低风险维护",
+            "Agent影视助手 低风险维护",
             f"版本：{payload.get('version')}",
             f"执行：{'是' if payload.get('execute_requested') else '否'}",
             "维护前：过期会话 {stale_sessions}；已执行计划 {saved_plans_executed}；待执行计划 {saved_plans_pending}".format(**before),
@@ -7654,7 +7654,7 @@ class AgentResourceOfficer(_PluginBase):
         checks = (data.get("selfcheck") or {}).get("checks") or {}
         failed = [key for key, value in checks.items() if not value]
         lines = [
-            "Agent云盘资源整合 启动聚合包",
+            "Agent影视助手 启动聚合包",
             f"版本：{data.get('version')}",
             f"可启动：{'是' if data.get('ok') else '否'}",
             f"115：{'可用' if services.get('p115_ready') else '不可用'}；影巢：{'已配' if services.get('hdhive_configured') else '未配'}；夸克：{'已配' if services.get('quark_configured') else '未配'}",
@@ -8409,7 +8409,7 @@ class AgentResourceOfficer(_PluginBase):
         payload = data or self._assistant_request_templates_response_data()
         templates = payload.get("request_templates") or {}
         lines = [
-            "Agent云盘资源整合 请求模板",
+            "Agent影视助手 请求模板",
             f"版本：{payload.get('version')}",
         ]
         detail = payload.get("recommended_recipe_detail") or {}
@@ -8447,7 +8447,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_toolbox_public_data()
         workflows = data.get("workflows") or []
         lines = [
-            "Agent云盘资源整合 轻量工具清单",
+            "Agent影视助手 轻量工具清单",
             f"版本：{data.get('version')}",
             "推荐启动顺序：" + " -> ".join(str(item) for item in (data.get("startup_order") or [])[:5]),
             "常用工作流：" + " / ".join(str(item.get("name")) for item in workflows if item.get("name")),
@@ -8760,7 +8760,7 @@ class AgentResourceOfficer(_PluginBase):
         checks = data.get("checks") or {}
         failed = [key for key, value in checks.items() if not value]
         lines = [
-            "Agent云盘资源整合 协议自检",
+            "Agent影视助手 协议自检",
             f"版本：{data.get('version')}",
             f"结果：{'通过' if data.get('ok') else '失败'}",
         ]
@@ -9863,7 +9863,7 @@ class AgentResourceOfficer(_PluginBase):
                 share_url,
                 access_code=access_code,
                 target_path=target_path or self._quark_default_path,
-                trigger="Agent云盘资源整合 影巢解锁后自动路由",
+                trigger="Agent影视助手 影巢解锁后自动路由",
             )
             route_result["route"].update(
                 {
@@ -9884,7 +9884,7 @@ class AgentResourceOfficer(_PluginBase):
                 url=share_url,
                 access_code=access_code,
                 path=target_path or self._p115_default_path,
-                trigger="Agent云盘资源整合 影巢解锁后自动路由",
+                trigger="Agent影视助手 影巢解锁后自动路由",
             )
             route_result["route"].update(
                 {
@@ -9970,7 +9970,7 @@ class AgentResourceOfficer(_PluginBase):
         target_path: str = "",
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         allowed, disabled = self._ensure_hdhive_resource_enabled()
         if not allowed:
             return str(disabled.get("message") or "影巢资源入口已关闭")
@@ -10009,7 +10009,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_hdhive_pick_session(self, session_id: str, index: int, target_path: str = "", action: str = "") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         allowed, disabled = self._ensure_hdhive_resource_enabled()
         if not allowed:
             return str(disabled.get("message") or "影巢资源入口已关闭")
@@ -10096,7 +10096,7 @@ class AgentResourceOfficer(_PluginBase):
                 share_url,
                 access_code=self._clean_text(access_code),
                 target_path=self._clean_text(target_path) or self._quark_default_path,
-                trigger="Agent云盘资源整合 Agent Tool",
+                trigger="Agent影视助手 Agent Tool",
             )
             if not ok:
                 return f"夸克转存失败：{message}"
@@ -10107,7 +10107,7 @@ class AgentResourceOfficer(_PluginBase):
                 url=share_url,
                 access_code=self._clean_text(access_code),
                 path=self._clean_text(target_path) or self._p115_default_path,
-                trigger="Agent云盘资源整合 Agent Tool",
+                trigger="Agent影视助手 Agent Tool",
             )
             if not ok:
                 return self._format_p115_transfer_failure(
@@ -10135,7 +10135,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_route(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10169,7 +10169,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_pick(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10188,17 +10188,17 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_help(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
         return self._format_assistant_help_text(session=session_name)
 
     async def tool_assistant_capabilities(self, compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_capabilities_compact_data(self._assistant_capabilities_public_data())
             return (
-                f"Agent云盘资源整合：{data.get('version')}；"
+                f"Agent影视助手：{data.get('version')}；"
                 f"工作流 {len(data.get('workflows') or [])} 个；"
                 f"Tool {len(data.get('agent_tools') or [])} 个"
             )
@@ -10206,7 +10206,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_readiness(self, compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_readiness_compact_data(self._assistant_readiness_public_data())
             services = data.get("services") or {}
@@ -10221,7 +10221,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_feishu_health(self, compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         channel = self._ensure_feishu_channel()
         data = {
             "plugin_version": self.plugin_version,
@@ -10242,23 +10242,23 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_pulse(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_pulse_text()
 
     async def tool_assistant_startup(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_startup_text()
 
     async def tool_assistant_maintain(self, execute: bool = False, limit: int = 100) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         data = self._assistant_maintain_public_data(execute=execute, limit=limit)
         return self._format_assistant_maintain_text(data)
 
     async def tool_assistant_toolbox(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_toolbox_text()
 
     async def tool_assistant_request_templates(
@@ -10269,7 +10269,7 @@ class AgentResourceOfficer(_PluginBase):
         include_templates: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         data = self._assistant_request_templates_response_data(
             limit=limit,
             names=names,
@@ -10280,7 +10280,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_selfcheck(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_selfcheck_text()
 
     async def tool_assistant_history(
@@ -10291,7 +10291,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_history_compact_data(
                 self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
@@ -10324,7 +10324,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_action(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10364,7 +10364,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_actions(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10403,7 +10403,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_workflow(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10442,7 +10442,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         method = "DELETE" if reset else "POST" if preferences else "GET"
         result = await self.api_assistant_preferences(
             _JsonRequestShim(
@@ -10470,7 +10470,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_plan_execute(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10497,7 +10497,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_plans_compact_data(
                 self._assistant_plans_public_data(
@@ -10528,7 +10528,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 100,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = self._clear_workflow_plans(
             plan_id=plan_id,
             session=session,
@@ -10551,7 +10551,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_recover(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10571,7 +10571,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "", compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
         if compact:
             state = self._assistant_session_compact_data(self._assistant_session_public_data(session=session_name))
@@ -10594,7 +10594,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_sessions_compact_data(
                 self._assistant_sessions_public_data(kind=kind, has_pending_p115=has_pending_p115, limit=limit)
@@ -10608,7 +10608,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_session_clear(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_name, cache_key = self._normalize_assistant_session_ref(session=session, session_id=session_id)
         existing = self._load_session(cache_key)
         if not existing:
@@ -10628,7 +10628,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 100,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_sessions_clear(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -10647,7 +10647,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_p115_qrcode_start(self, client_type: str = "alipaymini") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         final_client_type = P115TransferService.normalize_qrcode_client_type(client_type or self._p115_client_type)
         qr_ok, data, qr_message = self._ensure_p115_service().create_qrcode_login(client_type=final_client_type)
         if not qr_ok:
@@ -10670,7 +10670,7 @@ class AgentResourceOfficer(_PluginBase):
         client_type: str = "alipaymini",
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         qr_ok, data, qr_message = self._ensure_p115_service().check_qrcode_login(
             uid=self._clean_text(uid),
             time_value=self._clean_text(time_value),
@@ -10702,19 +10702,19 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_p115_status(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_p115_status_summary()
 
     async def tool_p115_pending(self, session: str = "default") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_id = self._session_key_for_tool(session)
         summary = self._pending_p115_summary(self._load_session(session_id))
         return summary or "当前没有待继续的 115 任务。"
 
     async def tool_p115_resume(self, session: str = "default") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_id = self._session_key_for_tool(session)
         state = self._load_session(session_id) or {}
         if not self._pending_p115_summary(state):
@@ -10724,7 +10724,7 @@ class AgentResourceOfficer(_PluginBase):
         resume_ok, resume_message, _ = self._execute_pending_p115_share(
             session_id=session_id,
             state=state,
-            trigger="Agent云盘资源整合 Agent Tool 手动继续 115 任务",
+            trigger="Agent影视助手 Agent Tool 手动继续 115 任务",
         )
         lines = ["已手动继续 115 任务", resume_message]
         if not resume_ok:
@@ -10733,7 +10733,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_p115_cancel(self, session: str = "default") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_id = self._session_key_for_tool(session)
         summary = self._pending_p115_summary(self._load_session(session_id))
         if not summary:
@@ -10832,7 +10832,7 @@ class AgentResourceOfficer(_PluginBase):
         url = self._clean_text(body.get("url") or body.get("share_url"))
         access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        trigger = self._clean_text(body.get("trigger") or "Agent云盘资源整合 API")
+        trigger = self._clean_text(body.get("trigger") or "Agent影视助手 API")
 
         service = self._ensure_p115_service()
         transfer_ok, result, transfer_message = service.transfer_share(
@@ -10910,7 +10910,7 @@ class AgentResourceOfficer(_PluginBase):
         resume_ok, resume_message, resume_data = self._execute_pending_p115_share(
             session_id=session_id,
             state=state,
-            trigger="Agent云盘资源整合 API 手动继续 115 任务",
+            trigger="Agent影视助手 API 手动继续 115 任务",
         )
         message_text = "已手动继续 115 任务"
         if resume_message:
@@ -10988,7 +10988,7 @@ class AgentResourceOfficer(_PluginBase):
         share_url = self._clean_text(body.get("url") or body.get("share_url") or body.get("share_text"))
         access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        trigger = self._clean_text(body.get("trigger") or "Agent云盘资源整合 自动路由")
+        trigger = self._clean_text(body.get("trigger") or "Agent影视助手 自动路由")
 
         if self._is_quark_url(share_url):
             quark_service = self._ensure_quark_service()
@@ -11288,7 +11288,7 @@ class AgentResourceOfficer(_PluginBase):
             }, method="GET")))
         if assistant_action == "hdhive_checkin":
             is_gambler = self._parse_bool_value(parsed.get("is_gambler"), self._hdhive_checkin_gambler_mode)
-            result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent云盘资源整合 智能入口")
+            result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent影视助手 智能入口")
             data = result.get("data") if isinstance(result.get("data"), dict) else {}
             status = data.get("status") or ("签到成功" if result.get("success") else "签到失败")
             mode_text = "赌狗签到" if is_gambler else "普通签到"
@@ -11943,7 +11943,7 @@ class AgentResourceOfficer(_PluginBase):
                     "url": parsed["url"],
                     "access_code": parsed.get("access_code") or "",
                     "path": target_path,
-                    "trigger": "Agent云盘资源整合 智能入口",
+                    "trigger": "Agent影视助手 智能入口",
                     "apikey": self._extract_apikey(request, body),
                 })
             )
@@ -13031,7 +13031,7 @@ class AgentResourceOfficer(_PluginBase):
                 return {"success": False, "message": message}
             return {
                 "success": True,
-                "message": "Agent云盘资源整合 预设工作流目录",
+                "message": "Agent影视助手 预设工作流目录",
                 "data": self._assistant_response_data(session="default", data={
                     "action": "workflow_catalog",
                     "ok": True,
@@ -13377,7 +13377,7 @@ class AgentResourceOfficer(_PluginBase):
                     "url": share_url,
                     "access_code": access_code,
                     "path": final_path,
-                    "trigger": "Agent云盘资源整合 智能入口盘搜选择",
+                    "trigger": "Agent影视助手 智能入口盘搜选择",
                     "apikey": self._extract_apikey(request, body),
                 })
             )
