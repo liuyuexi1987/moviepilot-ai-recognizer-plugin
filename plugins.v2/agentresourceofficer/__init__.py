@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.19"
+    plugin_version = "0.2.20"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -322,6 +322,8 @@ class AgentResourceOfficer(_PluginBase):
         text = str(value or "").strip().lower()
         if text in {"detail", "details", "review", "详情", "审查"}:
             return "detail"
+        if text in {"best", "best_result", "recommend_best", "最佳", "最佳片源", "推荐片源", "推荐下载", "最优"}:
+            return "best"
         if text in {"n", "next", "next_page", "下一页", "下页"} or text.startswith("n "):
             return "next_page"
         return ""
@@ -3604,6 +3606,50 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    async def _assistant_mp_best_result_detail(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        scored = [
+            item for item in preview
+            if isinstance(item, dict) and isinstance(item.get("score"), dict)
+        ]
+        if not scored:
+            return {
+                "success": False,
+                "message": "没有可评分的 MP 搜索结果，请先发送“MP搜索 片名”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_search_best_detail",
+                    "ok": False,
+                    "error_code": "mp_best_result_not_found",
+                }),
+            }
+        best = max(
+            scored,
+            key=lambda item: (
+                self._safe_int((item.get("score") or {}).get("score"), 0),
+                self._safe_int(((item.get("torrent_info") or {}).get("seeders")), 0),
+            ),
+        )
+        choice = self._safe_int(best.get("index"), 0)
+        result = await self._assistant_mp_result_detail(
+            choice=choice,
+            session=session,
+            cache_key=cache_key,
+            preferences=preferences,
+        )
+        if result.get("success"):
+            result["message"] = f"当前评分最高的 PT 候选是 #{choice}\n{result.get('message') or ''}".strip()
+            data = dict(result.get("data") or {})
+            data["action"] = "mp_search_best_detail"
+            data["best_choice"] = choice
+            result["data"] = data
+        return result
+
     async def _assistant_mp_download(self, *, choice: int, session: str, cache_key: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
         preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
         selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
@@ -5403,6 +5449,13 @@ class AgentResourceOfficer(_PluginBase):
         elif kind == "assistant_mp":
             templates.extend([
                 self._assistant_action_template(
+                    name="query_mp_best_result_detail",
+                    description="查看当前 MP 搜索结果里评分最高的 PT 候选详情",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_best_result_detail"},
+                ),
+                self._assistant_action_template(
                     name="query_mp_search_result_detail",
                     description="按编号查看 MP 原生搜索结果详情和 PT 评分理由",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
@@ -6421,6 +6474,7 @@ class AgentResourceOfficer(_PluginBase):
             "2. action=详情",
             "3. action=下一页",
             "MP 搜索结果里，choice=1 会先展示 PT 详情和评分理由；确认下载再发 text=下载1。",
+            "MP 搜索结果里，action=最佳 会展示当前评分最高候选，适合智能体省 token 决策。",
             "说明：同一个 session 会自动串起候选列表、资源列表、115 待任务与扫码续跑。",
             self._format_p115_next_actions(self._p115_status_snapshot()),
         ]
@@ -7347,6 +7401,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query_mp_lifecycle_status",
                 "query_mp_media_detail",
                 "query_mp_search_result_detail",
+                "query_mp_best_result_detail",
                 "query_mp_downloaders",
                 "query_mp_sites",
                 "query_mp_subscribes",
@@ -7527,6 +7582,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_search_detail", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "compact": True},
                 "body": {"workflow": "mp_search_detail", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "compact": True},
+            },
+            "mp_search_best": {
+                "description": "执行 MP 原生搜索并展示当前评分最高的 PT 候选详情；只读，不下载。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "session_cache",
+                "cache_ttl_seconds": 600,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search_best", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_search_best", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
             },
             "mp_search_download_plan": {
                 "description": "MP 原生搜索并选择编号下载；写入动作默认只生成 plan_id，确认后执行。",
@@ -11497,6 +11564,17 @@ class AgentResourceOfficer(_PluginBase):
                 cache_key=cache_key,
                 preferences=prefs,
             ))
+        if name == "query_mp_best_result_detail":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            return await finish(self._assistant_mp_best_result_detail(
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
         if name == "pick_mp_download":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -11923,6 +12001,11 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "choice", "compact"],
                 },
                 {
+                    "name": "mp_search_best",
+                    "description": "执行 MP 原生搜索并查看当前评分最高的 PT 候选详情，只读",
+                    "fields": ["session", "keyword", "compact"],
+                },
+                {
                     "name": "mp_search_download",
                     "description": "执行 MP 原生搜索并按编号下载，默认先生成 plan_id",
                     "fields": ["session", "keyword", "choice", "compact", "dry_run"],
@@ -12096,6 +12179,14 @@ class AgentResourceOfficer(_PluginBase):
             return [
                 base({"name": "start_mp_media_search", "keyword": keyword}),
                 base({"name": "query_mp_search_result_detail", "choice": max(1, choice)}),
+            ], ""
+
+        if workflow_name == "mp_search_best":
+            if not keyword:
+                return [], "mp_search_best 缺少 keyword"
+            return [
+                base({"name": "start_mp_media_search", "keyword": keyword}),
+                base({"name": "query_mp_best_result_detail"}),
             ], ""
 
         if workflow_name == "mp_search_download":
@@ -12593,6 +12684,13 @@ class AgentResourceOfficer(_PluginBase):
             ))
 
         if kind == "assistant_mp":
+            if action == "best":
+                preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+                return finish(await self._assistant_mp_best_result_detail(
+                    session=session,
+                    cache_key=cache_key,
+                    preferences=preferences,
+                ))
             if action == "detail" and index <= 0:
                 return {"success": False, "message": "MP 搜索结果详情需要编号，例如：选择 1。"}
             preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
