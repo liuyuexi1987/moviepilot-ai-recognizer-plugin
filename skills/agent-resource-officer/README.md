@@ -215,6 +215,8 @@ python3 scripts/aro_request.py route --text "下载任务"
 python3 scripts/aro_request.py route --text "下载历史"
 python3 scripts/aro_request.py route --text "下载历史 蜘蛛侠"
 python3 scripts/aro_request.py workflow --workflow mp_download_history --keyword "蜘蛛侠" --limit 10
+python3 scripts/aro_request.py route --text "追踪 蜘蛛侠"
+python3 scripts/aro_request.py workflow --workflow mp_lifecycle_status --keyword "蜘蛛侠" --limit 5
 python3 scripts/aro_request.py route --text "暂停下载 1"
 python3 scripts/aro_request.py route --text "恢复下载 1"
 python3 scripts/aro_request.py route --text "删除下载 1"

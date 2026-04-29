@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.16"
+    plugin_version = "0.2.17"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3853,6 +3853,93 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
+    async def _assistant_mp_lifecycle_status(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 5,
+    ) -> Dict[str, Any]:
+        safe_limit = max(1, min(10, self._safe_int(limit, 5)))
+        channel = self._ensure_feishu_channel()
+        task_result = channel._query_download_tasks(
+            status="all",
+            title=title,
+            hash_value=hash_value,
+            limit=safe_limit,
+        )
+        download_result = channel._query_download_history(
+            title=title,
+            hash_value=hash_value,
+            limit=safe_limit,
+        )
+        transfer_result = channel._query_transfer_history(
+            title=title,
+            status="all",
+            limit=safe_limit,
+        )
+        task_items = task_result.get("items") if isinstance(task_result.get("items"), list) else []
+        download_items = download_result.get("items") if isinstance(download_result.get("items"), list) else []
+        transfer_items = transfer_result.get("items") if isinstance(transfer_result.get("items"), list) else []
+        keyword = title or hash_value or "全部"
+        lines = [f"MP 生命周期追踪：{keyword}"]
+        lines.append(f"活动下载任务：{len(task_items)} 条；下载历史：{download_result.get('total', len(download_items))} 条；整理历史：{transfer_result.get('total', len(transfer_items))} 条")
+        if task_items:
+            lines.append("下载任务：")
+            for item in task_items[:safe_limit]:
+                lines.append(f"{item.get('index')}. {item.get('title')} | {item.get('progress') or '-'} | {item.get('state') or '-'} | Hash:{item.get('hash_short') or '-'}")
+        if download_items:
+            lines.append("下载历史：")
+            for item in download_items[:safe_limit]:
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) | {item.get('date') or '-'} | {item.get('transfer_status_text') or '-'} | Hash:{item.get('download_hash_short') or '-'}")
+        if transfer_items:
+            lines.append("整理/入库历史：")
+            for item in transfer_items[:safe_limit]:
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) | {item.get('status_text') or '-'} | {item.get('date') or '-'}")
+        if not task_items and not download_items and not transfer_items:
+            lines.append("未找到相关任务、下载历史或整理历史。")
+        lines.append("说明：这是只读聚合查询，用于判断资源处于搜索后、下载中、已下载还是已落库阶段。")
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_lifecycle_status",
+            "stage": "lifecycle_status",
+            "keyword": keyword,
+            "items": {
+                "download_tasks": task_items,
+                "download_history": download_items,
+                "transfer_history": transfer_items,
+            },
+            "target_path": "",
+        })
+        ok = bool(task_result.get("success")) and bool(download_result.get("success")) and bool(transfer_result.get("success"))
+        return {
+            "success": ok,
+            "message": "\n".join(lines),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_lifecycle_status",
+                "ok": ok,
+                "source_type": "moviepilot_lifecycle_status",
+                "title": title,
+                "hash": hash_value,
+                "download_tasks": {
+                    "ok": bool(task_result.get("success")),
+                    "total": self._safe_int(task_result.get("total"), len(task_items)),
+                    "items": task_items,
+                },
+                "download_history": {
+                    "ok": bool(download_result.get("success")),
+                    "total": self._safe_int(download_result.get("total"), len(download_items)),
+                    "items": download_items,
+                },
+                "transfer_history": {
+                    "ok": bool(transfer_result.get("success")),
+                    "total": self._safe_int(transfer_result.get("total"), len(transfer_items)),
+                    "items": transfer_items,
+                },
+            }),
+        }
+
     async def _assistant_mp_recommendations(
         self,
         *,
@@ -5104,6 +5191,13 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "name": "query_mp_download_history", "limit": 10},
                 ),
                 self._assistant_action_template(
+                    name="query_mp_lifecycle_status",
+                    description="聚合查看 MP 下载任务、下载历史和整理/入库历史",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_lifecycle_status", "keyword": "<关键词>", "limit": 5},
+                ),
+                self._assistant_action_template(
                     name="query_mp_downloaders",
                     description="查看 MP 下载器配置摘要",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
@@ -6185,8 +6279,9 @@ class AgentResourceOfficer(_PluginBase):
             "8. text=下载任务；暂停下载 1 / 恢复下载 1 / 删除下载 1 会先生成计划",
             "9. text=站点状态；下载器状态 用于排查 PT 搜索/下载环境",
             "10. text=下载历史 片名 用于判断资源是否提交过下载并进入整理流程",
-            "11. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
-            "12. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
+            "11. text=追踪 片名 一次查看下载任务、下载历史和入库历史",
+            "12. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
+            "13. text=入库历史；入库失败 片名 用于判断下载后是否已经整理落库",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
@@ -6233,6 +6328,7 @@ class AgentResourceOfficer(_PluginBase):
                     "hdhive_checkin_history",
                     "mp_download_tasks",
                     "mp_download_history",
+                    "mp_lifecycle_status",
                     "mp_download_control",
                     "mp_downloaders",
                     "mp_sites",
@@ -7112,6 +7208,7 @@ class AgentResourceOfficer(_PluginBase):
                 "execute_session_latest_plan",
                 "query_mp_download_tasks",
                 "query_mp_download_history",
+                "query_mp_lifecycle_status",
                 "query_mp_downloaders",
                 "query_mp_sites",
                 "query_mp_subscribes",
@@ -7291,6 +7388,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_download_history", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
                 "body": {"workflow": "mp_download_history", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
+            },
+            "mp_lifecycle_status": {
+                "description": "一次查询 MP 下载任务、下载历史和整理/入库历史，适合追踪资源当前卡在哪一步。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_lifecycle_status", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_lifecycle_status", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
             },
             "mp_transfer_history": {
                 "description": "查询 MP 最近整理/入库历史，判断下载后是否已经落库；只返回摘要。",
@@ -8336,6 +8445,17 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
+            "追踪",
+            "资源追踪",
+            "下载追踪",
+            "媒体状态",
+            "落库状态",
+            "lifecyclestatus",
+        }:
+            options["action"] = "mp_lifecycle_status"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "下载器",
             "下载器状态",
             "下载器列表",
@@ -8428,6 +8548,13 @@ class AgentResourceOfficer(_PluginBase):
                 for prefix in ["下载历史", "下载记录", "最近下载", "历史下载"]:
                     if raw.startswith(prefix + " "):
                         options["action"] = "mp_download_history"
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
+            if not options.get("action"):
+                for prefix in ["资源追踪", "下载追踪", "媒体状态", "落库状态", "追踪"]:
+                    if raw.startswith(prefix + " "):
+                        options["action"] = "mp_lifecycle_status"
                         options["mode"] = ""
                         options["keyword"] = raw[len(prefix):].strip()
                         break
@@ -10500,6 +10627,14 @@ class AgentResourceOfficer(_PluginBase):
                 limit=self._safe_int(body.get("limit"), 10),
                 page=self._safe_int(body.get("page"), 1),
             ))
+        if assistant_action == "mp_lifecycle_status":
+            return finish(await self._assistant_mp_lifecycle_status(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value") or parsed.get("hash")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
         if assistant_action == "mp_download_control":
             control = self._clean_text(parsed.get("download_control") or body.get("download_control") or body.get("control") or body.get("operation")).lower()
             control_aliases = {
@@ -11178,6 +11313,18 @@ class AgentResourceOfficer(_PluginBase):
                 limit=self._safe_int(body.get("limit"), 10),
                 page=self._safe_int(body.get("page"), 1),
             ))
+        if name == "query_mp_lifecycle_status":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_lifecycle_status(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
         if name == "query_mp_downloaders":
             session_name, _ = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -11558,6 +11705,11 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "hash", "limit", "page", "compact"],
                 },
                 {
+                    "name": "mp_lifecycle_status",
+                    "description": "聚合查询 MP 下载任务、下载历史和整理/入库历史，只读",
+                    "fields": ["session", "keyword", "hash", "limit", "compact"],
+                },
+                {
                     "name": "mp_downloaders",
                     "description": "查询 MP 下载器配置摘要，不返回敏感字段",
                     "fields": ["session", "compact"],
@@ -11720,6 +11872,14 @@ class AgentResourceOfficer(_PluginBase):
                 "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
                 "limit": self._safe_int(body.get("limit"), 10),
                 "page": self._safe_int(body.get("page"), 1),
+            })], ""
+
+        if workflow_name == "mp_lifecycle_status":
+            return [base({
+                "name": "query_mp_lifecycle_status",
+                "keyword": keyword,
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "limit": self._safe_int(body.get("limit"), 5),
             })], ""
 
         if workflow_name == "mp_downloaders":
