@@ -59,7 +59,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.2.01`
+- 当前版本：`0.2.02`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -70,6 +70,7 @@
 - 智能入口新增 `115帮助`，状态回执会附带下一步建议
 - 待继续的 115 任务已支持持久化保存、状态摘要、手动继续、手动取消，并已下沉为原生 Agent Tool 和标准 API
 - 影巢候选已支持新主线分页、`详情` / `审查` 按需补主演，飞书切 `auto` 时也能复用
+- 影巢资源搜索 / 解锁 / 转存已加入独立总开关；单资源积分上限默认 20 分，用于拦截高分或积分未知的解锁请求，降低外部智能体一步到位时的误消费风险
 - 影巢签到已收口到本插件：支持普通 / 赌狗签到、OpenAPI Premium 接口、网页 Cookie 兜底和定时任务
 - 影巢网页 Cookie 失效时可由插件使用账号密码自动登录刷新，并自动重试签到
 - 影巢签到日志已内置，可通过 `GET /hdhive/checkin/history` 或智能入口 `签到日志` 查看最近记录
@@ -261,10 +262,13 @@ POST /api/v1/plugin/AgentResourceOfficer/hdhive/search_by_keyword
 
 ### 5. 解锁影巢资源后自动落盘
 
+推荐通过 `assistant/route` + `assistant/pick` 选择资源；这样插件会带着资源积分信息做上限校验。默认超过 20 分会被拦截，需要用户确认后手动调高上限或临时设为 `0`。若直接调用 slug 解锁接口，请一并传入资源的 `unlock_points`。
+
 ```json
 POST /api/v1/plugin/AgentResourceOfficer/hdhive/unlock_and_route
 {
   "slug": "资源 slug",
+  "unlock_points": 4,
   "path": "/待整理",
   "apikey": "你的 MP API Token"
 }

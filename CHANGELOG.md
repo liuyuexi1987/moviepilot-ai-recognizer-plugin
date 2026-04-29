@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.01`
+- `AgentResourceOfficer`: `0.2.02`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.02`：新增影巢资源搜索/解锁总开关与单资源积分上限，降低外部智能体误解锁高积分资源的风险。
 - `AgentResourceOfficer 0.2.01`：减少状态轮询时的重复工具加载日志，并同步新展示名 `Agent云盘资源整合`、专属图标、外部智能体文档和飞书/Skill 接入口说明。
 - `AgentResourceOfficer 0.1.119`：新增本插件内置影巢签到日志，可通过 API、飞书或智能体查看最近签到、自动刷新 Cookie 和失败原因。
 - `AgentResourceOfficer 0.1.118`：本插件内置影巢 Cookie 自动刷新：签到兜底失败时可使用账号密码自动登录、保存新 Cookie 并重试。

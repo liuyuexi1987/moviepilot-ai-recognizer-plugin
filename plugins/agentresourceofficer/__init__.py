@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent云盘资源整合"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.01"
+    plugin_version = "0.2.02"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -137,6 +137,8 @@ class AgentResourceOfficer(_PluginBase):
     _hdhive_timeout = 30
     _hdhive_default_path = "/待整理"
     _hdhive_candidate_page_size = 10
+    _hdhive_resource_enabled = True
+    _hdhive_max_unlock_points = 20
     _hdhive_checkin_enabled = False
     _hdhive_checkin_gambler_mode = False
     _hdhive_checkin_cron = "0 8 * * *"
@@ -267,6 +269,8 @@ class AgentResourceOfficer(_PluginBase):
         self._hdhive_timeout = self._safe_int(config.get("hdhive_timeout"), 30)
         self._hdhive_default_path = self._normalize_path(config.get("hdhive_default_path") or "/待整理")
         self._hdhive_candidate_page_size = max(5, min(20, self._safe_int(config.get("hdhive_candidate_page_size"), 10)))
+        self._hdhive_resource_enabled = bool(config.get("hdhive_resource_enabled", True))
+        self._hdhive_max_unlock_points = max(0, self._safe_int(config.get("hdhive_max_unlock_points"), 20))
         self._hdhive_checkin_enabled = bool(config.get("hdhive_checkin_enabled", False))
         self._hdhive_checkin_gambler_mode = bool(config.get("hdhive_checkin_gambler_mode", False))
         self._hdhive_checkin_cron = self._clean_text(config.get("hdhive_checkin_cron") or "0 8 * * *")
@@ -543,6 +547,8 @@ class AgentResourceOfficer(_PluginBase):
         return True, cookie_string, login_message or "影巢自动登录成功"
 
     def _run_hdhive_checkin(self, *, is_gambler: Optional[bool] = None, trigger: str = "Agent云盘资源整合") -> Dict[str, Any]:
+        if not self._hdhive_checkin_enabled:
+            return self._hdhive_checkin_disabled_response()
         service = self._ensure_hdhive_service()
         final_gambler_mode = self._hdhive_checkin_gambler_mode if is_gambler is None else bool(is_gambler)
         checkin_ok, result, checkin_message = service.perform_checkin(
@@ -722,6 +728,8 @@ class AgentResourceOfficer(_PluginBase):
             "hdhive_timeout": self._hdhive_timeout,
             "hdhive_default_path": self._hdhive_default_path,
             "hdhive_candidate_page_size": self._hdhive_candidate_page_size,
+            "hdhive_resource_enabled": self._hdhive_resource_enabled,
+            "hdhive_max_unlock_points": self._hdhive_max_unlock_points,
             "hdhive_checkin_enabled": self._hdhive_checkin_enabled,
             "hdhive_checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
             "hdhive_checkin_cron": self._hdhive_checkin_cron,
@@ -1223,6 +1231,9 @@ class AgentResourceOfficer(_PluginBase):
 
         return (
             f"影巢账号：{'可用' if account_ok else '异常'}"
+            f"\n资源入口：{'开启' if self._hdhive_resource_enabled else '关闭'}"
+            f"\n单资源积分上限：{self._hdhive_max_unlock_points if self._hdhive_max_unlock_points > 0 else '不限制'}"
+            f"\n签到入口：{'开启' if self._hdhive_checkin_enabled else '关闭'}"
             f"\n昵称：{account_fields.get('nickname', '—')}"
             f"\n积分：{account_fields.get('points', '—')}"
             f"\nVIP：{'是' if account_fields.get('is_vip') else '否'}"
@@ -1542,6 +1553,138 @@ class AgentResourceOfficer(_PluginBase):
                                         "props": {
                                             "type": "info",
                                             "variant": "tonal",
+                                            "text": "影巢用于资源搜索、解锁、配额查询和签到。资源入口关闭后，智能体和飞书都不会执行影巢搜索、解锁或转存；单资源积分上限默认 20 分，超过就拦截提醒，填 0 表示不限制。",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VTextarea",
+                                        "props": {
+                                            "model": "hdhive_api_key",
+                                            "label": "影巢 API Key",
+                                            "rows": 2,
+                                            "placeholder": "填写影巢 OpenAPI 的 API Key",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "hdhive_resource_enabled",
+                                            "label": "启用影巢资源搜索/解锁",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_max_unlock_points",
+                                            "label": "单资源积分上限",
+                                            "type": "number",
+                                            "placeholder": "20；填 0 不限制",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "warning",
+                                            "variant": "tonal",
+                                            "text": "建议保留积分上限，避免智能体一步到位时误选高积分资源。",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 4},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_base_url",
+                                            "label": "影巢 Base URL",
+                                            "placeholder": "https://hdhive.com",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 2},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_timeout",
+                                            "label": "影巢超时(秒)",
+                                            "type": "number",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_default_path",
+                                            "label": "影巢默认目录",
+                                            "placeholder": "/待整理",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "hdhive_candidate_page_size",
+                                            "label": "候选页大小",
+                                            "type": "number",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
                                             "text": "影巢签到支持 OpenAPI 与网页兜底两种方式。OpenAPI 签到需要 Premium；普通用户可填写网页 Cookie，或填写账号密码让插件在 Cookie 失效时自动刷新。",
                                         },
                                     }
@@ -1555,7 +1698,7 @@ class AgentResourceOfficer(_PluginBase):
                                         "component": "VSwitch",
                                         "props": {
                                             "model": "hdhive_checkin_enabled",
-                                            "label": "启用影巢定时签到",
+                                            "label": "启用影巢签到",
                                         },
                                     }
                                 ],
@@ -1772,101 +1915,6 @@ class AgentResourceOfficer(_PluginBase):
                                         "props": {
                                             "model": "quark_auto_import_cookiecloud",
                                             "label": "允许自动刷新 Cookie",
-                                        },
-                                    }
-                                ],
-                            },
-                        ],
-                    },
-                    {
-                        "component": "VRow",
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12},
-                                "content": [
-                                    {
-                                        "component": "VTextarea",
-                                        "props": {
-                                            "model": "hdhive_api_key",
-                                            "label": "影巢 API Key",
-                                            "rows": 2,
-                                            "placeholder": "填写影巢 OpenAPI 的 API Key",
-                                        },
-                                    }
-                                ],
-                            }
-                        ],
-                    },
-                    {
-                        "component": "VRow",
-                        "content": [
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12},
-                                "content": [
-                                    {
-                                        "component": "VAlert",
-                                        "props": {
-                                            "type": "info",
-                                            "variant": "tonal",
-                                            "text": "影巢用于资源搜索、解锁和签到。填写 OpenAPI Key 后可查询账号、配额和资源；搜索结果默认转存到影巢默认目录。",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 4},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "hdhive_base_url",
-                                            "label": "影巢 Base URL",
-                                            "placeholder": "https://hdhive.com",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 2},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "hdhive_timeout",
-                                            "label": "影巢超时(秒)",
-                                            "type": "number",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 3},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "hdhive_default_path",
-                                            "label": "影巢默认目录",
-                                            "placeholder": "/待整理",
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "component": "VCol",
-                                "props": {"cols": 12, "md": 3},
-                                "content": [
-                                    {
-                                        "component": "VTextField",
-                                        "props": {
-                                            "model": "hdhive_candidate_page_size",
-                                            "label": "候选页大小",
-                                            "type": "number",
                                         },
                                     }
                                 ],
@@ -2212,6 +2260,8 @@ class AgentResourceOfficer(_PluginBase):
                 "hdhive_ping_ok": ping_ok,
                 "base_url": self._hdhive_base_url,
                 "default_target_path": self._hdhive_default_path,
+                "resource_enabled": self._hdhive_resource_enabled,
+                "max_unlock_points": self._hdhive_max_unlock_points,
                 "checkin_enabled": self._hdhive_checkin_enabled,
                 "checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
                 "checkin_cron": self._hdhive_checkin_cron,
@@ -2313,6 +2363,9 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return disabled
 
         media_type = self._clean_text(body.get("media_type") or body.get("type") or "movie").lower()
         tmdb_id = self._clean_text(body.get("tmdb_id"))
@@ -2329,6 +2382,9 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return disabled
 
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
         media_type = self._clean_text(body.get("media_type") or body.get("type") or "movie").lower()
@@ -2355,8 +2411,14 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return disabled
 
         slug = self._clean_text(body.get("slug"))
+        points_ok, points_message, points_data = self._check_hdhive_unlock_points_limit(body)
+        if not points_ok:
+            return {"success": False, "message": points_message, "data": {"resource_guard": points_data}}
         service = self._ensure_hdhive_service()
         unlock_ok, result, unlock_message = service.unlock_resource(slug)
         if not unlock_ok:
@@ -2502,6 +2564,73 @@ class AgentResourceOfficer(_PluginBase):
                 parts.append(message)
             lines.append(" | ".join(part for part in parts if part))
         return "\n".join(lines)
+
+    def _hdhive_resource_disabled_response(self) -> Dict[str, Any]:
+        return {
+            "success": False,
+            "message": "影巢资源入口已关闭：当前不会执行影巢搜索、解锁或转存。可在插件设置中开启“影巢资源搜索/解锁”。",
+            "data": {
+                "provider": "hdhive",
+                "resource_enabled": False,
+                "error_code": "hdhive_resource_disabled",
+            },
+        }
+
+    def _ensure_hdhive_resource_enabled(self) -> Tuple[bool, Dict[str, Any]]:
+        if self._hdhive_resource_enabled:
+            return True, {}
+        return False, self._hdhive_resource_disabled_response()
+
+    def _hdhive_checkin_disabled_response(self) -> Dict[str, Any]:
+        return {
+            "success": False,
+            "message": "影巢签到入口已关闭：如需执行签到，请先在插件设置中开启“影巢签到”。",
+            "data": {
+                "provider": "hdhive",
+                "checkin_enabled": False,
+                "error_code": "hdhive_checkin_disabled",
+            },
+        }
+
+    @staticmethod
+    def _resource_points_value(item: Optional[Dict[str, Any]]) -> Optional[int]:
+        if not item:
+            return None
+        raw = item.get("unlock_points")
+        if raw is None:
+            raw = item.get("cost")
+        if raw is None:
+            raw = item.get("points")
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        if text.lower() == "free" or text == "免费":
+            return 0
+        match = re.search(r"-?\d+", text)
+        if not match:
+            return None
+        try:
+            return int(match.group(0))
+        except Exception:
+            return None
+
+    def _check_hdhive_unlock_points_limit(self, resource: Optional[Dict[str, Any]]) -> Tuple[bool, str, Dict[str, Any]]:
+        limit = max(0, self._safe_int(self._hdhive_max_unlock_points, 20))
+        if limit <= 0:
+            return True, "", {"limit": limit, "points": None, "limited": False}
+        points = self._resource_points_value(resource)
+        title = self._clean_text((resource or {}).get("title") or (resource or {}).get("matched_title") or "该资源")
+        if points is None:
+            return False, (
+                f"已阻止影巢解锁：{title} 的积分消耗未知，当前单资源积分上限为 {limit} 分。"
+                "如确认要解锁，请把上限临时设为 0。"
+            ), {"limit": limit, "points": None, "limited": True, "reason": "unknown_points"}
+        if points > limit:
+            return False, (
+                f"已阻止影巢解锁：{title} 需要 {points} 分，超过当前单资源积分上限 {limit} 分。"
+                "如确认要解锁，请提高上限或临时设为 0。"
+            ), {"limit": limit, "points": points, "limited": True, "reason": "points_over_limit"}
+        return True, "", {"limit": limit, "points": points, "limited": False}
 
     def _persist_workflow_plans(self) -> None:
         try:
@@ -4430,6 +4559,8 @@ class AgentResourceOfficer(_PluginBase):
                 "quark_path": self._quark_default_path,
                 "p115_client_type": self._p115_client_type,
                 "hdhive_candidate_page_size": self._hdhive_candidate_page_size,
+                "hdhive_resource_enabled": self._hdhive_resource_enabled,
+                "hdhive_max_unlock_points": self._hdhive_max_unlock_points,
                 "hdhive_checkin_enabled": self._hdhive_checkin_enabled,
                 "hdhive_checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
             },
@@ -4711,6 +4842,7 @@ class AgentResourceOfficer(_PluginBase):
             f"- 115：{defaults.get('p115_path')}",
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
+            f"影巢资源入口：{'开启' if defaults.get('hdhive_resource_enabled') else '关闭'}；单资源积分上限：{defaults.get('hdhive_max_unlock_points')} 分（0 表示不限制）",
             "启动聚合包：assistant/startup，一次返回 pulse、自检、核心工具、端点和恢复建议，适合外部智能体开场调用",
             "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
             "轻量工具清单：assistant/toolbox，返回推荐工具、端点、工作流和命令示例，适合外部智能体初始化系统提示",
@@ -4739,6 +4871,8 @@ class AgentResourceOfficer(_PluginBase):
         warnings: List[str] = []
         if not self._enabled:
             warnings.append("插件未启用")
+        if not self._hdhive_resource_enabled:
+            warnings.append("影巢资源搜索/解锁已关闭，外部智能体应改用 MP 搜索或盘搜")
         if not self._hdhive_api_key:
             warnings.append("影巢 API Key 未配置，影巢相关工作流不可用")
         if not p115_status.get("ready"):
@@ -6755,7 +6889,18 @@ class AgentResourceOfficer(_PluginBase):
             lines.append(f"目录：{route.get('target_path')}")
         return "\n".join(lines)
 
-    async def _unlock_and_route(self, slug: str, target_path: str = "") -> Tuple[bool, Dict[str, Any], str]:
+    async def _unlock_and_route(
+        self,
+        slug: str,
+        target_path: str = "",
+        resource: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, Dict[str, Any], str]:
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return False, disabled.get("data") or {}, disabled.get("message") or "影巢资源入口已关闭"
+        points_ok, points_message, points_data = self._check_hdhive_unlock_points_limit(resource)
+        if not points_ok:
+            return False, {"resource_guard": points_data, "resource": resource or {}}, points_message
         service = self._ensure_hdhive_service()
         unlock_ok, result, unlock_message = service.unlock_resource(slug)
         if not unlock_ok:
@@ -6905,6 +7050,9 @@ class AgentResourceOfficer(_PluginBase):
     ) -> str:
         if not self._enabled:
             return "Agent云盘资源整合 插件未启用"
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return str(disabled.get("message") or "影巢资源入口已关闭")
 
         service = self._ensure_hdhive_service()
         search_ok, result, search_message = await service.resolve_candidates_by_keyword(
@@ -6941,6 +7089,9 @@ class AgentResourceOfficer(_PluginBase):
     async def tool_hdhive_pick_session(self, session_id: str, index: int, target_path: str = "", action: str = "") -> str:
         if not self._enabled:
             return "Agent云盘资源整合 插件未启用"
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return str(disabled.get("message") or "影巢资源入口已关闭")
         session = self._load_session(self._clean_text(session_id))
         if not session:
             return "会话不存在或已过期"
@@ -6997,6 +7148,7 @@ class AgentResourceOfficer(_PluginBase):
             route_ok, route_result, route_message = await self._unlock_and_route(
                 self._clean_text(resource.get("slug")),
                 target_path=self._clean_text(target_path) or session.get("target_path") or "",
+                resource=resource,
             )
             if not route_ok:
                 return f"资源处理失败：{route_message}"
@@ -7850,10 +8002,13 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return disabled
 
         slug = self._clean_text(body.get("slug"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        route_ok, route_result, route_message = await self._unlock_and_route(slug, target_path=target_path)
+        route_ok, route_result, route_message = await self._unlock_and_route(slug, target_path=target_path, resource=body)
         if not route_ok:
             return {"success": False, "message": route_message, "data": route_result}
         return {"success": True, "message": route_message, "data": route_result}
@@ -8358,6 +8513,19 @@ class AgentResourceOfficer(_PluginBase):
                     "action": "pansou_search",
                     "ok": True,
                     "items": items,
+                }),
+            })
+
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return finish({
+                "success": False,
+                "message": disabled.get("message") or "影巢资源入口已关闭",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "hdhive_candidates",
+                    "ok": False,
+                    "error_code": "hdhive_resource_disabled",
+                    "resource_enabled": False,
                 }),
             })
 
@@ -9060,6 +9228,18 @@ class AgentResourceOfficer(_PluginBase):
             })
 
         if kind == "assistant_hdhive":
+            allowed, disabled = self._ensure_hdhive_resource_enabled()
+            if not allowed:
+                return finish({
+                    "success": False,
+                    "message": disabled.get("message") or "影巢资源入口已关闭",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "hdhive_pick",
+                        "ok": False,
+                        "error_code": "hdhive_resource_disabled",
+                        "resource_enabled": False,
+                    }),
+                })
             stage = str(state.get("stage") or "").strip()
             service = self._ensure_hdhive_service()
             final_path = target_path or state.get("target_path") or self._hdhive_default_path
@@ -9136,6 +9316,7 @@ class AgentResourceOfficer(_PluginBase):
             route_ok, route_result, route_message = await self._unlock_and_route(
                 self._clean_text(resource.get("slug")),
                 target_path=final_path,
+                resource=resource,
             )
             if not route_ok:
                 route = dict((route_result or {}).get("route") or {})
@@ -9705,6 +9886,9 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return disabled
 
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
         media_type = self._clean_text(body.get("media_type") or body.get("type") or "movie").lower()
@@ -9756,6 +9940,9 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": message}
         if not self._enabled:
             return {"success": False, "message": "插件未启用"}
+        allowed, disabled = self._ensure_hdhive_resource_enabled()
+        if not allowed:
+            return disabled
 
         session_id = self._clean_text(body.get("session_id"))
         index = self._safe_int(
@@ -9861,6 +10048,7 @@ class AgentResourceOfficer(_PluginBase):
             route_ok, route_result, route_message = await self._unlock_and_route(
                 slug,
                 target_path=target_path or session.get("target_path") or "",
+                resource=resource,
             )
             if not route_ok:
                 return {"success": False, "message": route_message, "data": route_result}

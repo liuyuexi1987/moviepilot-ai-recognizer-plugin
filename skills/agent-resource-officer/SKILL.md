@@ -325,6 +325,7 @@ python3 scripts/aro_request.py maintain --execute
 
 - Do not call HDHive, 115, Quark, or PanSou raw APIs directly when `AgentResourceOfficer` can handle the workflow.
 - Do not unlock paid resources or execute write-side-effect calls without explicit confirmation.
+- Respect `hdhive_resource_enabled` and `hdhive_max_unlock_points` returned by readiness/capabilities. The default point limit is 20. If a HDHive resource is above the limit or the plugin cannot confirm its points, tell the user the exact point cost/risk and ask them to raise the limit or set it to 0 before retrying. Do not bypass the guardrail.
 - Prefer `include_templates=false` for low token startup.
 - Use full templates only when parameters are unclear.
 - Keep user-facing output short: show options, ask for a number, report result.
