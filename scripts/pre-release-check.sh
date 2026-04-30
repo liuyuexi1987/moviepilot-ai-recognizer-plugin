@@ -240,13 +240,9 @@ required_draft_release_fragments = [
     "dry_run",
 ]
 missing_workflow_fragments = []
-for workflow_name, workflow_text in (
-    ("ci.yml", ci_workflow),
-    ("draft-release.yml", draft_release_workflow),
-):
-    for fragment in required_ci_fragments:
-        if fragment not in workflow_text:
-            missing_workflow_fragments.append(f"{workflow_name}: {fragment}")
+for fragment in required_ci_fragments:
+    if fragment not in ci_workflow:
+        missing_workflow_fragments.append(f"ci.yml: {fragment}")
 for fragment in required_draft_release_fragments:
     if fragment not in draft_release_workflow:
         missing_workflow_fragments.append(f"draft-release.yml: {fragment}")
