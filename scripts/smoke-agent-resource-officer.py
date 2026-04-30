@@ -175,6 +175,38 @@ def main() -> int:
             str(external_agent_templates.get("message") or ""),
         )
 
+        mp_pt_templates = request_templates(base_url, api_key, "mp_pt")
+        mp_pt_templates_data = data(mp_pt_templates)
+        mp_pt_names = mp_pt_templates_data.get("selected_names") or []
+        assert_ok(
+            "mp_pt_request_templates",
+            bool(
+                mp_pt_templates.get("success")
+                and mp_pt_templates_data.get("ok")
+                and mp_pt_templates_data.get("selected_recipe") == "mp_pt_mainline"
+                and "mp_search" in mp_pt_names
+                and "mp_search_download_plan" in mp_pt_names
+                and "saved_plan_execute" in mp_pt_names
+            ),
+            str(mp_pt_templates.get("message") or ""),
+        )
+
+        mp_recommend_templates = request_templates(base_url, api_key, "recommend")
+        mp_recommend_templates_data = data(mp_recommend_templates)
+        mp_recommend_names = mp_recommend_templates_data.get("selected_names") or []
+        assert_ok(
+            "mp_recommend_request_templates",
+            bool(
+                mp_recommend_templates.get("success")
+                and mp_recommend_templates_data.get("ok")
+                and mp_recommend_templates_data.get("selected_recipe") == "mp_recommendation"
+                and "mp_recommend" in mp_recommend_names
+                and "mp_recommend_search" in mp_recommend_names
+                and "mp_search_download_plan" in mp_recommend_names
+            ),
+            str(mp_recommend_templates.get("message") or ""),
+        )
+
         status = route(base_url, api_key, sessions[0], "115状态")
         assert_route_action("route_115_status", status, "p115_status")
 

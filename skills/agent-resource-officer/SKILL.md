@@ -228,11 +228,15 @@ Supported recipe names and short aliases:
 - `plan` -> `plan_then_confirm`
 - `maintain` -> `maintenance_cycle`
 - `continue` -> `continue_existing_session`
+- `mp_pt` / `mp` / `pt` -> `mp_pt_mainline`
+- `recommend` / `热门` / `推荐` -> `mp_recommendation`
 
 Use:
 
 ```bash
 python3 scripts/aro_request.py templates --recipe plan --policy-only
+python3 scripts/aro_request.py templates --recipe mp_pt --policy-only
+python3 scripts/aro_request.py templates --recipe recommend --policy-only
 ```
 
 The response includes:

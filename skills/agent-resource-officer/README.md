@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.19`
+当前 helper 版本：`0.1.20`
 
 公开仓库：
 
@@ -70,6 +70,8 @@ python3 scripts/aro_request.py config-check
 python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py startup
 python3 scripts/aro_request.py templates --recipe bootstrap
+python3 scripts/aro_request.py templates --recipe mp_pt
+python3 scripts/aro_request.py templates --recipe recommend
 python3 scripts/aro_request.py preferences --session agent:demo
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
@@ -89,6 +91,8 @@ python3 scripts/aro_request.py pick --choice 1
 `commands` 会输出 helper 命令目录、是否联网、是否可能写入。`writes` 固定为布尔值，具体触发条件在 `write_condition`。
 
 `external-agent` 会输出可直接交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体的系统提示词和最小工具约定；`external-agent --full` 会输出完整接入说明。旧命令 `workbuddy` 仍保留为兼容别名。
+
+如果外部智能体已经确定是 MP 原生 PT 搜索/下载/订阅任务，优先拉 `mp_pt` recipe；如果是热门推荐、豆瓣热映、Bangumi 番剧续接，优先拉 `recommend` recipe。
 
 注意：`workflow` 会直接执行只读工作流；涉及下载、订阅、解锁或转存的写入工作流会默认保存待确认执行的 `plan_id`。
 

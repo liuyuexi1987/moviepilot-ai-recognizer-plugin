@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.36`
+- `AgentResourceOfficer`: `0.2.37`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.37`：新增 `mp_pt_mainline` 与 `mp_recommendation` 请求模板 recipe，外部智能体可低 token 拉取 MP 原生 PT 主线与推荐主线模板，不再猜 workflow body。
 - `AgentResourceOfficer 0.2.36`：优化评分展示文案；硬性阻断显示为“硬风险”，普通偏好未命中显示为“提醒”，避免智能体把软提醒误判为不可用。
 - `AgentResourceOfficer 0.2.35`：修正 MP 推荐回退过滤；`热门电影`、`热门电视剧` 在回退到 `tmdb_trending` 时仍保留电影/电视剧类型，不再混入另一类结果。
 - `AgentResourceOfficer 0.2.34`：修正 MP 原生搜索结果的下载提示；明确“下载资源 序号”会先生成下载计划，不会静默下载。

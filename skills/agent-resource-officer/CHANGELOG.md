@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.20
+
+- Added `mp_pt_recipe_command` and `mp_recommend_recipe_command` to the external-agent handoff payload.
+- Documented `mp_pt` and `recommend` request-template recipes for MP native PT and recommendation flows.
+
 ## 0.1.19
 
 - Added workflow helper flags for MP download task management: `--status`, `--hash`, `--target`, `--control`, `--downloader`, and `--delete-files`.

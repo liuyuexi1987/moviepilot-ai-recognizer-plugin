@@ -138,7 +138,9 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 4. 遇到编号选择、详情、下一页，要沿用同一个 session。
 5. 写入类动作，例如转存、解锁、执行计划，除非用户已经明确选择编号或给出链接，否则不要擅自执行。
 
-每次新会话先调用 startup。需要低 token 调用说明时，调用 request_templates，recipe=external_agent。
+每次新会话先调用 startup。需要低 token 调用说明时，默认调用 request_templates，recipe=external_agent。
+如果当前任务已经明确是 MP 原生 PT 搜索、下载、订阅、任务追踪，优先调用 request_templates，recipe=mp_pt。
+如果当前任务已经明确是热门推荐、豆瓣热映、Bangumi 番剧续接，优先调用 request_templates，recipe=recommend。
 
 统一入口：
 POST /api/v1/plugin/AgentResourceOfficer/assistant/route?apikey={MP_API_TOKEN}
