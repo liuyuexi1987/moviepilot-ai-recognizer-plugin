@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.35
+
+- Added `execution_loop_contract` to the external-agent payload so a new external agent can bootstrap itself from a structured startup -> decide -> route -> policy -> followup loop.
+- Documented the minimal external-agent execution loop in the Skill and external-agent guides.
+
 ## 0.1.34
 
 - Added `execution_policy_contract` to the external-agent payload so external agents can consume the helper's execution behavior classes without reading repository docs first.

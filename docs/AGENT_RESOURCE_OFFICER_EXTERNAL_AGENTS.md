@@ -35,6 +35,14 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 不要在接入层再定义第三套状态机，直接复用 helper 返回值。
 
+推荐的最小接入循环：
+
+1. 调 `startup`
+2. 调 `decide --summary-only`
+3. 用户发自然语言后，调 `route --summary-only`
+4. 读取 `recommended_agent_behavior`
+5. 如果执行过计划，再调 `followup --summary-only`
+
 ## 必要配置
 
 把下面两个变量配置到外部智能体的安全变量区或工具配置区：

@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.34"
+HELPER_VERSION = "0.1.35"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -182,6 +182,33 @@ def external_agent_payload():
             "show_only": "只展示 display_command，不要自动继续。",
             "stop": "当前没有适合自动继续的命令，不要继续执行。",
         },
+        "execution_loop_contract": [
+            {
+                "step": "startup",
+                "command": "python3 scripts/aro_request.py startup",
+                "purpose": "检查插件状态并拿到推荐 recipe。",
+            },
+            {
+                "step": "decide",
+                "command": "python3 scripts/aro_request.py decide --summary-only",
+                "purpose": "读取下一步 helper 决策摘要。",
+            },
+            {
+                "step": "route",
+                "command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>' --summary-only",
+                "purpose": "处理搜索、链接、状态查询等主入口。",
+            },
+            {
+                "step": "policy",
+                "command": "读取 recommended_agent_behavior / auto_run_command / confirm_command",
+                "purpose": "按统一 5 类执行范式决定自动继续、确认或停止。",
+            },
+            {
+                "step": "followup",
+                "command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>' --summary-only",
+                "purpose": "执行计划后继续追踪下载、入库或失败诊断。",
+            },
+        ],
         "compat_aliases": ["workbuddy"],
         "prompt": prompt,
         "tools": [
@@ -986,6 +1013,7 @@ def selftest_result():
     check("external_agent_payload_has_local_ingest_recipe", bool(external_agent.get("local_ingest_recipe_command")))
     check("external_agent_payload_has_next_command_rule", bool(external_agent.get("next_command_rule")))
     check("external_agent_payload_has_execution_policy_contract", bool((external_agent.get("execution_policy_contract") or {}).get("auto_continue")))
+    check("external_agent_payload_has_execution_loop_contract", len(external_agent.get("execution_loop_contract") or []) >= 5)
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []

@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.34`
+当前 helper 版本：`0.1.35`
 
 公开仓库：
 
@@ -193,6 +193,14 @@ python3 scripts/aro_request.py pick 1
 - `wait_user_confirmation`：不要自动执行，先展示 `confirm_command`
 - `show_only`：只展示 `display_command`
 - `stop`：当前不要继续自动执行
+
+推荐的最小启动流也已经固定：
+
+1. `startup`
+2. `decide --summary-only`
+3. `route "<用户原始指令>" --summary-only`
+4. 按 `recommended_agent_behavior` 决定自动继续、确认或停止
+5. 涉及执行计划后，再走 `followup --summary-only`
 
 评分由插件内置规则执行。外部智能体如需解释规则，可读取 `scoring-policy` 或 `capabilities.scoring_policy`；不要在智能体侧重新打分，也不要绕过 `hard_risk_reasons`。
 

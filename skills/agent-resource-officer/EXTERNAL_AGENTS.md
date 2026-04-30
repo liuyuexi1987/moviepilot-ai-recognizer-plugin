@@ -35,6 +35,14 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 不要再额外发明第三套状态名；直接复用 helper 返回值。
 
+推荐的最小接入循环：
+
+1. 调 `startup`
+2. 调 `decide --summary-only`
+3. 用户发自然语言后，调 `route --summary-only`
+4. 读取 `recommended_agent_behavior`
+5. 如果执行过计划，再调 `followup --summary-only`
+
 ## 连接变量
 
 ```text
