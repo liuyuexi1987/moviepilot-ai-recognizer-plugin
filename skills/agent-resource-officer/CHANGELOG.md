@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.22
+
+- Added positional text support for `route`, so `python3 scripts/aro_request.py route "盘搜搜索 大君夫人"` works without `--text`.
+- Kept the old `--text` form for compatibility.
+
 ## 0.1.21
 
 - Added direct `--command-only` helper output for the `mp_pt` and `recommend` recipes.

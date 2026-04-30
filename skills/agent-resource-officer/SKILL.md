@@ -86,7 +86,7 @@ python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
 python3 scripts/aro_request.py session-clear --session default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py templates --recipe bootstrap
-python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
+python3 scripts/aro_request.py route "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py pick --choice 1
 ```
 

@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.21`
+当前 helper 版本：`0.1.22`
 
 公开仓库：
 
@@ -48,6 +48,11 @@ ARO_API_KEY=your_moviepilot_api_token
 
 `ARO_BASE_URL` 按实际部署填写：同机可以用 `http://127.0.0.1:3000`，局域网可以用 `http://你的局域网IP:3000`，公网反代可以用自己的 HTTPS 域名。
 
+`route` 支持两种写法：
+
+- `python3 scripts/aro_request.py route "盘搜搜索 大君夫人"`
+- `python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"`
+
 4. 让外部智能体使用本 Skill。
 
 ## 推荐入口
@@ -78,7 +83,7 @@ python3 scripts/aro_request.py sessions
 python3 scripts/aro_request.py session-clear --session default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py recover
-python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
+python3 scripts/aro_request.py route "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py pick --choice 1
 ```
 

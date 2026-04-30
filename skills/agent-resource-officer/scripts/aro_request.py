@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.21"
+HELPER_VERSION = "0.1.22"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -123,7 +123,7 @@ def external_agent_payload():
         "mp_pt_recipe_command": "python3 scripts/aro_request.py templates --recipe mp_pt --compact",
         "mp_recommend_recipe_command": "python3 scripts/aro_request.py templates --recipe recommend --compact",
         "startup_command": "python3 scripts/aro_request.py startup",
-        "route_command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'agent:<会话ID>'",
+        "route_command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>'",
         "pick_command": "python3 scripts/aro_request.py pick --choice <编号> --session 'agent:<会话ID>'",
         "compat_aliases": ["workbuddy"],
         "prompt": prompt,
@@ -137,7 +137,7 @@ def external_agent_payload():
             {
                 "name": "route_text",
                 "purpose": "处理自然语言资源指令、链接转存、搜索和登录状态查询。",
-                "command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'agent:<会话ID>'",
+                "command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>'",
                 "writes": "depends_on_route",
             },
             {
@@ -638,6 +638,7 @@ def main():
         "command",
         choices=HELPER_COMMANDS,
     )
+    parser.add_argument("extra", nargs="*")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
     parser.add_argument("--recipe")
@@ -983,8 +984,9 @@ def main():
     elif args.command == "route":
         method = "POST"
         path = assistant_path("route")
+        route_text = args.text or " ".join(args.extra or []).strip()
         body = {
-            "text": args.text or "",
+            "text": route_text,
             "compact": True,
         }
         if args.session:
