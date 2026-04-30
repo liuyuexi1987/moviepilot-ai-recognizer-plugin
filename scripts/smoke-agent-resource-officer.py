@@ -303,6 +303,19 @@ def main() -> int:
             ),
             str(external_agent_templates.get("message") or ""),
         )
+        preferences_templates = request_templates(base_url, api_key, "preferences")
+        preferences_templates_data = data(preferences_templates)
+        preferences_names = preferences_templates_data.get("selected_names") or []
+        assert_ok(
+            "preferences_request_templates",
+            bool(
+                preferences_templates.get("success")
+                and preferences_templates_data.get("ok")
+                and preferences_templates_data.get("selected_recipe") == "preferences_onboarding"
+                and preferences_names == ["preferences_get", "scoring_policy", "preferences_save"]
+            ),
+            str(preferences_templates.get("message") or ""),
+        )
 
         mp_pt_templates = request_templates(base_url, api_key, "mp_pt")
         mp_pt_templates_data = data(mp_pt_templates)
@@ -366,10 +379,75 @@ def main() -> int:
             ),
             str(local_ingest_templates.get("message") or ""),
         )
+        preferences_templates = request_templates(base_url, api_key, "preferences")
+        preferences_templates_data = data(preferences_templates)
+        preferences_names = preferences_templates_data.get("selected_names") or []
+        assert_ok(
+            "preferences_request_templates",
+            bool(
+                preferences_templates.get("success")
+                and preferences_templates_data.get("ok")
+                and preferences_templates_data.get("selected_recipe") == "preferences_onboarding"
+                and preferences_names == ["preferences_get", "scoring_policy", "preferences_save"]
+            ),
+            str(preferences_templates.get("message") or ""),
+        )
+
+        preferences_view = route(base_url, api_key, sessions[0], "偏好")
+        preferences_view_data = assert_route_action("route_preferences_get", preferences_view, "preferences")
+        assert_ok(
+            "route_preferences_get_payload",
+            isinstance(preferences_view_data.get("preference_status"), dict)
+            and "needs_onboarding" in (preferences_view_data.get("preference_status") or {}),
+            json.dumps(preferences_view_data.get("preference_status") or {}, ensure_ascii=False)[:240],
+        )
+
+        scoring_policy = route(base_url, api_key, sessions[0], "评分策略")
+        scoring_policy_data = assert_route_action("route_scoring_policy", scoring_policy, "scoring_policy")
+        assert_ok(
+            "route_scoring_policy_payload",
+            isinstance(scoring_policy_data.get("scoring_policy"), dict)
+            and (scoring_policy_data.get("scoring_policy") or {}).get("schema_version") == "scoring_policy.v1",
+            json.dumps(scoring_policy_data.get("scoring_policy") or {}, ensure_ascii=False)[:240],
+        )
+
+        preferences_save = route(
+            base_url,
+            api_key,
+            sessions[0],
+            "保存偏好 4K 杜比 HDR 中字 全集 做种>=5 影巢积分15 不自动入库",
+        )
+        preferences_save_data = assert_route_action("route_preferences_save", preferences_save, "preferences_save")
+        saved_preferences = ((preferences_save_data.get("preference_status") or {}).get("summary") or {})
+        assert_ok(
+            "route_preferences_save_values",
+            (
+                saved_preferences.get("prefer_resolution") == "4K"
+                and saved_preferences.get("pt_min_seeders") == 5
+                and saved_preferences.get("hdhive_max_unlock_points") == 15
+                and saved_preferences.get("auto_ingest_enabled") is False
+            ),
+            json.dumps(saved_preferences, ensure_ascii=False)[:240],
+        )
+
+        preferences_after_save = route(base_url, api_key, sessions[0], "偏好")
+        preferences_after_save_data = assert_route_action("route_preferences_after_save", preferences_after_save, "preferences")
+        assert_ok(
+            "route_preferences_after_save_initialized",
+            ((preferences_after_save_data.get("preference_status") or {}).get("initialized") is True),
+            json.dumps(preferences_after_save_data.get("preference_status") or {}, ensure_ascii=False)[:240],
+        )
+
+        preferences_reset = route(base_url, api_key, sessions[0], "重置偏好")
+        preferences_reset_data = assert_route_action("route_preferences_reset", preferences_reset, "preferences_reset")
+        assert_ok(
+            "route_preferences_reset_needs_onboarding",
+            ((preferences_reset_data.get("preference_status") or {}).get("needs_onboarding") is True),
+            json.dumps(preferences_reset_data.get("preference_status") or {}, ensure_ascii=False)[:240],
+        )
 
         status = route(base_url, api_key, sessions[0], "115状态")
         assert_route_action("route_115_status", status, "p115_status")
-
         if args.include_search:
             download_tasks = route(base_url, api_key, sessions[0], "下载任务")
             download_tasks_data = assert_route_action("route_download_tasks", download_tasks, "mp_download_tasks")

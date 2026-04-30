@@ -38,11 +38,12 @@
     "name": "Agent影视助手",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存、飞书入口与智能体接口的资源工作流主插件。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.2.53",
+    "version": "0.2.54",
     "icon": "agentresourceofficer.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.2.54": "新增 preferences_onboarding 模板组、评分策略自然语言只读入口与 helper 命令；补齐偏好/评分 smoke 覆盖，并修正能力摘要里的 auto_ingest 默认值。",
       "0.2.53": "新增本地/PT 入库诊断主线；补齐 mp_ingest_status、mp_ingest_failures、mp_recent_activity、mp_local_diagnose，并让生命周期/执行后追踪统一返回 diagnosis_summary。",
       "0.2.52": "调整 recover 优先级：当前会话最近一条计划已执行时，恢复入口会优先推荐 query_execution_followup，而不是退回会话检查或新任务。",
       "0.2.51": "把 execution_followup 下沉为正式 request template 和 followup recipe，外部智能体可以通过低 token 模板直接续接执行后追踪。",

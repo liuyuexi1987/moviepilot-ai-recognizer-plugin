@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.53"
+    plugin_version = "0.2.54"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -7771,6 +7771,8 @@ class AgentResourceOfficer(_PluginBase):
         if isinstance(data.get("preference_status"), dict):
             payload["preference_status"] = data.get("preference_status")
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
         if isinstance(data.get("diagnosis_summary"), dict):
@@ -7837,6 +7839,8 @@ class AgentResourceOfficer(_PluginBase):
         if isinstance(data.get("preference_status"), dict):
             payload["preference_status"] = data.get("preference_status")
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
         if isinstance(data.get("diagnosis_summary"), dict):
@@ -7875,6 +7879,8 @@ class AgentResourceOfficer(_PluginBase):
         if isinstance(data.get("preference_status"), dict):
             payload["preference_status"] = data.get("preference_status")
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
         if isinstance(data.get("diagnosis_summary"), dict):
@@ -7919,6 +7925,8 @@ class AgentResourceOfficer(_PluginBase):
             payload["score_summary"] = data.get("score_summary")
         if isinstance(data.get("diagnosis_summary"), dict):
             payload["diagnosis_summary"] = data.get("diagnosis_summary")
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
         for key in ["download_tasks", "download_history", "transfer_history"]:
             if isinstance(data.get(key), dict):
                 payload[key] = data.get(key)
@@ -8285,7 +8293,8 @@ class AgentResourceOfficer(_PluginBase):
                 "hdhive_checkin_enabled": self._hdhive_checkin_enabled,
                 "hdhive_checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
                 "pt_min_seeders": self._default_assistant_preferences().get("pt_min_seeders"),
-                "auto_ingest": self._default_assistant_preferences().get("auto_ingest"),
+                "auto_ingest": self._default_assistant_preferences().get("auto_ingest_enabled"),
+                "auto_ingest_enabled": self._default_assistant_preferences().get("auto_ingest_enabled"),
                 "auto_ingest_score_threshold": self._default_assistant_preferences().get("auto_ingest_score_threshold"),
             },
             "smart_entry": {
@@ -8321,6 +8330,7 @@ class AgentResourceOfficer(_PluginBase):
                     "execute_plan",
                     "plans_list",
                     "plans_clear",
+                    "scoring_policy",
                     "preferences_get",
                     "preferences_save",
                     "preferences_reset",
@@ -9756,6 +9766,7 @@ class AgentResourceOfficer(_PluginBase):
             "maintenance_cycle": ["maintain_preview", "maintain_execute"],
             "external_agent_quickstart": ["startup_probe", "route_text", "pick_continue"],
             "workbuddy_quickstart": ["startup_probe", "route_text", "pick_continue"],
+            "preferences_onboarding": ["preferences_get", "scoring_policy", "preferences_save"],
             "mp_pt_mainline": [
                 "mp_media_detail",
                 "mp_search",
@@ -9833,6 +9844,13 @@ class AgentResourceOfficer(_PluginBase):
             "work_buddy": "external_agent_quickstart",
             "workbody": "external_agent_quickstart",
             "work_body": "external_agent_quickstart",
+            "preferences": "preferences_onboarding",
+            "preference": "preferences_onboarding",
+            "prefs": "preferences_onboarding",
+            "pref": "preferences_onboarding",
+            "片源偏好": "preferences_onboarding",
+            "偏好画像": "preferences_onboarding",
+            "评分偏好": "preferences_onboarding",
             "mp": "mp_pt_mainline",
             "pt": "mp_pt_mainline",
             "mp_native": "mp_pt_mainline",
@@ -9939,6 +9957,11 @@ class AgentResourceOfficer(_PluginBase):
                 "when": "盘搜、影巢候选或资源列表需要按编号继续时使用。",
             },
             {
+                "step": "preferences_onboarding",
+                "template": "preferences_get",
+                "when": "外部智能体首次接入时，先读取偏好和评分策略，再保存用户片源偏好。",
+            },
+            {
                 "step": "mp_pt_mainline",
                 "template": "mp_search",
                 "when": "需要 MP 原生 PT 搜索、评分、下载计划、订阅或任务追踪时使用。",
@@ -9986,6 +10009,11 @@ class AgentResourceOfficer(_PluginBase):
                 "templates": recipe_templates_map["workbuddy_quickstart"],
             },
             {
+                "name": "preferences_onboarding",
+                "description": "首次接入时先读取偏好、评分策略，再保存用户的片源偏好画像。",
+                "templates": recipe_templates_map["preferences_onboarding"],
+            },
+            {
                 "name": "mp_pt_mainline",
                 "description": "MP 原生 PT 主线：识别、搜索、评分、下载计划、任务、订阅、站点和入库追踪。",
                 "templates": recipe_templates_map["mp_pt_mainline"],
@@ -10031,6 +10059,9 @@ class AgentResourceOfficer(_PluginBase):
         elif "pick_continue" in selected_set:
             recommended_recipe = "continue_existing_session"
             recommended_recipe_reason = "当前模板集合包含 pick_continue，说明更像继续既有会话。"
+        elif {"preferences_get", "preferences_save", "scoring_policy"} & selected_set:
+            recommended_recipe = "preferences_onboarding"
+            recommended_recipe_reason = "当前模板集合包含偏好或评分策略模板，优先推荐偏好初始化流程。"
         elif {"maintain_preview", "maintain_execute"} & selected_set:
             recommended_recipe = "maintenance_cycle"
             recommended_recipe_reason = "当前模板集合包含维护模板，优先推荐维护流程。"
@@ -10759,6 +10790,16 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
+            "评分策略",
+            "评分规则",
+            "自动化规则",
+            "scoringpolicy",
+            "scoringrules",
+        }:
+            options["action"] = "scoring_policy"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "取消计划",
             "清理计划",
             "删除计划",
@@ -11047,6 +11088,9 @@ class AgentResourceOfficer(_PluginBase):
                 ("片源偏好", "preferences_get"),
                 ("重置偏好", "preferences_reset"),
                 ("清除偏好", "preferences_reset"),
+                ("评分策略", "scoring_policy"),
+                ("评分规则", "scoring_policy"),
+                ("自动化规则", "scoring_policy"),
             ]:
                 if raw.startswith(prefix + " ") or raw.startswith(prefix + "：") or raw.startswith(prefix + ":"):
                     remain_text = raw[len(prefix):].lstrip(" ：:").strip()
@@ -13128,6 +13172,16 @@ class AgentResourceOfficer(_PluginBase):
                 "compact": compact,
                 "apikey": self._extract_apikey(request, body),
             }, method="GET")))
+        if assistant_action == "scoring_policy":
+            return finish({
+                "success": True,
+                "message": "评分策略已返回。云盘与 PT 使用不同规则；自动化决策以硬风险和 score_summary 为准。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "scoring_policy",
+                    "ok": True,
+                    "scoring_policy": self._assistant_scoring_policy_public_data(),
+                }),
+            })
         if assistant_action == "hdhive_checkin":
             is_gambler = self._parse_bool_value(parsed.get("is_gambler"), self._hdhive_checkin_gambler_mode)
             result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent影视助手 智能入口")
@@ -14185,6 +14239,17 @@ class AgentResourceOfficer(_PluginBase):
                 "apikey": self._extract_apikey(request, body),
             }
             return await finish(self.api_assistant_preferences(_JsonRequestShim(request, payload, method=method)))
+        if name in {"scoring_policy", "query_scoring_policy"}:
+            session_name = self._clean_text(body.get("session")) or "default"
+            return await finish({
+                "success": True,
+                "message": "评分策略已返回。云盘与 PT 使用不同规则；自动化决策以硬风险和 score_summary 为准。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "scoring_policy",
+                    "ok": True,
+                    "scoring_policy": self._assistant_scoring_policy_public_data(),
+                }),
+            })
         if name == "start_115_login":
             route_payload.update({
                 "action": "p115_qrcode_start",

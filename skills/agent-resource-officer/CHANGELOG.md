@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.29
+
+- Added `preferences_recipe_command` to the external-agent payload.
+- Taught recipe command generation that `preferences_onboarding` maps to the direct `preferences` helper command.
+- Added selftest coverage for the preferences onboarding recipe and payload handoff.
+
 ## 0.1.28
 
 - Added `local_ingest_recipe_command` to the external-agent payload.

@@ -228,6 +228,7 @@ Supported recipe names and short aliases:
 - `plan` -> `plan_then_confirm`
 - `maintain` -> `maintenance_cycle`
 - `continue` -> `continue_existing_session`
+- `preferences` / `prefs` / `片源偏好` / `偏好画像` -> `preferences_onboarding`
 - `mp_pt` / `mp` / `pt` -> `mp_pt_mainline`
 - `recommend` / `热门` / `推荐` -> `mp_recommendation`
 - `local_ingest` / `ingest` / `local` / `本地入库` / `入库诊断` -> `local_ingest`
@@ -236,6 +237,7 @@ Use:
 
 ```bash
 python3 scripts/aro_request.py templates --recipe plan --policy-only
+python3 scripts/aro_request.py templates --recipe preferences --policy-only
 python3 scripts/aro_request.py templates --recipe mp_pt --policy-only
 python3 scripts/aro_request.py templates --recipe recommend --policy-only
 ```
@@ -317,6 +319,8 @@ Before the first automated resource task in a new user profile, check preference
 
 ```bash
 python3 scripts/aro_request.py preferences --session agent:<用户ID>
+python3 scripts/aro_request.py templates --recipe preferences --compact
+python3 scripts/aro_request.py scoring-policy
 ```
 
 Most assistant responses also include compact `preference_status`. If `preference_status.needs_onboarding=true`, pause automation, ask the user for preferences, then save them before choosing downloads, unlocks, or transfers.

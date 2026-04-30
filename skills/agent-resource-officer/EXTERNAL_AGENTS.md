@@ -139,6 +139,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 5. 写入类动作，例如转存、解锁、执行计划，除非用户已经明确选择编号或给出链接，否则不要擅自执行。
 
 每次新会话先调用 startup。需要低 token 调用说明时，默认调用 request_templates，recipe=external_agent。
+如果当前会话还没有完成偏好初始化，优先调用 request_templates，recipe=preferences。
 如果当前任务已经明确是 MP 原生 PT 搜索、下载、订阅、任务追踪，优先调用 request_templates，recipe=mp_pt。
 如果当前任务已经明确是热门推荐、豆瓣热映、Bangumi 番剧续接，优先调用 request_templates，recipe=recommend。
 

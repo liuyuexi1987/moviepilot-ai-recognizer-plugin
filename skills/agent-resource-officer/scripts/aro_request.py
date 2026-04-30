@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.28"
+HELPER_VERSION = "0.1.29"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -163,6 +163,7 @@ def external_agent_payload():
         "guide_file_exists": os.path.exists(EXTERNAL_AGENT_GUIDE_PATH),
         "recommended_recipe": "external_agent",
         "recipe_command": "python3 scripts/aro_request.py templates --recipe external_agent --compact",
+        "preferences_recipe_command": "python3 scripts/aro_request.py templates --recipe preferences --compact",
         "mp_pt_recipe_command": "python3 scripts/aro_request.py templates --recipe mp_pt --compact",
         "mp_recommend_recipe_command": "python3 scripts/aro_request.py templates --recipe recommend --compact",
         "post_execute_recipe_command": "python3 scripts/aro_request.py templates --recipe followup --compact",
@@ -455,6 +456,10 @@ def recipe_helper_commands(recipe_summary, recipe_request):
         execute = "python3 scripts/aro_request.py followup"
     elif first_template == "pick_continue":
         execute = "python3 scripts/aro_request.py recover --execute"
+    elif first_template == "preferences_get":
+        execute = "python3 scripts/aro_request.py preferences"
+    elif first_template == "scoring_policy":
+        execute = "python3 scripts/aro_request.py scoring-policy"
     elif first_template == "workflow_dry_run":
         execute = "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>"
     elif first_template == "mp_media_detail":
@@ -533,6 +538,8 @@ def selftest_result():
     check("mp_pt_recipe_execute_command", mp_pt_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword <keyword>")
     mp_recommend_commands = recipe_helper_commands({"first_template": "mp_recommend"}, "recommend")
     check("mp_recommend_recipe_execute_command", mp_recommend_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20")
+    preferences_commands = recipe_helper_commands({"first_template": "preferences_get"}, "preferences")
+    check("preferences_recipe_execute_command", preferences_commands.get("execute_helper_command") == "python3 scripts/aro_request.py preferences")
     local_ingest_commands = recipe_helper_commands({"first_template": "mp_ingest_status"}, "local_ingest")
     check("local_ingest_recipe_execute_command", local_ingest_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_ingest_status --keyword <keyword>")
     maintain_commands = recipe_helper_commands({"first_template": "maintain_preview"}, "maintain")
@@ -676,6 +683,7 @@ def selftest_result():
     check("external_agent_payload_has_guide", external_agent.get("guide_file_exists") is True)
     check("external_agent_payload_has_tools", len(external_agent.get("tools") or []) == 4)
     check("external_agent_payload_has_followup", bool(external_agent.get("followup_command")))
+    check("external_agent_payload_has_preferences_recipe", bool(external_agent.get("preferences_recipe_command")))
     check("external_agent_payload_has_mp_pt_recipe", bool(external_agent.get("mp_pt_recipe_command")))
     check("external_agent_payload_has_mp_recommend_recipe", bool(external_agent.get("mp_recommend_recipe_command")))
     check("external_agent_payload_has_post_execute_recipe", bool(external_agent.get("post_execute_recipe_command")))
