@@ -100,9 +100,9 @@ python3 scripts/aro_request.py pick --choice 1
 
 偏好也可以直接走主入口自然语言：`偏好` 查看，`保存偏好 4K 杜比 HDR 中字 全集 做种>=3 影巢积分20 不自动入库` 写入，`重置偏好` 清除。
 
-搜索类响应可能带有 `score_summary`，包含 `best` 和 `top_recommendations`。外部智能体应优先读取这个结构化摘要，而不是解析长文本；存在 `risk_reasons` 时不要自动执行，`score_level=confirm` 时先向用户解释原因并确认。
+搜索类响应可能带有 `score_summary`，包含 `best` 和 `top_recommendations`。外部智能体应优先读取这个结构化摘要，而不是解析长文本；存在 `hard_risk_reasons` 时不要自动执行，`risk_reasons` 只作为确认前需要解释的提醒。
 
-评分由插件内置规则执行。外部智能体如需解释规则，可读取 `scoring-policy` 或 `capabilities.scoring_policy`；不要在智能体侧重新打分，也不要绕过 `risk_reasons`。
+评分由插件内置规则执行。外部智能体如需解释规则，可读取 `scoring-policy` 或 `capabilities.scoring_policy`；不要在智能体侧重新打分，也不要绕过 `hard_risk_reasons`。
 
 `config-check` 只检查连接配置来源和是否存在，不输出真实 API Key。
 

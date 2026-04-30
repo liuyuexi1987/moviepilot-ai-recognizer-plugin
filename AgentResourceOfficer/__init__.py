@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.29"
+    plugin_version = "0.2.30"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3080,13 +3080,15 @@ class AgentResourceOfficer(_PluginBase):
         *,
         score: int,
         risk_reasons: List[str],
+        hard_risk_reasons: Optional[List[str]] = None,
         preferences: Dict[str, Any],
         default_action: str,
     ) -> Dict[str, Any]:
         threshold = max(1, min(100, self._safe_int(preferences.get("auto_ingest_score_threshold"), 90)))
         confirm_threshold = max(1, min(100, self._safe_int(preferences.get("confirm_score_threshold"), 70)))
         auto_enabled = self._parse_bool_value(preferences.get("auto_ingest_enabled"), False)
-        hard_risk = bool(risk_reasons)
+        hard_risks = [self._clean_text(item) for item in (hard_risk_reasons or []) if self._clean_text(item)]
+        hard_risk = bool(hard_risks)
         can_auto = bool(auto_enabled and not hard_risk and score >= threshold)
         if can_auto:
             recommended = default_action
@@ -3098,6 +3100,7 @@ class AgentResourceOfficer(_PluginBase):
             "score": score,
             "score_level": self._score_level(score),
             "risk_reasons": risk_reasons,
+            "hard_risk_reasons": hard_risks,
             "can_auto_execute": can_auto,
             "recommended_action": recommended,
             "auto_ingest_enabled": auto_enabled,
@@ -3118,6 +3121,7 @@ class AgentResourceOfficer(_PluginBase):
         score = 20
         reasons: List[str] = []
         risks: List[str] = []
+        hard_risks: List[str] = []
         resolution_pref = self._clean_text(prefs.get("prefer_resolution")).lower()
         provider = self._clean_text(item.get("pan_type") or item.get("channel")).lower()
         media_type = self._clean_text(item.get("media_type") or item.get("type")).lower()
@@ -3184,10 +3188,14 @@ class AgentResourceOfficer(_PluginBase):
                 reasons.append("影巢免费 +10")
             elif points is None and limit > 0:
                 score -= 20
-                risks.append("影巢积分未知，禁止自动解锁")
+                message = "影巢积分未知，禁止自动解锁"
+                risks.append(message)
+                hard_risks.append(message)
             elif limit > 0 and points is not None and points > limit:
                 score -= 30
-                risks.append(f"影巢积分 {points} 超过上限 {limit}，禁止自动解锁")
+                message = f"影巢积分 {points} 超过上限 {limit}，禁止自动解锁"
+                risks.append(message)
+                hard_risks.append(message)
             elif points is not None:
                 score += max(0, 10 - points)
                 reasons.append(f"影巢积分 {points}")
@@ -3196,6 +3204,7 @@ class AgentResourceOfficer(_PluginBase):
         decision = self._score_decision(
             score=final_score,
             risk_reasons=risks,
+            hard_risk_reasons=hard_risks,
             preferences=prefs,
             default_action="auto_ingest_cloud",
         )
@@ -3219,6 +3228,7 @@ class AgentResourceOfficer(_PluginBase):
         score = 20
         reasons: List[str] = []
         risks: List[str] = []
+        hard_risks: List[str] = []
         min_seeders = max(0, self._safe_int(prefs.get("pt_min_seeders"), 3))
         seeders = self._safe_int(torrent.get("seeders"), 0)
         peers = self._safe_int(torrent.get("peers"), 0)
@@ -3235,10 +3245,14 @@ class AgentResourceOfficer(_PluginBase):
         prefer_complete = self._parse_bool_value(prefs.get("prefer_complete_series"), True)
 
         if seeders <= 0:
-            risks.append("做种数 0，禁止自动下载")
+            message = "做种数 0，禁止自动下载"
+            risks.append(message)
+            hard_risks.append(message)
             score -= 35
         elif seeders < min_seeders:
-            risks.append(f"做种数 {seeders}，低于阈值 {min_seeders}，禁止自动下载")
+            message = f"做种数 {seeders}，低于阈值 {min_seeders}，禁止自动下载"
+            risks.append(message)
+            hard_risks.append(message)
             score -= 25
         elif seeders >= 20:
             score += 22
@@ -3265,7 +3279,9 @@ class AgentResourceOfficer(_PluginBase):
             reasons.append("免费/促销 +18")
         elif self._parse_bool_value(prefs.get("pt_require_free"), False):
             score -= 20
-            risks.append("用户要求 PT 免费资源")
+            message = "用户要求 PT 免费资源"
+            risks.append(message)
+            hard_risks.append(message)
         elif self._parse_bool_value(prefs.get("pt_prefer_free"), True):
             reasons.append("普通 PT 资源，未额外扣分")
 
@@ -3353,6 +3369,7 @@ class AgentResourceOfficer(_PluginBase):
         decision = self._score_decision(
             score=final_score,
             risk_reasons=risks,
+            hard_risk_reasons=hard_risks,
             preferences=prefs,
             default_action="auto_download_pt",
         )
@@ -3431,6 +3448,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         reasons = [self._clean_text(value) for value in (score.get("score_reasons") or []) if self._clean_text(value)]
         risks = [self._clean_text(value) for value in (score.get("risk_reasons") or []) if self._clean_text(value)]
+        hard_risks = [self._clean_text(value) for value in (score.get("hard_risk_reasons") or []) if self._clean_text(value)]
         brief = {
             "index": index,
             "title": title[:160],
@@ -3442,6 +3460,7 @@ class AgentResourceOfficer(_PluginBase):
             "can_auto_execute": bool(score.get("can_auto_execute")),
             "score_reasons": reasons[:3],
             "risk_reasons": risks[:2],
+            "hard_risk_reasons": hard_risks[:2],
         }
         points_text = self._resource_points_text(current) if current and brief.get("source_type") != "pt" else ""
         if points_text and points_text != "积分未知":
@@ -3470,13 +3489,15 @@ class AgentResourceOfficer(_PluginBase):
             self._safe_int(value.get("score"), 0),
         ), reverse=True)
         auto_count = len([item for item in scored if item.get("can_auto_execute")])
-        confirm_count = len([item for item in scored if item.get("score_level") == "confirm"])
-        blocked_count = len([item for item in scored if item.get("risk_reasons")])
+        confirm_count = len([item for item in scored if item.get("recommended_action") == "ask_confirm"])
+        blocked_count = len([item for item in scored if item.get("hard_risk_reasons")])
+        warning_count = len([item for item in scored if item.get("risk_reasons")])
         return {
             "total_scored": len(scored),
             "auto_count": auto_count,
             "confirm_count": confirm_count,
             "blocked_count": blocked_count,
+            "warning_count": warning_count,
             "best": scored[0] if scored else None,
             "top_recommendations": scored[:max(1, min(10, self._safe_int(limit, 5)))],
         }
@@ -3550,7 +3571,7 @@ class AgentResourceOfficer(_PluginBase):
                 "auto_execute_requires": [
                     "auto_ingest_enabled=true",
                     "score >= auto_ingest_score_threshold",
-                    "risk_reasons 为空",
+                    "hard_risk_reasons 为空",
                 ],
                 "confirm_range": "confirm_score_threshold <= score < auto_ingest_score_threshold 且无硬风险",
                 "default_confirm_score_threshold": prefs.get("confirm_score_threshold"),
@@ -3604,7 +3625,10 @@ class AgentResourceOfficer(_PluginBase):
                     "can_auto_execute",
                     "score_reasons",
                     "risk_reasons",
+                    "hard_risk_reasons",
                 ],
+                "blocked_count": "只统计 hard_risk_reasons，不统计缺字幕等软提醒",
+                "warning_count": "统计 risk_reasons，用于解释需要用户确认的原因",
                 "do_not_parse": "不要解析自然语言 message 来判断自动化，优先读取 score_summary",
             },
         }
