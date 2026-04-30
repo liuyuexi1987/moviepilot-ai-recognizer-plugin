@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.42`
+- `AgentResourceOfficer`: `0.2.43`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.43`：调整 `recover` 优先级为业务续接优先于偏好初始化；已有 PT/云盘会话时，恢复入口会先推荐继续当前任务。
 - `AgentResourceOfficer 0.2.42`：补齐 compact `session/recover` 协议里的 `action_templates`；外部智能体读取会话状态或恢复入口时，也能拿到完整的结构化下一步模板。
 - `AgentResourceOfficer 0.2.41`：补齐 PT 只读会话的 `action_templates`；下载任务、站点、下载器、订阅列表等场景现在会给外部智能体正确的结构化下一步模板。
 - `AgentResourceOfficer 0.2.40`：收紧 PT 只读会话的下一步建议；下载任务、站点、下载器、订阅列表等场景不再给出误导性的控制动作提示。

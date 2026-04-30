@@ -314,6 +314,12 @@ def main() -> int:
                 "preferences_save" in site_recover_templates and "query_mp_downloaders" in site_recover_templates,
                 json.dumps(site_recover_templates, ensure_ascii=False),
             )
+            assert_ok(
+                "route_sites_recover_priority",
+                (site_recover_data.get("recovery") or {}).get("recommended_action") == "query_mp_downloaders"
+                and (site_recover_data.get("recovery") or {}).get("mode") == "continue_mp_sites",
+                json.dumps(site_recover_data.get("recovery") or {}, ensure_ascii=False),
+            )
 
             downloaders = route(base_url, api_key, sessions[0], "下载器状态")
             downloaders_data = assert_route_action("route_downloaders", downloaders, "mp_downloaders")

@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.42"
+    plugin_version = "0.2.43"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -5471,10 +5471,6 @@ class AgentResourceOfficer(_PluginBase):
                 "resume_pending_115",
                 "check_115_login",
             ])
-        elif self._assistant_find_action_template(templates, ["preferences_save"]):
-            mode = "onboard_preferences"
-            reason = "智能体片源偏好未初始化，建议先询问并保存用户偏好"
-            template = self._assistant_find_action_template(templates, ["preferences_save"])
         elif has_session and kind == "assistant_pansou":
             mode = "continue_pansou"
             reason = "当前会话停留在盘搜结果列表"
@@ -5491,6 +5487,51 @@ class AgentResourceOfficer(_PluginBase):
             mode = "continue_mp_recommend"
             reason = "当前会话停留在 MP 热门推荐列表"
             template = self._assistant_find_action_template(templates, ["pick_recommend_mp_search"])
+        elif has_session and kind == "assistant_mp_download_tasks":
+            mode = "continue_mp_download_tasks"
+            reason = "当前会话停留在 MP 下载任务列表"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_download_history",
+                "pause_mp_download",
+                "resume_mp_download",
+                "delete_mp_download",
+            ])
+        elif has_session and kind == "assistant_mp_download_history":
+            mode = "continue_mp_download_history"
+            reason = "当前会话停留在 MP 下载历史"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_lifecycle_status",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_downloaders":
+            mode = "continue_mp_downloaders"
+            reason = "当前会话停留在 MP 下载器状态"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_sites",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_sites":
+            mode = "continue_mp_sites"
+            reason = "当前会话停留在 MP 站点状态"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_downloaders",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_subscribes":
+            mode = "continue_mp_subscribes"
+            reason = "当前会话停留在 MP 订阅列表"
+            template = self._assistant_find_action_template(templates, [
+                "start_mp_subscribe",
+                "search_mp_subscribe",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_lifecycle_status":
+            mode = "continue_mp_lifecycle_status"
+            reason = "当前会话停留在 MP 生命周期追踪"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_download_history",
+                "start_mp_media_search",
+            ])
         elif has_session and kind == "assistant_hdhive" and stage == "candidate":
             mode = "continue_hdhive_candidate"
             reason = "当前会话停留在影巢候选列表"
@@ -5503,6 +5544,10 @@ class AgentResourceOfficer(_PluginBase):
             mode = "continue_115_login"
             reason = "当前会话停留在 115 登录检查阶段"
             template = self._assistant_find_action_template(templates, ["check_115_login", "show_115_status"])
+        elif self._assistant_find_action_template(templates, ["preferences_save"]):
+            mode = "onboard_preferences"
+            reason = "智能体片源偏好未初始化，建议先询问并保存用户偏好"
+            template = self._assistant_find_action_template(templates, ["preferences_save"])
         else:
             mode = "start_new"
             reason = "当前没有待恢复的执行状态，可直接开始新任务"
