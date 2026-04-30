@@ -26,6 +26,7 @@ docs/INDEX.md
 - 当前安装说明：[`docs/PLUGIN_INSTALL.md`](./docs/PLUGIN_INSTALL.md)
 - 当前外部智能体接入：[`docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`](./docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
 - 当前跨机器部署：[`docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`](./docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
+- 当前维护入口：先看 [`docs/INDEX.md`](./docs/INDEX.md)，需要仓库卫生检查时直接运行 `bash scripts/repo-hygiene.sh`
 
 如果你只想快速落地，不要先看历史重构文档，直接从上面 4 个入口开始。
 
