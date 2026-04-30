@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.48`
+- `AgentResourceOfficer`: `0.2.50`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,8 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.50`：补齐 `assistant/action` compact 协议，`query_execution_followup` 这类单动作返回现在也会带 `error_code`、`recommended_action` 和 `follow_up_hint`，外部智能体续接更稳定。
+- `AgentResourceOfficer 0.2.49`：新增 `query_execution_followup` 统一只读入口，外部智能体可按最近已执行计划自动查询下载、订阅或入库后续状态，不必自己决定先查哪一个只读动作。
 - `AgentResourceOfficer 0.2.48`：把 `recommended_action` 和 `follow_up_hint` 下沉到 `plan_execute` 的原始 data 与用户可读消息里，非 compact 调用和人工通道也能直接续接下一步。
 - `AgentResourceOfficer 0.2.47`：在 `execute_plan` 的 compact 结果中补充 `recommended_action` 和 `follow_up_hint`，外部智能体执行计划后可直接读取建议下一步，不必再从模板列表里自己猜。
 - `AgentResourceOfficer 0.2.46`：把 `execute_plan` 的 follow-up 样本加入 `assistant/selfcheck`，并纳入 live smoke 回归，后续即使没有真实写入执行，也能防止 PT 下载、订阅与云盘转存的后续动作模板回退。

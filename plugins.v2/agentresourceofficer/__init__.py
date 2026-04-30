@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.48"
+    plugin_version = "0.2.50"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -7027,6 +7027,7 @@ class AgentResourceOfficer(_PluginBase):
         session_id: str,
         session_state: Optional[Dict[str, Any]] = None,
         ok: bool,
+        plan_id: str = "",
     ) -> Dict[str, Any]:
         if not ok:
             return {"next_actions": [], "action_templates": [], "recommended_action": "", "follow_up_hint": ""}
@@ -7048,11 +7049,23 @@ class AgentResourceOfficer(_PluginBase):
         next_actions: List[str] = []
         templates: List[Dict[str, Any]] = []
         follow_up_hint = ""
+        clean_plan_id = self._clean_text(plan_id)
 
         if workflow_name in {"mp_best_download", "mp_download", "mp_search_download", "mp_download_control"}:
-            next_actions = ["query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
-            follow_up_hint = "建议先查下载历史或生命周期，确认 PT 任务是否已提交并开始整理/入库。"
+            next_actions = ["query_execution_followup", "query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
+            follow_up_hint = "可以先执行统一后续追踪；它会自动去查下载历史，再继续判断是否已整理/入库。"
             templates = [
+                self._assistant_action_template(
+                    name="query_execution_followup",
+                    description="按最近已执行计划自动查询下载后的统一后续状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={
+                        **base_state,
+                        "name": "query_execution_followup",
+                        **({"plan_id": clean_plan_id} if clean_plan_id else {}),
+                    },
+                ),
                 self._assistant_action_template(
                     name="query_mp_download_history",
                     description="查看下载历史，并继续追踪整理/入库状态",
@@ -7076,9 +7089,20 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ]
         elif workflow_name in {"mp_subscribe", "mp_subscribe_and_search", "mp_subscribe_control"}:
-            next_actions = ["query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
-            follow_up_hint = "建议先查订阅列表确认规则已生效，再视情况继续搜索或追踪生命周期。"
+            next_actions = ["query_execution_followup", "query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
+            follow_up_hint = "可以先执行统一后续追踪；它会自动查订阅列表，再决定是否继续搜索或追踪生命周期。"
             templates = [
+                self._assistant_action_template(
+                    name="query_execution_followup",
+                    description="按最近已执行计划自动查询订阅后的统一后续状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={
+                        **base_state,
+                        "name": "query_execution_followup",
+                        **({"plan_id": clean_plan_id} if clean_plan_id else {}),
+                    },
+                ),
                 self._assistant_action_template(
                     name="query_mp_subscribes",
                     description="查看订阅列表，确认当前订阅是否已生效",
@@ -7102,9 +7126,20 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ]
         elif workflow_name in {"share_transfer", "pansou_transfer_selected", "hdhive_unlock", "hdhive_unlock_selected"}:
-            next_actions = ["query_mp_transfer_history", "inspect_session_state"]
-            follow_up_hint = "建议先查整理/入库历史，确认云盘资源是否已落库；如果失败，再回看当前会话状态。"
+            next_actions = ["query_execution_followup", "query_mp_transfer_history", "inspect_session_state"]
+            follow_up_hint = "可以先执行统一后续追踪；它会自动查整理/入库历史，失败时再回看当前会话状态。"
             templates = [
+                self._assistant_action_template(
+                    name="query_execution_followup",
+                    description="按最近已执行计划自动查询云盘转存后的统一后续状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={
+                        **base_state,
+                        "name": "query_execution_followup",
+                        **({"plan_id": clean_plan_id} if clean_plan_id else {}),
+                    },
+                ),
                 self._assistant_action_template(
                     name="query_mp_transfer_history",
                     description="查看最近整理/入库历史，确认转存资源是否已落库",
@@ -7126,6 +7161,105 @@ class AgentResourceOfficer(_PluginBase):
             "action_templates": templates,
             "recommended_action": next_actions[0] if next_actions else "",
             "follow_up_hint": follow_up_hint,
+        }
+
+    async def _assistant_execution_followup(
+        self,
+        request: Request,
+        *,
+        session: str,
+        session_id: str,
+        plan_id: str = "",
+    ) -> Dict[str, Any]:
+        session_name, cache_key = self._normalize_assistant_session_ref(
+            session=session or "default",
+            session_id=session_id,
+        )
+        target_plan_id = self._clean_text(plan_id)
+        plan = self._find_workflow_plan(
+            plan_id=target_plan_id,
+            session=session_name,
+            session_id=cache_key,
+            executed=True if not target_plan_id else None,
+        )
+        if target_plan_id and plan and not bool(plan.get("executed")):
+            return {
+                "success": False,
+                "message": f"计划 {target_plan_id} 还没有执行，暂时无法做执行后追踪。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "execution_followup",
+                    "ok": False,
+                    "error_code": "plan_not_executed",
+                    "plan_id": target_plan_id,
+                }),
+            }
+        if not plan:
+            latest_any = self._find_workflow_plan(session=session_name, session_id=cache_key, executed=None)
+            error_code = "executed_plan_not_found"
+            if latest_any and not bool(latest_any.get("executed")):
+                error_code = "latest_plan_not_executed"
+            return {
+                "success": False,
+                "message": "当前会话没有可追踪的已执行计划，请先执行下载、订阅或转存计划。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "execution_followup",
+                    "ok": False,
+                    "error_code": error_code,
+                    "plan_id": target_plan_id,
+                }),
+            }
+
+        source_plan = self._workflow_plan_public_item(plan, include_actions=False)
+        state = self._load_session(self._clean_text(plan.get("session_id"))) or {}
+        followup = self._assistant_plan_execute_followup(
+            workflow=self._clean_text(plan.get("workflow")),
+            session=self._clean_text(plan.get("session")) or session_name,
+            session_id=self._clean_text(plan.get("session_id")) or cache_key,
+            session_state=state,
+            ok=bool(plan.get("last_success")) if plan.get("last_success") is not None else True,
+            plan_id=self._clean_text(plan.get("plan_id")),
+        )
+        action_templates = [item for item in (followup.get("action_templates") or []) if isinstance(item, dict)]
+        resolved_template = next(
+            (item for item in action_templates if self._clean_text(item.get("name")) != "query_execution_followup"),
+            {},
+        )
+        resolved_name = self._clean_text(resolved_template.get("name"))
+        if not resolved_name:
+            return {
+                "success": False,
+                "message": "当前执行计划没有可自动继续的只读追踪动作。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "execution_followup",
+                    "ok": False,
+                    "error_code": "followup_not_available",
+                    "plan_id": self._clean_text(plan.get("plan_id")),
+                    "source_plan": source_plan,
+                }),
+            }
+        action_body = dict(resolved_template.get("action_body") or resolved_template.get("body") or {})
+        action_body["compact"] = False
+        action_body["apikey"] = self._extract_apikey(request, {})
+        result = await self.api_assistant_action(_JsonRequestShim(request, action_body))
+        payload = dict(result.get("data") or {})
+        payload.update({
+            "action": "execution_followup",
+            "ok": bool(result.get("success")),
+            "plan_id": self._clean_text(plan.get("plan_id")),
+            "workflow": self._clean_text(plan.get("workflow")),
+            "source_plan": source_plan,
+            "recommended_action": self._clean_text(followup.get("recommended_action")),
+            "follow_up_hint": self._clean_text(followup.get("follow_up_hint")),
+            "resolved_followup_action": resolved_name,
+        })
+        message_lines = [
+            f"已执行后续追踪：{resolved_name}",
+            self._clean_text(result.get("message")),
+        ]
+        return {
+            "success": bool(result.get("success")),
+            "message": "\n".join(line for line in message_lines if line).strip(),
+            "data": self._assistant_response_data(session=session_name, data=payload),
         }
 
     def _assistant_actions_compact_data(self, actions_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -7167,6 +7301,7 @@ class AgentResourceOfficer(_PluginBase):
             session_id=self._clean_text(data.get("session_id") or session_state.get("session_id")),
             session_state=session_state,
             ok=bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
+            plan_id=self._clean_text(data.get("plan_id")),
         )
         payload = {
             "protocol_version": "assistant.v1",
@@ -7232,6 +7367,8 @@ class AgentResourceOfficer(_PluginBase):
             "action": self._clean_text(data.get("action")) or self._clean_text(name) or "execute_action",
             "ok": bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
             "compact": True,
+            "write_effect": data.get("write_effect") or self._assistant_write_effect_for_action(self._clean_text(data.get("action")) or self._clean_text(name)),
+            "error_code": self._clean_text(data.get("error_code")) or ("" if response.get("success") else "assistant_error"),
             "name": self._clean_text(name),
             "session": self._clean_text(data.get("session") or session_state.get("session")) or "default",
             "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
@@ -7249,6 +7386,9 @@ class AgentResourceOfficer(_PluginBase):
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
+        for key in ["recommended_action", "follow_up_hint"]:
+            if key in data:
+                payload[key] = data.get(key)
         pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
         if pending_p115:
             payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
@@ -8555,6 +8695,7 @@ class AgentResourceOfficer(_PluginBase):
                 "query_mp_download_tasks",
                 "query_mp_download_history",
                 "query_mp_lifecycle_status",
+                "query_execution_followup",
                 "query_mp_media_detail",
                 "query_mp_search_result_detail",
                 "query_mp_best_result_detail",
@@ -9681,6 +9822,7 @@ class AgentResourceOfficer(_PluginBase):
                     "session_id": "selfcheck-session",
                 },
                 ok=True,
+                plan_id=f"plan-selfcheck-{workflow}",
             )
             for workflow, keyword in [
                 ("mp_best_download", "蜘蛛侠"),
@@ -9690,16 +9832,16 @@ class AgentResourceOfficer(_PluginBase):
         }
         execute_plan_followups_ok = (
             [item.get("name") for item in (execute_plan_followup_samples.get("mp_best_download") or {}).get("action_templates") or []]
-            == ["query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
-            and (execute_plan_followup_samples.get("mp_best_download") or {}).get("recommended_action") == "query_mp_download_history"
+            == ["query_execution_followup", "query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
+            and (execute_plan_followup_samples.get("mp_best_download") or {}).get("recommended_action") == "query_execution_followup"
             and bool(self._clean_text((execute_plan_followup_samples.get("mp_best_download") or {}).get("follow_up_hint")))
             and [item.get("name") for item in (execute_plan_followup_samples.get("mp_subscribe") or {}).get("action_templates") or []]
-            == ["query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
-            and (execute_plan_followup_samples.get("mp_subscribe") or {}).get("recommended_action") == "query_mp_subscribes"
+            == ["query_execution_followup", "query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
+            and (execute_plan_followup_samples.get("mp_subscribe") or {}).get("recommended_action") == "query_execution_followup"
             and bool(self._clean_text((execute_plan_followup_samples.get("mp_subscribe") or {}).get("follow_up_hint")))
             and [item.get("name") for item in (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("action_templates") or []]
-            == ["query_mp_transfer_history", "inspect_session_state"]
-            and (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_mp_transfer_history"
+            == ["query_execution_followup", "query_mp_transfer_history", "inspect_session_state"]
+            and (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_execution_followup"
             and bool(self._clean_text((execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("follow_up_hint")))
         )
         checks = {
@@ -13181,6 +13323,17 @@ class AgentResourceOfficer(_PluginBase):
                 limit=self._safe_int(body.get("limit"), 10),
                 page=self._safe_int(body.get("page"), 1),
             ))
+        if name == "query_execution_followup":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_execution_followup(
+                request,
+                session=session_name,
+                session_id=cache_key,
+                plan_id=self._clean_text(body.get("plan_id")),
+            ))
         if name == "mp_subscribe_control":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
@@ -13677,6 +13830,11 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "status", "limit", "page", "compact"],
                 },
                 {
+                    "name": "execution_followup",
+                    "description": "按最近已执行计划自动查询对应的下载、订阅或入库后续状态，只读",
+                    "fields": ["session", "session_id", "plan_id", "compact"],
+                },
+                {
                     "name": "mp_recommend",
                     "description": "读取 MP 原生推荐，例如 TMDB、豆瓣、Bangumi",
                     "fields": ["session", "source", "media_type", "limit", "compact"],
@@ -13897,6 +14055,12 @@ class AgentResourceOfficer(_PluginBase):
                 "status": self._clean_text(body.get("status")) or "all",
                 "limit": self._safe_int(body.get("limit"), 10),
                 "page": self._safe_int(body.get("page"), 1),
+            })], ""
+
+        if workflow_name == "execution_followup":
+            return [base({
+                "name": "query_execution_followup",
+                "plan_id": self._clean_text(body.get("plan_id")),
             })], ""
 
         if workflow_name == "mp_recommend":
@@ -14188,6 +14352,7 @@ class AgentResourceOfficer(_PluginBase):
             session_id=session_id,
             session_state=data.get("session_state") if isinstance(data.get("session_state"), dict) else {},
             ok=bool(action_result.get("success")),
+            plan_id=plan_id,
         )
         data["recommended_action"] = self._clean_text(data.get("recommended_action")) or self._clean_text(followup.get("recommended_action"))
         data["follow_up_hint"] = self._clean_text(data.get("follow_up_hint")) or self._clean_text(followup.get("follow_up_hint"))

@@ -119,6 +119,18 @@ def workflow(base_url: str, api_key: str, session: str, workflow_name: str, **kw
     )
 
 
+def action(base_url: str, api_key: str, session: str, name: str, **kwargs) -> dict:
+    body = {"session": session, "name": name, "compact": True}
+    body.update(kwargs)
+    return request(
+        base_url,
+        api_key,
+        "POST",
+        "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+        body=body,
+    )
+
+
 def recover(base_url: str, api_key: str, session: str) -> dict:
     return request(
         base_url,
@@ -225,24 +237,27 @@ def main() -> int:
             "selfcheck_execute_plan_followups",
             (
                 (execute_plan_followups.get("mp_best_download") or {}).get("template_names") == [
+                    "query_execution_followup",
                     "query_mp_download_history",
                     "query_mp_lifecycle_status",
                     "query_mp_download_tasks",
                 ]
-                and (execute_plan_followups.get("mp_best_download") or {}).get("recommended_action") == "query_mp_download_history"
+                and (execute_plan_followups.get("mp_best_download") or {}).get("recommended_action") == "query_execution_followup"
                 and bool((execute_plan_followups.get("mp_best_download") or {}).get("follow_up_hint"))
                 and (execute_plan_followups.get("mp_subscribe") or {}).get("template_names") == [
+                    "query_execution_followup",
                     "query_mp_subscribes",
                     "query_mp_lifecycle_status",
                     "start_mp_media_search",
                 ]
-                and (execute_plan_followups.get("mp_subscribe") or {}).get("recommended_action") == "query_mp_subscribes"
+                and (execute_plan_followups.get("mp_subscribe") or {}).get("recommended_action") == "query_execution_followup"
                 and bool((execute_plan_followups.get("mp_subscribe") or {}).get("follow_up_hint"))
                 and (execute_plan_followups.get("hdhive_unlock_selected") or {}).get("template_names") == [
+                    "query_execution_followup",
                     "query_mp_transfer_history",
                     "inspect_session_state",
                 ]
-                and (execute_plan_followups.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_mp_transfer_history"
+                and (execute_plan_followups.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_execution_followup"
                 and bool((execute_plan_followups.get("hdhive_unlock_selected") or {}).get("follow_up_hint"))
             ),
             json.dumps(execute_plan_followups, ensure_ascii=False),
@@ -304,6 +319,17 @@ def main() -> int:
         if args.include_search:
             download_tasks = route(base_url, api_key, sessions[0], "下载任务")
             download_tasks_data = assert_route_action("route_download_tasks", download_tasks, "mp_download_tasks")
+            execution_followup = action(base_url, api_key, sessions[0], "query_execution_followup")
+            execution_followup_data = data(execution_followup)
+            assert_ok(
+                "action_execution_followup_without_plan",
+                (
+                    execution_followup.get("success") is False
+                    and execution_followup_data.get("action") == "execution_followup"
+                    and execution_followup_data.get("error_code") in {"executed_plan_not_found", "latest_plan_not_executed"}
+                ),
+                json.dumps(execution_followup, ensure_ascii=False)[:240],
+            )
             download_task_actions = list(download_tasks_data.get("next_actions") or [])
             assert_ok(
                 "route_download_tasks_empty_next_actions",
