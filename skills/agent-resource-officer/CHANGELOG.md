@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.25
+
+- Preserved `follow_up_hint` in compact helper output, so `plan-execute` and related commands no longer drop the plugin's next-step hint.
+- Added a selftest case for `follow_up_hint` passthrough.
+
 ## 0.1.24
 
 - Added positional argument support for `workflow`, so `python3 scripts/aro_request.py workflow mp_media_detail 蜘蛛侠` works without `--workflow` and `--keyword`.

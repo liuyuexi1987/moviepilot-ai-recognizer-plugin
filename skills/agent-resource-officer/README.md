@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.24`
+当前 helper 版本：`0.1.25`
 
 公开仓库：
 
@@ -58,6 +58,8 @@ ARO_API_KEY=your_moviepilot_api_token
 - `python3 scripts/aro_request.py pick 1`
 - `python3 scripts/aro_request.py pick 1 详情`
 - `python3 scripts/aro_request.py plan-execute plan-xxx`
+
+`plan-execute` 返回里会保留插件给出的 `recommended_action` 和 `follow_up_hint`，外部智能体执行计划后可以直接按这两个字段继续。
 
 `workflow`、`session`、`history`、`plans` 也支持常用短写法：
 

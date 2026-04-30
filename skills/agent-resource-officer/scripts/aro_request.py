@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.24"
+HELPER_VERSION = "0.1.25"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -229,6 +229,7 @@ def compact(data):
             "missing_requirements",
             "migration_hint",
             "recommended_action",
+            "follow_up_hint",
             "p115_ready",
             "p115_direct_ready",
             "hdhive_configured",
@@ -610,6 +611,15 @@ def selftest_result():
     })
     check("compact_preserves_plan_id", compact_workflow.get("plan_id") == "plan-123")
     check("compact_preserves_execute_plan_body", (compact_workflow.get("execute_plan_body") or {}).get("plan_id") == "plan-123")
+    compact_execute = compact({
+        "success": True,
+        "data": {
+            "action": "execute_plan",
+            "recommended_action": "query_mp_download_history",
+            "follow_up_hint": "先查下载历史。",
+        },
+    })
+    check("compact_preserves_follow_up_hint", compact_execute.get("follow_up_hint") == "先查下载历史。")
     compact_clear = compact({
         "success": True,
         "data": {
