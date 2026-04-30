@@ -1,5 +1,8 @@
 # 重构计划：Agent Suite
 
+> 这是历史重构规划文档，主要用于回看设计演进。
+> 当前安装、接入、发布请优先看 `README.md`、`docs/INDEX.md`、`docs/PLUGIN_INSTALL.md`、`docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`。
+
 这个仓库接下来不再继续沿着“功能越分越散”的方向增长，而是进入一次有边界的重构：
 
 - 保留旧插件作为可运行的 `legacy` 参考
