@@ -220,6 +220,27 @@ def main() -> int:
         selfcheck_data = data(selfcheck)
         assert_ok("selfcheck", bool(selfcheck.get("success") and selfcheck_data.get("ok")), str(selfcheck.get("message") or ""))
         print(f"plugin_version={selfcheck_data.get('version') or ''}")
+        execute_plan_followups = ((selfcheck_data.get("template_samples") or {}).get("execute_plan_followups") or {})
+        assert_ok(
+            "selfcheck_execute_plan_followups",
+            (
+                (execute_plan_followups.get("mp_best_download") or {}).get("template_names") == [
+                    "query_mp_download_history",
+                    "query_mp_lifecycle_status",
+                    "query_mp_download_tasks",
+                ]
+                and (execute_plan_followups.get("mp_subscribe") or {}).get("template_names") == [
+                    "query_mp_subscribes",
+                    "query_mp_lifecycle_status",
+                    "start_mp_media_search",
+                ]
+                and (execute_plan_followups.get("hdhive_unlock_selected") or {}).get("template_names") == [
+                    "query_mp_transfer_history",
+                    "inspect_session_state",
+                ]
+            ),
+            json.dumps(execute_plan_followups, ensure_ascii=False),
+        )
 
         feishu = request(base_url, api_key, "GET", "/api/v1/plugin/AgentResourceOfficer/feishu/health")
         feishu_data = data(feishu)

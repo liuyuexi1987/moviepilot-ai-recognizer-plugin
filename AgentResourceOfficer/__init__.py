@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.45"
+    plugin_version = "0.2.46"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -9662,6 +9662,32 @@ class AgentResourceOfficer(_PluginBase):
             and start_new_recovery.get("can_resume") is False
             and start_new_recovery.get("recommended_action") == "start_pansou_search"
         )
+        execute_plan_followup_samples = {
+            workflow: self._assistant_plan_execute_followup(
+                workflow=workflow,
+                session="selfcheck",
+                session_id="selfcheck-session",
+                session_state={
+                    "keyword": keyword,
+                    "session": "selfcheck",
+                    "session_id": "selfcheck-session",
+                },
+                ok=True,
+            )
+            for workflow, keyword in [
+                ("mp_best_download", "蜘蛛侠"),
+                ("mp_subscribe", "钢铁侠"),
+                ("hdhive_unlock_selected", "复仇者联盟"),
+            ]
+        }
+        execute_plan_followups_ok = (
+            [item.get("name") for item in (execute_plan_followup_samples.get("mp_best_download") or {}).get("action_templates") or []]
+            == ["query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
+            and [item.get("name") for item in (execute_plan_followup_samples.get("mp_subscribe") or {}).get("action_templates") or []]
+            == ["query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
+            and [item.get("name") for item in (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("action_templates") or []]
+            == ["query_mp_transfer_history", "inspect_session_state"]
+        )
         checks = {
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
@@ -9682,6 +9708,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_policy_only": request_templates_policy_only_ok,
             "startup_request_templates": startup_request_templates_ok,
             "start_new_recovery_not_resumable": start_new_recovery_ok,
+            "execute_plan_followups": execute_plan_followups_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
@@ -9715,6 +9742,17 @@ class AgentResourceOfficer(_PluginBase):
                         "endpoint": (request_templates.get(name) or {}).get("endpoint"),
                     }
                     for name in ["maintain_execute", "workflow_dry_run", "saved_plan_execute"]
+                },
+                "execute_plan_followups": {
+                    workflow: {
+                        "next_actions": (sample or {}).get("next_actions") or [],
+                        "template_names": [
+                            self._clean_text(item.get("name"))
+                            for item in ((sample or {}).get("action_templates") or [])
+                            if isinstance(item, dict) and self._clean_text(item.get("name"))
+                        ],
+                    }
+                    for workflow, sample in execute_plan_followup_samples.items()
                 },
             },
             "next_actions": ["assistant_startup", "assistant_maintain", "assistant_pulse", "assistant_toolbox", "assistant_readiness"],
