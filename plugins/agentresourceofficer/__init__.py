@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.32"
+    plugin_version = "0.2.33"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -232,6 +232,18 @@ class AgentResourceOfficer(_PluginBase):
                 if remain:
                     return mode, remain
         return "", raw
+
+    @staticmethod
+    def _match_command_prefix(raw: str, prefixes: List[str]) -> Optional[Tuple[str, str]]:
+        text = str(raw or "").strip()
+        for prefix in prefixes:
+            if not text.startswith(prefix):
+                continue
+            remain = text[len(prefix):]
+            if not remain:
+                return prefix, ""
+            return prefix, remain.lstrip(" ：:").strip()
+        return None
 
     @staticmethod
     def _normalize_mp_recommend_request(value: Any, default_source: str = "tmdb_trending") -> Tuple[str, str]:
@@ -9498,8 +9510,9 @@ class AgentResourceOfficer(_PluginBase):
                 ("删除下载", "delete"),
                 ("移除下载", "delete"),
             ]:
-                if raw.startswith(prefix):
-                    target_text = raw[len(prefix):].strip()
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, [prefix])
+                if prefix_match:
+                    target_text = prefix_match[1]
                     if target_text:
                         options["action"] = "mp_download_control"
                         options["mode"] = ""
@@ -9507,40 +9520,35 @@ class AgentResourceOfficer(_PluginBase):
                         options["download_control"] = control
                     break
             if not options.get("action"):
-                for prefix in ["下载任务", "下载状态", "下载列表", "查看下载", "下载进度"]:
-                    if raw.startswith(prefix + " "):
-                        options["action"] = "mp_download_tasks"
-                        options["mode"] = ""
-                        options["keyword"] = raw[len(prefix):].strip()
-                        break
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["下载任务", "下载状态", "下载列表", "查看下载", "下载进度"])
+                if prefix_match:
+                    options["action"] = "mp_download_tasks"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
             if not options.get("action"):
-                for prefix in ["下载历史", "下载记录", "最近下载", "历史下载"]:
-                    if raw.startswith(prefix + " "):
-                        options["action"] = "mp_download_history"
-                        options["mode"] = ""
-                        options["keyword"] = raw[len(prefix):].strip()
-                        break
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["下载历史", "下载记录", "最近下载", "历史下载"])
+                if prefix_match:
+                    options["action"] = "mp_download_history"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
             if not options.get("action"):
-                for prefix in ["资源追踪", "下载追踪", "媒体状态", "落库状态", "追踪"]:
-                    if raw.startswith(prefix + " "):
-                        options["action"] = "mp_lifecycle_status"
-                        options["mode"] = ""
-                        options["keyword"] = raw[len(prefix):].strip()
-                        break
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["资源追踪", "下载追踪", "媒体状态", "落库状态", "追踪"])
+                if prefix_match:
+                    options["action"] = "mp_lifecycle_status"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
             if not options.get("action"):
-                for prefix in ["MP识别", "mp识别", "媒体识别", "媒体详情", "详情媒体", "识别"]:
-                    if raw.startswith(prefix + " "):
-                        options["action"] = "mp_media_detail"
-                        options["mode"] = ""
-                        options["keyword"] = raw[len(prefix):].strip()
-                        break
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["MP识别", "mp识别", "媒体识别", "媒体详情", "详情媒体", "识别"])
+                if prefix_match:
+                    options["action"] = "mp_media_detail"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
             if not options.get("action"):
-                for prefix in ["站点状态", "站点列表", "PT站点", "pt站点", "站点"]:
-                    if raw.startswith(prefix + " "):
-                        options["action"] = "mp_sites"
-                        options["mode"] = ""
-                        options["keyword"] = raw[len(prefix):].strip()
-                        break
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["站点状态", "站点列表", "PT站点", "pt站点", "站点"])
+                if prefix_match:
+                    options["action"] = "mp_sites"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
             if not options.get("action"):
                 for prefix, control in [
                     ("搜索订阅", "search"),
@@ -9550,8 +9558,9 @@ class AgentResourceOfficer(_PluginBase):
                     ("删除订阅", "delete"),
                     ("移除订阅", "delete"),
                 ]:
-                    if raw.startswith(prefix):
-                        target_text = raw[len(prefix):].strip()
+                    prefix_match = AgentResourceOfficer._match_command_prefix(raw, [prefix])
+                    if prefix_match:
+                        target_text = prefix_match[1]
                         if target_text:
                             options["action"] = "mp_subscribe_control"
                             options["mode"] = ""
@@ -9559,13 +9568,11 @@ class AgentResourceOfficer(_PluginBase):
                             options["subscribe_control"] = control
                         break
             if not options.get("action"):
-                for prefix in ["订阅列表", "订阅状态", "查看订阅", "MP订阅", "mp订阅"]:
-                    if raw.startswith(prefix + " ") or raw.startswith(prefix + "：") or raw.startswith(prefix + ":") or raw.startswith(prefix):
-                        remain_text = raw[len(prefix):].lstrip(" ：:").strip()
-                        options["action"] = "mp_subscribes"
-                        options["mode"] = ""
-                        options["keyword"] = remain_text
-                        break
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["订阅列表", "订阅状态", "查看订阅", "MP订阅", "mp订阅"])
+                if prefix_match:
+                    options["action"] = "mp_subscribes"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
             if not options.get("action"):
                 for prefix, status_name in [
                     ("入库失败", "failed"),
@@ -9582,10 +9589,11 @@ class AgentResourceOfficer(_PluginBase):
                     ("最近入库", "all"),
                     ("最近整理", "all"),
                 ]:
-                    if raw.startswith(prefix + " "):
+                    prefix_match = AgentResourceOfficer._match_command_prefix(raw, [prefix])
+                    if prefix_match:
                         options["action"] = "mp_transfer_history"
                         options["mode"] = ""
-                        options["keyword"] = raw[len(prefix):].strip()
+                        options["keyword"] = prefix_match[1]
                         options["status"] = status_name
                         break
             if not options.get("action"):
