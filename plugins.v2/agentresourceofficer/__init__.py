@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.35"
+    plugin_version = "0.2.36"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3563,11 +3563,15 @@ class AgentResourceOfficer(_PluginBase):
         if score:
             lines.append(f"评分：{self._safe_int(score.get('score'), 0)} / {self._clean_text(score.get('score_level')) or '-'}")
             reasons = [self._clean_text(value) for value in (score.get("score_reasons") or []) if self._clean_text(value)]
+            hard_risks = [self._clean_text(value) for value in (score.get("hard_risk_reasons") or []) if self._clean_text(value)]
             risks = [self._clean_text(value) for value in (score.get("risk_reasons") or []) if self._clean_text(value)]
+            risks = [risk for risk in risks if risk not in hard_risks]
             if reasons:
                 lines.append("加分理由：" + "；".join(reasons[:6]))
+            if hard_risks:
+                lines.append("硬风险：" + "；".join(hard_risks[:6]))
             if risks:
-                lines.append("风险：" + "；".join(risks[:6]))
+                lines.append("提醒：" + "；".join(risks[:6]))
         if index:
             lines.append(f"下一步：确认处理请回复“选择 {index}”。")
         return "\n".join(lines)
@@ -3718,9 +3722,13 @@ class AgentResourceOfficer(_PluginBase):
                     f"促销：{torrent.get('volume_factor') or '普通'}",
                     f"大小：{torrent.get('size') or '未知'}",
                 ]
+                hard_risks = score.get("hard_risk_reasons") or []
                 risks = score.get("risk_reasons") or []
-                if risks:
-                    details.append("风险：" + "；".join(str(item) for item in risks[:2]))
+                risks = [risk for risk in risks if risk not in hard_risks]
+                if hard_risks:
+                    details.append("硬风险：" + "；".join(str(item) for item in hard_risks[:2]))
+                elif risks:
+                    details.append("提醒：" + "；".join(str(item) for item in risks[:2]))
                 lines.append("   " + " | ".join(details))
             lines.append("下载/订阅属于写入动作，默认请先用 dry_run 生成 plan_id，再确认执行。")
         return "\n".join(line for line in lines if line)
@@ -3849,11 +3857,15 @@ class AgentResourceOfficer(_PluginBase):
         if score_label:
             lines.append(f"评分：{score_label}")
         reasons = [str(value) for value in (score.get("score_reasons") or []) if value]
+        hard_risks = [str(value) for value in (score.get("hard_risk_reasons") or []) if value]
         risks = [str(value) for value in (score.get("risk_reasons") or []) if value]
+        risks = [risk for risk in risks if risk not in hard_risks]
         if reasons:
             lines.append("加分理由：" + "；".join(reasons[:6]))
+        if hard_risks:
+            lines.append("硬风险：" + "；".join(hard_risks[:6]))
         if risks:
-            lines.append("风险：" + "；".join(risks[:6]))
+            lines.append("提醒：" + "；".join(risks[:6]))
         if torrent.get("page_url"):
             lines.append(f"详情页：{torrent.get('page_url')}")
         lines.append(f"下一步：确认下载请发“下载{choice}”，会先生成 plan_id，不会静默下载。")
@@ -9807,9 +9819,13 @@ class AgentResourceOfficer(_PluginBase):
             if score_label:
                 lines.append(f"   评分：{score_label}")
                 score = cached.get("score") if isinstance(cached.get("score"), dict) else {}
+                hard_risks = score.get("hard_risk_reasons") or []
                 risks = score.get("risk_reasons") or []
-                if risks:
-                    lines.append("   风险：" + "；".join(str(item) for item in risks[:2]))
+                risks = [risk for risk in risks if risk not in hard_risks]
+                if hard_risks:
+                    lines.append("   硬风险：" + "；".join(str(item) for item in hard_risks[:2]))
+                elif risks:
+                    lines.append("   提醒：" + "；".join(str(item) for item in risks[:2]))
             lines.append(f"   {cached['url']}")
         next_quark_hint = count_115 + 1 if count_quark else 1
         lines.append("下一步：建议先回复“计划选择 1”生成待确认计划；确认后再回复“执行计划”。")
@@ -10067,9 +10083,13 @@ class AgentResourceOfficer(_PluginBase):
             score = item.get("score") if isinstance(item.get("score"), dict) else {}
             if score_label:
                 lines.append(f"   评分：{score_label}")
+                hard_risks = score.get("hard_risk_reasons") or []
                 risks = score.get("risk_reasons") or []
-                if risks:
-                    lines.append("   风险：" + "；".join(str(risk) for risk in risks[:2]))
+                risks = [risk for risk in risks if risk not in hard_risks]
+                if hard_risks:
+                    lines.append("   硬风险：" + "；".join(str(risk) for risk in hard_risks[:2]))
+                elif risks:
+                    lines.append("   提醒：" + "；".join(str(risk) for risk in risks[:2]))
             if episode:
                 lines.append(f"   集数：{episode}")
             if subtitle:
