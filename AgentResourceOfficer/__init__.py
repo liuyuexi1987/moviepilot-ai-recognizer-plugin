@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.63"
+    plugin_version = "0.2.64"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -10640,6 +10640,40 @@ class AgentResourceOfficer(_PluginBase):
             "url_template": "{base_url}{endpoint}?apikey={MP_API_TOKEN}",
             "description": "调用插件 HTTP 接口时推荐使用 ?apikey=你的MP_API_TOKEN；MP Tool 调用不需要此参数。",
         }
+        external_agent_execution_policy_contract = {
+            "auto_continue": "直接执行 auto_run_command。",
+            "auto_continue_then_wait_confirmation": "先执行 auto_run_command，再停止并向用户展示 confirm_command。",
+            "wait_user_confirmation": "不要自动执行；先向用户展示 confirm_command 或 display_command。",
+            "show_only": "只展示 display_command，不要自动继续。",
+            "stop": "当前没有适合自动继续的命令，不要继续执行。",
+        }
+        external_agent_execution_loop_contract = [
+            {
+                "step": "startup",
+                "template": "startup_probe",
+                "when": "新会话开始时先读取启动聚合包。",
+            },
+            {
+                "step": "decide",
+                "template": "startup_probe",
+                "when": "结合恢复信息和推荐 recipe，确定先继续会话还是开始新流程。",
+            },
+            {
+                "step": "route",
+                "template": "route_text",
+                "when": "处理用户的自然语言资源指令。",
+            },
+            {
+                "step": "policy",
+                "template": "",
+                "when": "读取 recommended_agent_behavior、auto_run_command、confirm_command 决定自动继续、确认或停止。",
+            },
+            {
+                "step": "followup",
+                "template": "execution_followup",
+                "when": "执行计划后继续追踪下载、入库或失败诊断。",
+            },
+        ]
         recommended_sequence = [
             {
                 "step": "bootstrap",
@@ -10849,6 +10883,9 @@ class AgentResourceOfficer(_PluginBase):
             } if first_template_data else {},
             "calls": recommended_recipe_calls,
         }
+        if recommended_recipe == "external_agent_quickstart":
+            recommended_recipe_detail["execution_policy_contract"] = external_agent_execution_policy_contract
+            recommended_recipe_detail["execution_loop_contract"] = external_agent_execution_loop_contract
         confirmation_templates = recommended_recipe_detail.get("confirmation_required_templates") or []
         recommended_recipe_detail["first_confirmation_template"] = confirmation_templates[0] if confirmation_templates else ""
         recommended_recipe_detail["confirmation_message"] = (
@@ -10886,6 +10923,8 @@ class AgentResourceOfficer(_PluginBase):
             "recommended_recipe": recommended_recipe,
             "recommended_recipe_reason": recommended_recipe_reason,
             "recommended_recipe_detail": recommended_recipe_detail,
+            "external_agent_execution_policy_contract": external_agent_execution_policy_contract,
+            "external_agent_execution_loop_contract": external_agent_execution_loop_contract,
         }
 
     def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
@@ -10909,6 +10948,13 @@ class AgentResourceOfficer(_PluginBase):
             )
         if detail.get("confirmation_message"):
             lines.append(f"确认提示：{detail.get('confirmation_message')}")
+        if detail.get("execution_policy_contract"):
+            lines.append("外部智能体执行分支：" + " / ".join(str(key) for key in (detail.get("execution_policy_contract") or {}).keys()))
+        if detail.get("execution_loop_contract"):
+            lines.append(
+                "外部智能体最小循环："
+                + " -> ".join(self._clean_text(item.get("step")) for item in (detail.get("execution_loop_contract") or []) if self._clean_text(item.get("step")))
+            )
         for name in [
             "startup_probe",
             "selfcheck_probe",
@@ -10998,6 +11044,11 @@ class AgentResourceOfficer(_PluginBase):
         recipe_filtered_request_templates = self._assistant_request_templates_response_data(
             limit=5,
             recipe="plan",
+            include_templates=False,
+        )
+        external_recipe_request_templates = self._assistant_request_templates_response_data(
+            limit=5,
+            recipe="external_agent",
             include_templates=False,
         )
         policy_only_request_templates = self._assistant_request_templates_response_data(
@@ -11164,6 +11215,20 @@ class AgentResourceOfficer(_PluginBase):
             and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("confirmation_required") or [])
             and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("non_cacheable_templates") or [])
         )
+        external_recipe_detail = external_recipe_request_templates.get("recommended_recipe_detail") or {}
+        request_templates_external_agent_contract_ok = (
+            external_recipe_request_templates.get("selected_recipe") == "external_agent_quickstart"
+            and external_recipe_request_templates.get("recommended_recipe") == "external_agent_quickstart"
+            and bool((external_recipe_request_templates.get("external_agent_execution_policy_contract") or {}).get("auto_continue"))
+            and len(external_recipe_request_templates.get("external_agent_execution_loop_contract") or []) >= 5
+            and bool((external_recipe_detail.get("execution_policy_contract") or {}).get("auto_continue"))
+            and len(external_recipe_detail.get("execution_loop_contract") or []) >= 5
+            and any(
+                self._clean_text(item.get("step")) == "policy"
+                for item in (external_recipe_detail.get("execution_loop_contract") or [])
+                if isinstance(item, dict)
+            )
+        )
         start_new_recovery = self._assistant_recovery_public_data(
             session_state={"has_session": False},
             action_templates=[{"name": "start_pansou_search", "tool": "agent_resource_officer_smart_entry"}],
@@ -11247,6 +11312,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_recipe_filter": request_templates_recipe_filter_ok,
             "request_templates_recommended_recipe_detail": request_templates_recommended_recipe_detail_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
+            "request_templates_external_agent_contract": request_templates_external_agent_contract_ok,
             "startup_request_templates": startup_request_templates_ok,
             "start_new_recovery_not_resumable": start_new_recovery_ok,
             "executed_plan_recovery": executed_plan_recovery_ok,

@@ -38,11 +38,12 @@
     "name": "Agent影视助手",
     "description": "统一承接影巢搜索/解锁、115 转存、夸克转存、飞书入口与智能体接口的资源工作流主插件。",
     "labels": "Agent,影巢,HDHive,115,夸克,Quark,智能体,转存,解锁",
-    "version": "0.2.63",
+    "version": "0.2.64",
     "icon": "agentresourceofficer.png",
     "author": "liuyuexi1987",
     "level": 1,
     "history": {
+      "0.2.64": "把外部智能体执行契约与最小执行循环下沉到 request_templates 返回；新接入的智能体现在可以直接从模板元数据拿到 startup -> decide -> route -> policy -> followup 脚手架。",
       "0.2.63": "为 compact 顶层短命令增加执行语义字段：command_policy、preferred_requires_confirmation、fallback_requires_confirmation、can_auto_run_preferred；外部智能体现在可以机械判断 直接读 还是 先确认再写。",
       "0.2.62": "把 error_summary、followup_summary、score_summary.decision 三层短命令继续上浮到 compact 主响应顶层；外部智能体现在只读 preferred_command / compact_commands 和 command_source 就能续跑。",
       "0.2.61": "为 compact 失败回执增加统一 error_summary；外部智能体现在可以直接读取失败标签、建议说明，以及 preferred_command / compact_commands 这样的最短恢复命令。",
