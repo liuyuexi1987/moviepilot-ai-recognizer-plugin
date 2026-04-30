@@ -70,6 +70,28 @@ def assert_ok(name: str, condition: bool, detail: str = "") -> None:
     print(f"{name}_ok")
 
 
+def message_text(result: dict) -> str:
+    return str(result.get("message") or "")
+
+
+def assert_route_action(name: str, result: dict, expected_action: str, *, require_success: bool = True) -> dict:
+    result_data = data(result)
+    condition = result_data.get("action") == expected_action
+    if require_success:
+        condition = condition and bool(result.get("success") and result_data.get("ok"))
+    assert_ok(
+        name,
+        condition,
+        json.dumps({
+            "success": result.get("success"),
+            "ok": result_data.get("ok"),
+            "action": result_data.get("action"),
+            "message": message_text(result)[:160],
+        }, ensure_ascii=False),
+    )
+    return result_data
+
+
 def route(base_url: str, api_key: str, session: str, text: str) -> dict:
     return request(
         base_url,
@@ -124,6 +146,9 @@ def main() -> int:
             f"smoke-aro-mp-search-{stamp}",
             f"smoke-aro-pansou-{stamp}",
             f"smoke-aro-hdhive-{stamp}",
+            f"smoke-aro-mp-readonly-{stamp}",
+            f"smoke-aro-recommend-movie-{stamp}",
+            f"smoke-aro-recommend-tv-{stamp}",
         ])
 
     try:
@@ -151,21 +176,46 @@ def main() -> int:
         )
 
         status = route(base_url, api_key, sessions[0], "115状态")
-        status_data = data(status)
-        assert_ok("route_115_status", bool(status.get("success") and status_data.get("ok")), str(status.get("message") or ""))
+        assert_route_action("route_115_status", status, "p115_status")
 
         if args.include_search:
             mp_search = route(base_url, api_key, sessions[1], f"MP搜索 {args.keyword}")
-            mp_search_data = data(mp_search)
-            assert_ok("route_mp_search", bool(mp_search.get("success") and mp_search_data.get("ok")), str(mp_search.get("message") or ""))
+            assert_route_action("route_mp_search", mp_search, "mp_media_search")
+            mp_search_message = message_text(mp_search)
+            assert_ok(
+                "route_mp_search_plan_hint",
+                "会先生成下载计划" in mp_search_message and "即可下载选中项" not in mp_search_message,
+                mp_search_message[:240],
+            )
 
             pansou = route(base_url, api_key, sessions[2], f"ps{args.pansou_keyword}")
-            pansou_data = data(pansou)
-            assert_ok("route_pansou_alias", bool(pansou.get("success") and pansou_data.get("ok")), str(pansou.get("message") or ""))
+            assert_route_action("route_pansou_alias", pansou, "pansou_search")
 
             hdhive = route(base_url, api_key, sessions[3], f"yc{args.keyword}")
-            hdhive_data = data(hdhive)
-            assert_ok("route_hdhive_alias", bool(hdhive.get("success") and hdhive_data.get("ok")), str(hdhive.get("message") or ""))
+            assert_route_action("route_hdhive_alias", hdhive, "hdhive_candidates")
+
+            subscribe_list = route(base_url, api_key, sessions[4], f"订阅列表{args.keyword}")
+            subscribe_data = assert_route_action("route_subscribe_list_compact", subscribe_list, "mp_subscribes")
+            assert_ok("route_subscribe_list_no_plan", not subscribe_data.get("plan_id"), json.dumps(subscribe_data, ensure_ascii=False)[:240])
+
+            download_history = route(base_url, api_key, sessions[4], f"下载历史{args.keyword}")
+            assert_route_action("route_download_history_compact", download_history, "mp_download_history")
+
+            lifecycle = route(base_url, api_key, sessions[4], f"追踪{args.keyword}")
+            assert_route_action("route_lifecycle_compact", lifecycle, "mp_lifecycle_status")
+
+            transfer_failed = route(base_url, api_key, sessions[4], f"入库失败{args.keyword}")
+            assert_route_action("route_transfer_failed_compact", transfer_failed, "mp_transfer_history")
+
+            movie_recommend = route(base_url, api_key, sessions[5], "热门电影")
+            assert_route_action("route_recommend_movie", movie_recommend, "mp_recommendations")
+            movie_message = message_text(movie_recommend)
+            assert_ok("route_recommend_movie_type_filter", "| 电视剧 |" not in movie_message, movie_message[:240])
+
+            tv_recommend = route(base_url, api_key, sessions[6], "热门电视剧")
+            assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")
+            tv_message = message_text(tv_recommend)
+            assert_ok("route_recommend_tv_type_filter", "| 电影 |" not in tv_message, tv_message[:240])
     finally:
         for session in sessions:
             clear_session(base_url, api_key, session)
