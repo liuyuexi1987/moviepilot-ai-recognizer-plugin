@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.31"
+    plugin_version = "0.2.32"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -9560,10 +9560,11 @@ class AgentResourceOfficer(_PluginBase):
                         break
             if not options.get("action"):
                 for prefix in ["订阅列表", "订阅状态", "查看订阅", "MP订阅", "mp订阅"]:
-                    if raw.startswith(prefix + " "):
+                    if raw.startswith(prefix + " ") or raw.startswith(prefix + "：") or raw.startswith(prefix + ":") or raw.startswith(prefix):
+                        remain_text = raw[len(prefix):].lstrip(" ：:").strip()
                         options["action"] = "mp_subscribes"
                         options["mode"] = ""
-                        options["keyword"] = raw[len(prefix):].strip()
+                        options["keyword"] = remain_text
                         break
             if not options.get("action"):
                 for prefix, status_name in [
@@ -9587,42 +9588,43 @@ class AgentResourceOfficer(_PluginBase):
                         options["keyword"] = raw[len(prefix):].strip()
                         options["status"] = status_name
                         break
-            for prefix, action in [
-                ("下载资源", "mp_download"),
-                ("下载", "mp_download"),
-                ("订阅并搜索", "mp_subscribe_search"),
-                ("订阅搜索", "mp_subscribe_search"),
-                ("订阅媒体", "mp_subscribe"),
-                ("订阅", "mp_subscribe"),
-                ("热门推荐", "mp_recommendations"),
-                ("推荐", "mp_recommendations"),
-            ]:
-                if raw == prefix:
-                    options["action"] = action
-                    options["mode"] = ""
-                    options["keyword"] = ""
-                    break
-                if raw.startswith(prefix + " "):
-                    options["action"] = action
-                    options["mode"] = ""
-                    options["keyword"] = raw[len(prefix):].strip()
-                    break
-                if raw.startswith(prefix):
-                    remain_text = raw[len(prefix):].strip()
-                    if not remain_text:
-                        continue
-                    if action == "mp_download":
-                        download_match = re.search(r"\d+", remain_text)
-                        if not download_match:
-                            continue
+            if not options.get("action"):
+                for prefix, action in [
+                    ("下载资源", "mp_download"),
+                    ("下载", "mp_download"),
+                    ("订阅并搜索", "mp_subscribe_search"),
+                    ("订阅搜索", "mp_subscribe_search"),
+                    ("订阅媒体", "mp_subscribe"),
+                    ("订阅", "mp_subscribe"),
+                    ("热门推荐", "mp_recommendations"),
+                    ("推荐", "mp_recommendations"),
+                ]:
+                    if raw == prefix:
                         options["action"] = action
                         options["mode"] = ""
-                        options["keyword"] = download_match.group(0)
+                        options["keyword"] = ""
                         break
-                    options["action"] = action
-                    options["mode"] = ""
-                    options["keyword"] = remain_text
-                    break
+                    if raw.startswith(prefix + " "):
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
+                    if raw.startswith(prefix):
+                        remain_text = raw[len(prefix):].strip()
+                        if not remain_text:
+                            continue
+                        if action == "mp_download":
+                            download_match = re.search(r"\d+", remain_text)
+                            if not download_match:
+                                continue
+                            options["action"] = action
+                            options["mode"] = ""
+                            options["keyword"] = download_match.group(0)
+                            break
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = remain_text
+                        break
             if not options.get("action") and any(
                 marker in compact
                 for marker in [
