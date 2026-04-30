@@ -18,6 +18,14 @@ bash scripts/package-plugin.sh --list
 
 确认输出的插件和版本符合本次发布预期。
 
+同时确认当前对外文档没有落后：
+
+- `README.md`
+- `docs/INDEX.md`
+- `docs/PLUGIN_INSTALL.md`
+- `docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`
+- `docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`
+
 ## 3. 执行完整检查
 
 如果只改了 Skill，可以先跑轻量检查：
