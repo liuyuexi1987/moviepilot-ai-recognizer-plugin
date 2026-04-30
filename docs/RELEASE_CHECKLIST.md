@@ -42,6 +42,14 @@ bash scripts/pre-release-check.sh
 
 这个命令会同步 `plugins/` 和 `plugins.v2/`，检查元数据、Skill helper、ZIP 内容，并重新生成插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`。
 
+其中也会自动执行：
+
+```bash
+python3 scripts/check-doc-current-state.py
+```
+
+用来校验当前状态文档中的插件版本、helper 版本和 release URL 没有落后于代码。
+
 如果本机已经跑着可访问的 MoviePilot，并且 `~/.config/agent-resource-officer/config` 已配置 `ARO_BASE_URL` / `ARO_API_KEY`，建议追加一次真实链路检查：
 
 ```bash

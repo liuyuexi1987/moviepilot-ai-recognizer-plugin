@@ -19,6 +19,8 @@ Personal MoviePilot plugin suite for agent-driven resource workflows, AI recogni
 - 当前对外文档优先以 `docs/INDEX.md` 为导航；不要把历史规划文档当成当前说明
 - 发布前执行一次：
   - `bash scripts/pre-release-check.sh`
+- 如果只想先验证“当前状态”文档有没有版本漂移，可以单独执行：
+  - `python3 scripts/check-doc-current-state.py`
 - Release 附件可上传 `dist/` 下生成的插件 ZIP，以及 `dist/skills/` 下生成的公开 Skill ZIP；校验文件在 Release 附件中使用 `PLUGIN_` / `SKILL_` 前缀避免重名
 - CI 通过后会把插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json` 上传为 Actions artifact，可直接下载核对或作为 Release 附件来源
 - 可以用 `bash scripts/create-draft-release.sh <tag> --dry-run` 预览 Release 附件和说明，再去掉 `--dry-run` 创建 Draft Release

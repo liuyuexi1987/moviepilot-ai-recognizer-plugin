@@ -246,6 +246,8 @@ if missing_workflow_fragments:
     print("\n".join(missing_workflow_fragments))
     raise SystemExit(1)
 PY
+echo "检查当前状态文档..."
+python3 scripts/check-doc-current-state.py
 
 echo "检查 Markdown 本地链接..."
 python3 - <<'PY'
