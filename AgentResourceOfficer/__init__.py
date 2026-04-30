@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.40"
+    plugin_version = "0.2.41"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -6244,58 +6244,164 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ])
         elif kind == "assistant_mp_download_tasks":
+            has_items = bool(data.get("items")) or self._safe_int(data.get("result_count"), 0) > 0
+            if has_items:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="pause_mp_download",
+                        description="按编号暂停下载任务；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_download_control", "control": "pause", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="resume_mp_download",
+                        description="按编号恢复下载任务；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_download_control", "control": "resume", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="delete_mp_download",
+                        description="按编号删除下载任务；默认不删除文件",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_download_control", "control": "delete", "target": "<1-N>", "delete_files": False},
+                    ),
+                ])
+            else:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="query_mp_download_history",
+                        description="当前没有下载中任务，改查下载历史和整理状态",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "query_mp_download_history", "limit": 10},
+                    ),
+                    self._assistant_action_template(
+                        name="start_mp_media_search",
+                        description="重新发起 MP 原生搜索",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "mode": "mp", "keyword": "<关键词>"},
+                    ),
+                ])
+        elif kind == "assistant_mp_download_history":
             templates.extend([
                 self._assistant_action_template(
-                    name="pause_mp_download",
-                    description="按编号暂停下载任务；写入动作建议先 dry_run 生成计划",
+                    name="query_mp_lifecycle_status",
+                    description="按关键词聚合查看下载任务、下载历史和整理/入库状态",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
-                    body={**base_state, "name": "mp_download_control", "control": "pause", "target": "<1-N>"},
+                    body={**base_state, "name": "query_mp_lifecycle_status", "keyword": data.get("keyword") or "<关键词>", "limit": 5},
                 ),
                 self._assistant_action_template(
-                    name="resume_mp_download",
-                    description="按编号恢复下载任务；写入动作建议先 dry_run 生成计划",
+                    name="start_mp_media_search",
+                    description="按关键词重新发起 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_downloaders":
+            templates.extend([
+                self._assistant_action_template(
+                    name="query_mp_sites",
+                    description="查看 PT 站点启用状态和 Cookie 是否存在",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
-                    body={**base_state, "name": "mp_download_control", "control": "resume", "target": "<1-N>"},
+                    body={**base_state, "name": "query_mp_sites", "status": "active", "limit": 30},
                 ),
                 self._assistant_action_template(
-                    name="delete_mp_download",
-                    description="按编号删除下载任务；默认不删除文件",
+                    name="start_mp_media_search",
+                    description="发起新的 MP 原生搜索，返回 PT 候选和评分摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_sites":
+            templates.extend([
+                self._assistant_action_template(
+                    name="query_mp_downloaders",
+                    description="查看 MP 下载器配置摘要",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
-                    body={**base_state, "name": "mp_download_control", "control": "delete", "target": "<1-N>", "delete_files": False},
+                    body={**base_state, "name": "query_mp_downloaders"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="发起新的 MP 原生搜索，返回 PT 候选和评分摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": "<关键词>"},
                 ),
             ])
         elif kind == "assistant_mp_subscribes":
+            has_items = bool(data.get("items")) or self._safe_int(data.get("result_count"), 0) > 0
+            if has_items:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="search_mp_subscribe",
+                        description="按编号触发订阅搜索；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "search", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="pause_mp_subscribe",
+                        description="按编号暂停订阅；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "pause", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="resume_mp_subscribe",
+                        description="按编号恢复订阅；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "resume", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="delete_mp_subscribe",
+                        description="按编号删除订阅",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "delete", "target": "<1-N>"},
+                    ),
+                ])
+            else:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="start_mp_subscribe",
+                        description="按关键词生成新的 MP 订阅计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "start_mp_subscribe", "keyword": data.get("keyword") or "<关键词>"},
+                    ),
+                    self._assistant_action_template(
+                        name="start_mp_media_search",
+                        description="按关键词重新发起 MP 原生搜索",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "mode": "mp", "keyword": data.get("keyword") or "<关键词>"},
+                    ),
+                ])
+        elif kind == "assistant_mp_lifecycle_status":
             templates.extend([
                 self._assistant_action_template(
-                    name="search_mp_subscribe",
-                    description="按编号触发订阅搜索；写入动作建议先 dry_run 生成计划",
+                    name="query_mp_download_history",
+                    description="继续查看 MP 下载历史",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
-                    body={**base_state, "name": "mp_subscribe_control", "control": "search", "target": "<1-N>"},
+                    body={**base_state, "name": "query_mp_download_history", "title": data.get("keyword") or "", "limit": 10},
                 ),
                 self._assistant_action_template(
-                    name="pause_mp_subscribe",
-                    description="按编号暂停订阅；写入动作建议先 dry_run 生成计划",
-                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
-                    tool="agent_resource_officer_execute_action",
-                    body={**base_state, "name": "mp_subscribe_control", "control": "pause", "target": "<1-N>"},
-                ),
-                self._assistant_action_template(
-                    name="resume_mp_subscribe",
-                    description="按编号恢复订阅；写入动作建议先 dry_run 生成计划",
-                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
-                    tool="agent_resource_officer_execute_action",
-                    body={**base_state, "name": "mp_subscribe_control", "control": "resume", "target": "<1-N>"},
-                ),
-                self._assistant_action_template(
-                    name="delete_mp_subscribe",
-                    description="按编号删除订阅",
-                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
-                    tool="agent_resource_officer_execute_action",
-                    body={**base_state, "name": "mp_subscribe_control", "control": "delete", "target": "<1-N>"},
+                    name="start_mp_media_search",
+                    description="按当前关键词重新发起 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": data.get("keyword") or "<关键词>"},
                 ),
             ])
         elif kind == "assistant_mp_recommend":

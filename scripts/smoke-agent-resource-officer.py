@@ -92,6 +92,11 @@ def assert_route_action(name: str, result: dict, expected_action: str, *, requir
     return result_data
 
 
+def template_names(result_data: dict) -> list[str]:
+    items = result_data.get("action_templates") or []
+    return [str(item.get("name") or "").strip() for item in items if isinstance(item, dict) and str(item.get("name") or "").strip()]
+
+
 def route(base_url: str, api_key: str, session: str, text: str) -> dict:
     return request(
         base_url,
@@ -244,6 +249,15 @@ def main() -> int:
                 and "mp_download_control.delete" not in download_task_actions,
                 json.dumps(download_task_actions, ensure_ascii=False),
             )
+            download_task_templates = template_names(download_tasks_data)
+            assert_ok(
+                "route_download_tasks_empty_templates",
+                "pause_mp_download" not in download_task_templates
+                and "resume_mp_download" not in download_task_templates
+                and "delete_mp_download" not in download_task_templates
+                and "query_mp_download_history" in download_task_templates,
+                json.dumps(download_task_templates, ensure_ascii=False),
+            )
 
             sites = route(base_url, api_key, sessions[0], "站点状态")
             sites_data = assert_route_action("route_sites", sites, "mp_sites")
@@ -252,6 +266,12 @@ def main() -> int:
                 "mp_downloaders" in list(sites_data.get("next_actions") or []),
                 json.dumps(sites_data.get("next_actions") or [], ensure_ascii=False),
             )
+            site_templates = template_names(sites_data)
+            assert_ok(
+                "route_sites_templates",
+                "query_mp_downloaders" in site_templates and "start_mp_media_search" in site_templates,
+                json.dumps(site_templates, ensure_ascii=False),
+            )
 
             downloaders = route(base_url, api_key, sessions[0], "下载器状态")
             downloaders_data = assert_route_action("route_downloaders", downloaders, "mp_downloaders")
@@ -259,6 +279,12 @@ def main() -> int:
                 "route_downloaders_next_actions",
                 "mp_sites" in list(downloaders_data.get("next_actions") or []),
                 json.dumps(downloaders_data.get("next_actions") or [], ensure_ascii=False),
+            )
+            downloader_templates = template_names(downloaders_data)
+            assert_ok(
+                "route_downloaders_templates",
+                "query_mp_sites" in downloader_templates and "start_mp_media_search" in downloader_templates,
+                json.dumps(downloader_templates, ensure_ascii=False),
             )
 
             mp_search = route(base_url, api_key, sessions[1], f"MP搜索 {args.keyword}")
@@ -331,6 +357,16 @@ def main() -> int:
                 and "mp_subscribe_control.resume" not in subscribe_actions
                 and "mp_subscribe_control.delete" not in subscribe_actions,
                 json.dumps(subscribe_actions, ensure_ascii=False),
+            )
+            subscribe_templates = template_names(subscribe_data)
+            assert_ok(
+                "route_subscribe_list_empty_templates",
+                "search_mp_subscribe" not in subscribe_templates
+                and "pause_mp_subscribe" not in subscribe_templates
+                and "resume_mp_subscribe" not in subscribe_templates
+                and "delete_mp_subscribe" not in subscribe_templates
+                and "start_mp_subscribe" in subscribe_templates,
+                json.dumps(subscribe_templates, ensure_ascii=False),
             )
             subscribe_control_missing = route(base_url, api_key, sessions[4], "搜索订阅 1")
             subscribe_control_missing_data = data(subscribe_control_missing)
