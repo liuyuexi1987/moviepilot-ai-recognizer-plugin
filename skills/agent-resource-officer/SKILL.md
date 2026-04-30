@@ -193,7 +193,7 @@ python3 scripts/aro_request.py recover --command-only
 python3 scripts/aro_request.py decide --command-only --confirmed
 ```
 
-`--command-only` prints an inspect command when the next action requires confirmation. Add `--confirmed` only after the user has approved the write-side-effect step.
+`--command-only` prints an inspect command only when the next action itself requires confirmation. If the current recipe starts with a safe read step, such as `mp_pt` or `recommend`, it prints that executable read command directly even when later write steps still require confirmation.
 
 If token budget is tight, prefer:
 

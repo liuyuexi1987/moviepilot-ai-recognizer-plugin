@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.20"
+HELPER_VERSION = "0.1.21"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -265,7 +265,10 @@ def print_json(data):
 
 def summary_command(summary, confirmed=False):
     summary = summary or {}
-    requires_confirmation = bool(summary.get("requires_confirmation"))
+    if "first_requires_confirmation" in summary:
+        requires_confirmation = bool(summary.get("first_requires_confirmation"))
+    else:
+        requires_confirmation = bool(summary.get("requires_confirmation"))
     command = str(summary.get("execute_helper_command") or "").strip()
     if requires_confirmation and not confirmed:
         command = str(summary.get("inspect_helper_command") or command).strip()
@@ -363,6 +366,7 @@ def request_templates_summary(data):
         "first_template": detail.get("first_template") or "",
         "first_endpoint": first_call.get("endpoint") or "",
         "first_method": first_call.get("method") or "",
+        "first_requires_confirmation": bool(first_call.get("requires_confirmation")),
         "requires_confirmation": bool(detail.get("confirmation_required_templates")),
         "confirmation_message": detail.get("confirmation_message") or "",
     }
@@ -397,6 +401,20 @@ def recipe_helper_commands(recipe_summary, recipe_request):
         execute = "python3 scripts/aro_request.py recover --execute"
     elif first_template == "workflow_dry_run":
         execute = "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>"
+    elif first_template == "mp_media_detail":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword <keyword>"
+    elif first_template == "mp_search":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search --keyword <keyword>"
+    elif first_template == "mp_search_detail":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search_detail --keyword <keyword> --choice <编号>"
+    elif first_template == "mp_search_best":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search_best --keyword <keyword>"
+    elif first_template == "mp_search_download_plan":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword <keyword> --choice <编号>"
+    elif first_template == "mp_recommend":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20"
+    elif first_template == "mp_recommend_search":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source tmdb_trending --media-type all --choice <编号> --mode mp --limit 20"
     elif first_endpoint:
         execute = f"# {first_method or 'CALL'} {first_endpoint}"
 
@@ -451,6 +469,10 @@ def selftest_result():
 
     workflow_commands = recipe_helper_commands({"first_template": "workflow_dry_run"}, "plan")
     check("workflow_dry_run_command", workflow_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>")
+    mp_pt_commands = recipe_helper_commands({"first_template": "mp_media_detail"}, "mp_pt")
+    check("mp_pt_recipe_execute_command", mp_pt_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword <keyword>")
+    mp_recommend_commands = recipe_helper_commands({"first_template": "mp_recommend"}, "recommend")
+    check("mp_recommend_recipe_execute_command", mp_recommend_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20")
     maintain_commands = recipe_helper_commands({"first_template": "maintain_preview"}, "maintain")
     check("maintain_preview_command", maintain_commands.get("execute_helper_command") == "python3 scripts/aro_request.py maintain")
     maintain_execute_commands = recipe_helper_commands({"first_template": "maintain_execute"}, "maintain")
@@ -470,6 +492,7 @@ def selftest_result():
     check("templates_summary_recipe", template_summary.get("recommended_recipe") == "bootstrap")
     check("templates_summary_first_call", template_summary.get("first_template") == "startup_probe" and template_summary.get("first_method") == "GET")
     check("templates_summary_confirmation", template_summary.get("requires_confirmation") is True and template_summary.get("confirmation_message") == "需要确认")
+    check("templates_summary_first_confirmation", template_summary.get("first_requires_confirmation") is False)
 
     confirm_summary = {
         "requires_confirmation": True,
@@ -477,6 +500,13 @@ def selftest_result():
         "execute_helper_command": "execute",
     }
     check("command_only_requires_confirmation", summary_command(confirm_summary) == "inspect")
+    later_confirm_summary = {
+        "first_requires_confirmation": False,
+        "requires_confirmation": True,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "execute",
+    }
+    check("command_only_later_confirmation_executes_first_step", summary_command(later_confirm_summary) == "execute")
     check("command_only_confirmed_executes", summary_command(confirm_summary, confirmed=True) == "execute")
     no_confirm_summary = {
         "requires_confirmation": False,

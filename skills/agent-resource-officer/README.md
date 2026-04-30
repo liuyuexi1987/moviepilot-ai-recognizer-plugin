@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.20`
+当前 helper 版本：`0.1.21`
 
 公开仓库：
 
@@ -133,6 +133,13 @@ python3 scripts/aro_request.py decide --command-only --confirmed
 ```
 
 默认会在需要确认的场景输出查看命令；已经获得用户确认后，再加 `--confirmed` 输出执行命令。
+
+如果已确定任务类型，可以直接指定 recipe 获取更具体的下一步命令：
+
+```bash
+python3 scripts/aro_request.py decide --recipe mp_pt --command-only
+python3 scripts/aro_request.py decide --recipe recommend --command-only
+```
 
 如果只想拿自动启动流的最小决策结果，直接用：
 

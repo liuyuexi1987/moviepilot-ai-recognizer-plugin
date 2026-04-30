@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.21
+
+- Added direct `--command-only` helper output for the `mp_pt` and `recommend` recipes.
+- Changed recipe command selection to execute the first safe read step directly even when later recipe steps require confirmation.
+
 ## 0.1.20
 
 - Added `mp_pt_recipe_command` and `mp_recommend_recipe_command` to the external-agent handoff payload.
