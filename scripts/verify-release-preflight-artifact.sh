@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 
 RUN_ID="${1:-}"
 WORKFLOW_NAME="${WORKFLOW_NAME:-Release Preflight}"
+WORKFLOW_FILE="${WORKFLOW_FILE:-ci.yml}"
 if ! command -v gh >/dev/null 2>&1; then
   echo "未找到 gh 命令，无法下载 GitHub Actions artifact。" >&2
   exit 1
@@ -24,11 +25,19 @@ if [ -z "$REPO" ] || [ "$REPO" = "null" ]; then
   exit 1
 fi
 
+resolve_run_id() {
+  local selector="$1"
+  gh run list --repo "$REPO" --workflow "$selector" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true
+}
+
 if [ -z "$RUN_ID" ]; then
-  RUN_ID="$(gh run list --repo "$REPO" --workflow "$WORKFLOW_NAME" --branch main --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+  RUN_ID="$(resolve_run_id "$WORKFLOW_NAME")"
+  if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+    RUN_ID="$(resolve_run_id "$WORKFLOW_FILE")"
+  fi
 fi
 if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-  echo "未找到可用的成功 $WORKFLOW_NAME run。" >&2
+  echo "未找到可用的成功 $WORKFLOW_NAME / $WORKFLOW_FILE run。" >&2
   exit 1
 fi
 
