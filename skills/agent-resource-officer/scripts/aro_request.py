@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.22"
+HELPER_VERSION = "0.1.23"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -102,6 +102,30 @@ def load_json_arg(value):
     return data if isinstance(data, dict) else {}
 
 
+def normalize_command_args(args):
+    extra = list(getattr(args, "extra", []) or [])
+    command = str(getattr(args, "command", "") or "").strip()
+
+    if command == "route":
+        if not getattr(args, "text", None) and extra:
+            args.text = " ".join(extra).strip()
+    elif command == "pick":
+        if getattr(args, "choice", None) is None and extra:
+            first = extra.pop(0)
+            try:
+                args.choice = int(str(first).strip())
+            except (TypeError, ValueError):
+                if not getattr(args, "action", None):
+                    args.action = str(first).strip()
+        if not getattr(args, "action", None) and extra:
+            args.action = " ".join(str(item).strip() for item in extra if str(item).strip()).strip()
+    elif command == "plan-execute":
+        if not getattr(args, "plan_id", None) and extra:
+            args.plan_id = str(extra[0]).strip()
+
+    return args
+
+
 def external_agent_payload():
     prompt = (
         "你是外部智能体，通过 AgentResourceOfficer 控制 MoviePilot 资源工作流。"
@@ -124,7 +148,7 @@ def external_agent_payload():
         "mp_recommend_recipe_command": "python3 scripts/aro_request.py templates --recipe recommend --compact",
         "startup_command": "python3 scripts/aro_request.py startup",
         "route_command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>'",
-        "pick_command": "python3 scripts/aro_request.py pick --choice <编号> --session 'agent:<会话ID>'",
+        "pick_command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
         "compat_aliases": ["workbuddy"],
         "prompt": prompt,
         "tools": [
@@ -143,7 +167,7 @@ def external_agent_payload():
             {
                 "name": "pick_continue",
                 "purpose": "继续编号选择、详情、审查、下一页等会话动作。",
-                "command": "python3 scripts/aro_request.py pick --choice <编号> --session 'agent:<会话ID>'",
+                "command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
                 "writes": "depends_on_choice",
             },
         ],
@@ -518,6 +542,29 @@ def selftest_result():
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
 
+    route_args = normalize_command_args(argparse.Namespace(command="route", extra=["盘搜搜索", "大君夫人"], text=None))
+    check("normalize_route_positional_text", route_args.text == "盘搜搜索 大君夫人")
+
+    pick_choice_args = normalize_command_args(
+        argparse.Namespace(command="pick", extra=["11"], choice=None, action=None)
+    )
+    check("normalize_pick_positional_choice", pick_choice_args.choice == 11 and not pick_choice_args.action)
+
+    pick_action_args = normalize_command_args(
+        argparse.Namespace(command="pick", extra=["详情"], choice=None, action=None)
+    )
+    check("normalize_pick_positional_action", pick_action_args.action == "详情" and pick_action_args.choice is None)
+
+    pick_choice_action_args = normalize_command_args(
+        argparse.Namespace(command="pick", extra=["11", "详情"], choice=None, action=None)
+    )
+    check("normalize_pick_positional_choice_action", pick_choice_action_args.choice == 11 and pick_choice_action_args.action == "详情")
+
+    plan_args = normalize_command_args(
+        argparse.Namespace(command="plan-execute", extra=["plan-123"], plan_id=None)
+    )
+    check("normalize_plan_execute_positional_plan", plan_args.plan_id == "plan-123")
+
     compact_workflow = compact({
         "success": True,
         "data": {
@@ -689,7 +736,7 @@ def main():
     parser.add_argument("--summary-only", action="store_true")
     parser.add_argument("--command-only", action="store_true")
     parser.add_argument("--confirmed", action="store_true")
-    args = parser.parse_args()
+    args = normalize_command_args(parser.parse_args())
 
     if args.executed and args.unexecuted:
         print("--executed and --unexecuted cannot be used together", file=sys.stderr)
@@ -984,7 +1031,7 @@ def main():
     elif args.command == "route":
         method = "POST"
         path = assistant_path("route")
-        route_text = args.text or " ".join(args.extra or []).strip()
+        route_text = args.text or ""
         body = {
             "text": route_text,
             "compact": True,

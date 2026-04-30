@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.22`
+当前 helper 版本：`0.1.23`
 
 公开仓库：
 
@@ -53,6 +53,12 @@ ARO_API_KEY=your_moviepilot_api_token
 - `python3 scripts/aro_request.py route "盘搜搜索 大君夫人"`
 - `python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"`
 
+`pick` 和 `plan-execute` 也支持更短的位置参数写法：
+
+- `python3 scripts/aro_request.py pick 1`
+- `python3 scripts/aro_request.py pick 1 详情`
+- `python3 scripts/aro_request.py plan-execute plan-xxx`
+
 4. 让外部智能体使用本 Skill。
 
 ## 推荐入口
@@ -84,7 +90,7 @@ python3 scripts/aro_request.py session-clear --session default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py route "盘搜搜索 大君夫人"
-python3 scripts/aro_request.py pick --choice 1
+python3 scripts/aro_request.py pick 1
 ```
 
 `auto` 会先读取 `startup.recommended_request_templates`，再自动拉取推荐的低 token recipe。
@@ -182,7 +188,7 @@ python3 scripts/aro_request.py history --limit 10
 python3 scripts/aro_request.py plans --limit 10
 python3 scripts/aro_request.py plans --plan-id plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
-python3 scripts/aro_request.py plan-execute --plan-id plan-xxx
+python3 scripts/aro_request.py plan-execute plan-xxx
 python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
 ```
 

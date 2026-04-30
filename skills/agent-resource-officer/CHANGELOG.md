@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.23
+
+- Added positional argument support for `pick`, so `python3 scripts/aro_request.py pick 1` and `python3 scripts/aro_request.py pick 1 详情` work without `--choice` or `--action`.
+- Added positional plan support for `plan-execute`, so `python3 scripts/aro_request.py plan-execute plan-xxx` works without `--plan-id`.
+- Updated the external-agent handoff payload to prefer the shorter positional `pick` command.
+
 ## 0.1.22
 
 - Added positional text support for `route`, so `python3 scripts/aro_request.py route "盘搜搜索 大君夫人"` works without `--text`.

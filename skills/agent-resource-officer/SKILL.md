@@ -87,7 +87,7 @@ python3 scripts/aro_request.py session-clear --session default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py route "盘搜搜索 大君夫人"
-python3 scripts/aro_request.py pick --choice 1
+python3 scripts/aro_request.py pick 1
 ```
 
 The helper uses `?apikey=...`, which is the recommended HTTP auth mode for plugin assistant endpoints.
@@ -260,13 +260,14 @@ python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"
 python3 scripts/aro_request.py route --text "链接 https://pan.quark.cn/s/xxxx path=/飞书"
 ```
 
-For numbered continuation, use `pick`:
+For numbered continuation, use `pick`. Positional and flagged forms are both supported:
 
 ```bash
-python3 scripts/aro_request.py pick --choice 1
-python3 scripts/aro_request.py pick --choice 11 --path /飞书
-python3 scripts/aro_request.py pick --action 详情
-python3 scripts/aro_request.py pick --action 下一页
+python3 scripts/aro_request.py pick 1
+python3 scripts/aro_request.py pick 11 --path /飞书
+python3 scripts/aro_request.py pick 1 详情
+python3 scripts/aro_request.py pick 详情
+python3 scripts/aro_request.py pick 下一页
 ```
 
 For session inspection and recovery:
@@ -282,7 +283,7 @@ python3 scripts/aro_request.py history --limit 10
 python3 scripts/aro_request.py plans --limit 10
 python3 scripts/aro_request.py plans --plan-id plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
-python3 scripts/aro_request.py plan-execute --plan-id plan-xxx
+python3 scripts/aro_request.py plan-execute plan-xxx
 python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
 ```
 
