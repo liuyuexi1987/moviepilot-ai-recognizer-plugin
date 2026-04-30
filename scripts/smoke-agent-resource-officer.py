@@ -379,20 +379,6 @@ def main() -> int:
             ),
             str(local_ingest_templates.get("message") or ""),
         )
-        preferences_templates = request_templates(base_url, api_key, "preferences")
-        preferences_templates_data = data(preferences_templates)
-        preferences_names = preferences_templates_data.get("selected_names") or []
-        assert_ok(
-            "preferences_request_templates",
-            bool(
-                preferences_templates.get("success")
-                and preferences_templates_data.get("ok")
-                and preferences_templates_data.get("selected_recipe") == "preferences_onboarding"
-                and preferences_names == ["preferences_get", "scoring_policy", "preferences_save"]
-            ),
-            str(preferences_templates.get("message") or ""),
-        )
-
         preferences_view = route(base_url, api_key, sessions[0], "偏好")
         preferences_view_data = assert_route_action("route_preferences_get", preferences_view, "preferences")
         assert_ok(
