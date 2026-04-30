@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.41`
+- `AgentResourceOfficer`: `0.2.42`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.42`：补齐 compact `session/recover` 协议里的 `action_templates`；外部智能体读取会话状态或恢复入口时，也能拿到完整的结构化下一步模板。
 - `AgentResourceOfficer 0.2.41`：补齐 PT 只读会话的 `action_templates`；下载任务、站点、下载器、订阅列表等场景现在会给外部智能体正确的结构化下一步模板。
 - `AgentResourceOfficer 0.2.40`：收紧 PT 只读会话的下一步建议；下载任务、站点、下载器、订阅列表等场景不再给出误导性的控制动作提示。
 - `AgentResourceOfficer 0.2.39`：修复 workflow/tool 直调下的控制计划安全；空下载任务或空订阅列表时，不再为 `mp_download_control` / `mp_subscribe_control` 生成无效 `plan_id`。

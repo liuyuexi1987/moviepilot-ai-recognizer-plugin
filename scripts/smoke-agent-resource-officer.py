@@ -119,6 +119,26 @@ def workflow(base_url: str, api_key: str, session: str, workflow_name: str, **kw
     )
 
 
+def recover(base_url: str, api_key: str, session: str) -> dict:
+    return request(
+        base_url,
+        api_key,
+        "POST",
+        "/api/v1/plugin/AgentResourceOfficer/assistant/recover",
+        body={"session": session, "compact": True},
+    )
+
+
+def session_state(base_url: str, api_key: str, session: str) -> dict:
+    return request(
+        base_url,
+        api_key,
+        "POST",
+        "/api/v1/plugin/AgentResourceOfficer/assistant/session",
+        body={"session": session, "compact": True},
+    )
+
+
 def request_templates(base_url: str, api_key: str, recipe: str) -> dict:
     return request(
         base_url,
@@ -130,23 +150,29 @@ def request_templates(base_url: str, api_key: str, recipe: str) -> dict:
 
 
 def clear_session(base_url: str, api_key: str, session: str) -> None:
-    request(
-        base_url,
-        api_key,
-        "POST",
-        "/api/v1/plugin/AgentResourceOfficer/assistant/session/clear",
-        body={"session": session, "compact": True},
-    )
+    try:
+        request(
+            base_url,
+            api_key,
+            "POST",
+            "/api/v1/plugin/AgentResourceOfficer/assistant/session/clear",
+            body={"session": session, "compact": True},
+        )
+    except Exception:
+        pass
 
 
 def clear_plans(base_url: str, api_key: str, session: str) -> None:
-    request(
-        base_url,
-        api_key,
-        "POST",
-        "/api/v1/plugin/AgentResourceOfficer/assistant/plans/clear",
-        body={"session": session, "limit": 100},
-    )
+    try:
+        request(
+            base_url,
+            api_key,
+            "POST",
+            "/api/v1/plugin/AgentResourceOfficer/assistant/plans/clear",
+            body={"session": session, "limit": 100},
+        )
+    except Exception:
+        pass
 
 
 def main() -> int:
@@ -271,6 +297,22 @@ def main() -> int:
                 "route_sites_templates",
                 "query_mp_downloaders" in site_templates and "start_mp_media_search" in site_templates,
                 json.dumps(site_templates, ensure_ascii=False),
+            )
+            site_session = session_state(base_url, api_key, sessions[0])
+            site_session_data = data(site_session)
+            site_session_templates = template_names(site_session_data)
+            assert_ok(
+                "route_sites_session_templates",
+                "query_mp_downloaders" in site_session_templates and "start_mp_media_search" in site_session_templates,
+                json.dumps(site_session_templates, ensure_ascii=False),
+            )
+            site_recover = recover(base_url, api_key, sessions[0])
+            site_recover_data = data(site_recover)
+            site_recover_templates = template_names(site_recover_data)
+            assert_ok(
+                "route_sites_recover_templates",
+                "preferences_save" in site_recover_templates and "query_mp_downloaders" in site_recover_templates,
+                json.dumps(site_recover_templates, ensure_ascii=False),
             )
 
             downloaders = route(base_url, api_key, sessions[0], "下载器状态")

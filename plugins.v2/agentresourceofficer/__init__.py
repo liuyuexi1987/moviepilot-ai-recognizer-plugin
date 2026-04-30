@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.41"
+    plugin_version = "0.2.42"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -6017,6 +6017,27 @@ class AgentResourceOfficer(_PluginBase):
             "action_body": action_body,
         }
 
+    @staticmethod
+    def _assistant_compact_action_templates(
+        primary: Optional[Dict[str, Any]] = None,
+        templates: Optional[List[Dict[str, Any]]] = None,
+        *,
+        limit: int = 6,
+    ) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in [primary, *(templates or [])]:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            result.append(dict(item))
+            if len(result) >= max(1, limit):
+                break
+        return result
+
     def _assistant_action_templates(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         session_name = self._clean_text(data.get("session")) or "default"
         session_id = self._clean_text(data.get("session_id")) or self._assistant_session_id(session_name)
@@ -6724,6 +6745,7 @@ class AgentResourceOfficer(_PluginBase):
         session_name = self._clean_text(payload.get("session") or session_state.get("session")) or "default"
         session_id = self._clean_text(payload.get("session_id") or session_state.get("session_id")) or self._assistant_session_id(session_name)
         action_template = recovery.get("action_template") if isinstance(recovery.get("action_template"), dict) else None
+        session_templates = session_state.get("action_templates") if isinstance(session_state.get("action_templates"), list) else []
         payload.update({
             "protocol_version": "assistant.v1",
             "compact": True,
@@ -6736,7 +6758,7 @@ class AgentResourceOfficer(_PluginBase):
                 ]
                 if item
             ][:6],
-            "action_templates": [action_template] if action_template else [],
+            "action_templates": self._assistant_compact_action_templates(action_template, session_templates),
         })
         return payload
 
@@ -6770,7 +6792,10 @@ class AgentResourceOfficer(_PluginBase):
             },
             "recovery": recovery,
             "next_actions": state.get("suggested_actions") or [],
-            "action_templates": [recovery.get("action_template")] if isinstance(recovery.get("action_template"), dict) else [],
+            "action_templates": self._assistant_compact_action_templates(
+                recovery.get("action_template") if isinstance(recovery.get("action_template"), dict) else None,
+                state.get("action_templates") if isinstance(state.get("action_templates"), list) else [],
+            ),
         }
         for key in [
             "result_count",
