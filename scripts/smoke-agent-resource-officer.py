@@ -158,6 +158,7 @@ def main() -> int:
             f"smoke-aro-hdhive-{stamp}",
             f"smoke-aro-mp-readonly-{stamp}",
             f"smoke-aro-recommend-movie-{stamp}",
+            f"smoke-aro-recommend-pansou-{stamp}",
             f"smoke-aro-recommend-tv-{stamp}",
         ])
 
@@ -260,6 +261,22 @@ def main() -> int:
             subscribe_list = route(base_url, api_key, sessions[4], f"订阅列表{args.keyword}")
             subscribe_data = assert_route_action("route_subscribe_list_compact", subscribe_list, "mp_subscribes")
             assert_ok("route_subscribe_list_no_plan", not subscribe_data.get("plan_id"), json.dumps(subscribe_data, ensure_ascii=False)[:240])
+            subscribe_control_missing = route(base_url, api_key, sessions[4], "搜索订阅 1")
+            subscribe_control_missing_data = data(subscribe_control_missing)
+            assert_ok(
+                "route_subscribe_control_requires_list_item",
+                subscribe_control_missing.get("success") is False
+                and subscribe_control_missing_data.get("action") == "mp_subscribe_control"
+                and subscribe_control_missing_data.get("error_code") == "subscribe_target_not_found"
+                and not subscribe_control_missing_data.get("plan_id"),
+                json.dumps({
+                    "success": subscribe_control_missing.get("success"),
+                    "action": subscribe_control_missing_data.get("action"),
+                    "error_code": subscribe_control_missing_data.get("error_code"),
+                    "plan_id": subscribe_control_missing_data.get("plan_id"),
+                    "message": message_text(subscribe_control_missing)[:160],
+                }, ensure_ascii=False),
+            )
 
             download_history = route(base_url, api_key, sessions[4], f"下载历史{args.keyword}")
             assert_route_action("route_download_history_compact", download_history, "mp_download_history")
@@ -274,7 +291,16 @@ def main() -> int:
             assert_route_action("route_recommend_movie", movie_recommend, "mp_recommendations")
             movie_message = message_text(movie_recommend)
             assert_ok("route_recommend_movie_type_filter", "| 电视剧 |" not in movie_message, movie_message[:240])
-            movie_to_pansou = route(base_url, api_key, sessions[5], "选择 1 盘搜")
+            movie_to_mp = route(base_url, api_key, sessions[5], "选择 1")
+            movie_to_mp_data = assert_route_action("route_recommend_to_mp", movie_to_mp, "mp_media_search")
+            assert_ok(
+                "route_recommend_to_mp_scored",
+                bool((movie_to_mp_data.get("score_summary") or {}).get("best")),
+                json.dumps(movie_to_mp_data.get("score_summary") or {}, ensure_ascii=False)[:240],
+            )
+            movie_recommend_pansou = route(base_url, api_key, sessions[6], "热门电影")
+            assert_route_action("route_recommend_movie_pansou_session", movie_recommend_pansou, "mp_recommendations")
+            movie_to_pansou = route(base_url, api_key, sessions[6], "选择 1 盘搜")
             movie_to_pansou_data = assert_route_action("route_recommend_to_pansou", movie_to_pansou, "pansou_search")
             assert_ok(
                 "route_recommend_to_pansou_scored",
@@ -282,7 +308,7 @@ def main() -> int:
                 json.dumps(movie_to_pansou_data.get("score_summary") or {}, ensure_ascii=False)[:240],
             )
 
-            tv_recommend = route(base_url, api_key, sessions[6], "热门电视剧")
+            tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")
             tv_message = message_text(tv_recommend)
             assert_ok("route_recommend_tv_type_filter", "| 电影 |" not in tv_message, tv_message[:240])

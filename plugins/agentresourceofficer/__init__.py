@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.37"
+    plugin_version = "0.2.38"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4148,6 +4148,7 @@ class AgentResourceOfficer(_PluginBase):
         target: str,
         session: str,
         cache_key: str,
+        allow_raw_id: bool = False,
     ) -> Dict[str, Any]:
         control = self._clean_text(control)
         target = self._clean_text(target)
@@ -4159,6 +4160,17 @@ class AgentResourceOfficer(_PluginBase):
                     "action": "mp_subscribe_control",
                     "ok": False,
                     "error_code": "invalid_subscribe_control_args",
+                }),
+            }
+        if not self._resolve_mp_subscribe_target(target=target, cache_key=cache_key, allow_raw_id=allow_raw_id):
+            return {
+                "success": False,
+                "message": "未找到可操作的订阅。请先发送“订阅列表”获取列表，再按编号操作；也可以直接传订阅 ID。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_control",
+                    "ok": False,
+                    "error_code": "subscribe_target_not_found",
+                    "target": target,
                 }),
             }
         return self._save_assistant_pick_plan_response(
@@ -4422,7 +4434,7 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
-    def _resolve_mp_subscribe_target(self, *, target: str, cache_key: str) -> Dict[str, Any]:
+    def _resolve_mp_subscribe_target(self, *, target: str, cache_key: str, allow_raw_id: bool = False) -> Dict[str, Any]:
         target_text = self._clean_text(target)
         state = self._load_session(cache_key) or {}
         items = state.get("items") if isinstance(state.get("items"), list) else []
@@ -4431,7 +4443,8 @@ class AgentResourceOfficer(_PluginBase):
             for item in items:
                 if self._safe_int(item.get("index"), 0) == index or self._safe_int(item.get("id"), 0) == index:
                     return dict(item)
-            return {"id": index}
+            if allow_raw_id:
+                return {"id": index}
         return {}
 
     async def _assistant_mp_subscribes(
@@ -4477,8 +4490,9 @@ class AgentResourceOfficer(_PluginBase):
         cache_key: str,
         control: str,
         target: str,
+        allow_raw_id: bool = False,
     ) -> Dict[str, Any]:
-        selected = self._resolve_mp_subscribe_target(target=target, cache_key=cache_key)
+        selected = self._resolve_mp_subscribe_target(target=target, cache_key=cache_key, allow_raw_id=allow_raw_id)
         subscribe_id = self._safe_int(selected.get("id") or target, 0)
         if subscribe_id <= 0:
             return {
@@ -11848,6 +11862,7 @@ class AgentResourceOfficer(_PluginBase):
                 "remove": "delete",
             }
             control = control_aliases.get(control, control)
+            allow_raw_subscribe_id = body.get("subscribe_id") is not None
             target = self._clean_text(keyword or body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
             if control not in {"search", "pause", "resume", "delete"} or not target:
                 return finish({
@@ -11859,7 +11874,7 @@ class AgentResourceOfficer(_PluginBase):
                         "error_code": "invalid_subscribe_control_args",
                     }),
                 })
-            if not self._resolve_mp_subscribe_target(target=target, cache_key=cache_key):
+            if not self._resolve_mp_subscribe_target(target=target, cache_key=cache_key, allow_raw_id=allow_raw_subscribe_id):
                 return finish({
                     "success": False,
                     "message": "未找到可操作的订阅。请先发送“订阅列表”获取列表，再按编号操作；也可以直接传订阅 ID。",
@@ -11876,12 +11891,14 @@ class AgentResourceOfficer(_PluginBase):
                     target=target,
                     session=session,
                     cache_key=cache_key,
+                    allow_raw_id=allow_raw_subscribe_id,
                 )))
             return finish(await self._assistant_mp_subscribe_control(
                 session=session,
                 cache_key=cache_key,
                 control=control,
                 target=target,
+                allow_raw_id=allow_raw_subscribe_id,
             ))
         if assistant_action == "mp_download_tasks":
             return finish(await self._assistant_mp_download_tasks(
@@ -12615,6 +12632,7 @@ class AgentResourceOfficer(_PluginBase):
             )
             control = self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation"))
             target = self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+            allow_raw_subscribe_id = body.get("subscribe_id") is not None
             execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
             if not execute_requested:
                 return await finish(immediate(self._assistant_mp_subscribe_control_plan_response(
@@ -12622,12 +12640,14 @@ class AgentResourceOfficer(_PluginBase):
                     target=target,
                     session=session_name,
                     cache_key=cache_key,
+                    allow_raw_id=allow_raw_subscribe_id,
                 )))
             return await finish(self._assistant_mp_subscribe_control(
                 session=session_name,
                 cache_key=cache_key,
                 control=control,
                 target=target,
+                allow_raw_id=allow_raw_subscribe_id,
             ))
         if name == "mp_download_control":
             session_name, cache_key = self._normalize_assistant_session_ref(
