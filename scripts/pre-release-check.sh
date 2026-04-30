@@ -4,6 +4,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 export PYTHONDONTWRITEBYTECODE=1
+mkdir -p .tmp
+LOCK_DIR="$ROOT_DIR/.tmp/pre-release-check.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  echo "pre-release-check 已在运行，请等待当前检查结束后重试。" >&2
+  exit 1
+fi
+trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 PACKAGE_PLUGINS=(
   AIRecoginzerForwarder
