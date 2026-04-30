@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.30`
+- `AgentResourceOfficer`: `0.2.31`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.31`：收紧 compact 协议中的评分摘要返回；普通站点、下载器、任务诊断不再继承上一轮搜索的 `score_summary`，避免外部智能体误读上下文。
 - `AgentResourceOfficer 0.2.30`：细化评分风险结构；`hard_risk_reasons` 表示真正阻断自动化的风险，`risk_reasons` 保留为确认前提醒，避免软提醒被误算为阻断。
 - `AgentResourceOfficer 0.2.29`：收口 MP 原生 PT 主线；补齐做种/热度/字幕/站点等评分理由，下载/订阅/控制统一走 `plan_id` 确认链路，并强化 MP 原生推荐续接。
 - `AgentResourceOfficer 0.2.28`：插件展示名统一改为 `Agent影视助手`，并同步仓库文档、Skill 文案和兼容插件引用。

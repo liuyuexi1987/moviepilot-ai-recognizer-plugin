@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.30"
+    plugin_version = "0.2.31"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -6668,8 +6668,6 @@ class AgentResourceOfficer(_PluginBase):
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
-        elif isinstance(session_state.get("score_summary"), dict):
-            payload["score_summary"] = session_state.get("score_summary")
         return payload
 
     def _assistant_single_action_compact_response(self, name: str, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -6698,8 +6696,6 @@ class AgentResourceOfficer(_PluginBase):
             payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
-        elif isinstance(session_state.get("score_summary"), dict):
-            payload["score_summary"] = session_state.get("score_summary")
         pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
         if pending_p115:
             payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
@@ -6732,8 +6728,6 @@ class AgentResourceOfficer(_PluginBase):
         }
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
-        elif isinstance(session_state.get("score_summary"), dict):
-            payload["score_summary"] = session_state.get("score_summary")
         for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource", "plan_id", "workflow"]:
             if key in data:
                 payload[key] = data.get(key)
@@ -12688,8 +12682,6 @@ class AgentResourceOfficer(_PluginBase):
         }
         if isinstance(data.get("score_summary"), dict):
             summary["score_summary"] = data.get("score_summary")
-        elif isinstance(session_state.get("score_summary"), dict):
-            summary["score_summary"] = session_state.get("score_summary")
         return summary
 
     async def api_assistant_actions(self, request: Request):
