@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.26
+
+- Added `followup`, a direct helper command for the plugin-owned `query_execution_followup` action.
+- Added positional `plan-xxx` support for `followup`, so `python3 scripts/aro_request.py followup plan-xxx` works without `--plan-id`.
+- Added `followup_command` to the external-agent handoff payload, so other agents can continue after `plan-execute` without guessing the next raw action.
+
 ## 0.1.25
 
 - Preserved `follow_up_hint` in compact helper output, so `plan-execute` and related commands no longer drop the plugin's next-step hint.

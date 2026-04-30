@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.25"
+HELPER_VERSION = "0.1.26"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -31,6 +31,7 @@ HELPER_COMMANDS = [
     "preferences",
     "workflow",
     "plan-execute",
+    "followup",
     "maintain",
     "recover",
     "session",
@@ -122,6 +123,11 @@ def normalize_command_args(args):
     elif command == "plan-execute":
         if not getattr(args, "plan_id", None) and extra:
             args.plan_id = str(extra[0]).strip()
+    elif command == "followup":
+        if not getattr(args, "plan_id", None) and extra:
+            first = str(extra[0]).strip()
+            if first.startswith("plan-"):
+                args.plan_id = first
     elif command == "workflow":
         if getattr(args, "workflow", "hdhive_candidates") == "hdhive_candidates" and extra:
             args.workflow = str(extra.pop(0)).strip() or args.workflow
@@ -162,6 +168,7 @@ def external_agent_payload():
         "startup_command": "python3 scripts/aro_request.py startup",
         "route_command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>'",
         "pick_command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
+        "followup_command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>'",
         "compat_aliases": ["workbuddy"],
         "prompt": prompt,
         "tools": [
@@ -182,6 +189,12 @@ def external_agent_payload():
                 "purpose": "继续编号选择、详情、审查、下一页等会话动作。",
                 "command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
                 "writes": "depends_on_choice",
+            },
+            {
+                "name": "execution_followup",
+                "purpose": "在执行计划后自动追踪下载、订阅或入库状态。",
+                "command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>'",
+                "writes": False,
             },
         ],
     }
@@ -578,6 +591,10 @@ def selftest_result():
         argparse.Namespace(command="plan-execute", extra=["plan-123"], plan_id=None)
     )
     check("normalize_plan_execute_positional_plan", plan_args.plan_id == "plan-123")
+    followup_args = normalize_command_args(
+        argparse.Namespace(command="followup", extra=["plan-123"], plan_id=None)
+    )
+    check("normalize_followup_positional_plan", followup_args.plan_id == "plan-123")
 
     workflow_args = normalize_command_args(
         argparse.Namespace(command="workflow", extra=["mp_media_detail", "蜘蛛侠"], workflow="hdhive_candidates", keyword=None)
@@ -646,7 +663,8 @@ def selftest_result():
     external_agent = external_agent_payload()
     check("external_agent_payload_has_prompt", bool(external_agent.get("prompt")))
     check("external_agent_payload_has_guide", external_agent.get("guide_file_exists") is True)
-    check("external_agent_payload_has_tools", len(external_agent.get("tools") or []) == 3)
+    check("external_agent_payload_has_tools", len(external_agent.get("tools") or []) == 4)
+    check("external_agent_payload_has_followup", bool(external_agent.get("followup_command")))
     check("external_agent_payload_has_mp_pt_recipe", bool(external_agent.get("mp_pt_recipe_command")))
     check("external_agent_payload_has_mp_recommend_recipe", bool(external_agent.get("mp_recommend_recipe_command")))
 
@@ -710,6 +728,7 @@ def commands_catalog():
             {"name": "preferences", "network": True, "writes": True, "write_condition": "only with --preferences-json or --reset", "purpose": "read/save/reset source preferences used by cloud and PT scoring"},
             {"name": "workflow", "network": True, "writes": True, "write_condition": "read workflows execute directly; write workflows save a dry-run plan by default", "purpose": "run or plan preset assistant workflows"},
             {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan; use --plan-id for exact execution", "purpose": "execute a saved plan by plan_id or latest unexecuted session plan"},
+            {"name": "followup", "network": True, "writes": False, "write_condition": "", "purpose": "run the unified post-execution follow-up action for the latest executed or specified plan"},
             {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
             {"name": "session", "network": True, "writes": False, "write_condition": "", "purpose": "inspect one assistant session"},
             {"name": "session-clear", "network": True, "writes": True, "write_condition": "clears exactly one assistant session by --session or --session-id", "purpose": "clear one assistant session, including abandoned pending 115 state"},
@@ -1152,6 +1171,19 @@ def main():
         path = assistant_path("plan/execute")
         body = {
             "prefer_unexecuted": True,
+            "compact": True,
+        }
+        if args.plan_id:
+            body["plan_id"] = args.plan_id
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
+    elif args.command == "followup":
+        method = "POST"
+        path = assistant_path("action")
+        body = {
+            "name": "query_execution_followup",
             "compact": True,
         }
         if args.plan_id:

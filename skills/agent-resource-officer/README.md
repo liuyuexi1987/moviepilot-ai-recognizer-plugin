@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.25`
+当前 helper 版本：`0.1.26`
 
 公开仓库：
 
@@ -53,13 +53,14 @@ ARO_API_KEY=your_moviepilot_api_token
 - `python3 scripts/aro_request.py route "盘搜搜索 大君夫人"`
 - `python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"`
 
-`pick` 和 `plan-execute` 也支持更短的位置参数写法：
+`pick`、`plan-execute`、`followup` 也支持更短的位置参数写法：
 
 - `python3 scripts/aro_request.py pick 1`
 - `python3 scripts/aro_request.py pick 1 详情`
 - `python3 scripts/aro_request.py plan-execute plan-xxx`
+- `python3 scripts/aro_request.py followup plan-xxx`
 
-`plan-execute` 返回里会保留插件给出的 `recommended_action` 和 `follow_up_hint`，外部智能体执行计划后可以直接按这两个字段继续。
+`plan-execute` 返回里会保留插件给出的 `recommended_action` 和 `follow_up_hint`。如果不想自己解析下一步，也可以直接执行 `python3 scripts/aro_request.py followup --session 'agent:<会话ID>'`。
 
 `workflow`、`session`、`history`、`plans` 也支持常用短写法：
 
@@ -81,6 +82,7 @@ python3 scripts/aro_request.py doctor --limit 5
 python3 scripts/aro_request.py doctor --summary-only
 python3 scripts/aro_request.py feishu-health
 python3 scripts/aro_request.py recover --summary-only
+python3 scripts/aro_request.py followup --session agent:<用户ID>
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands
@@ -199,11 +201,14 @@ python3 scripts/aro_request.py plans --limit 10
 python3 scripts/aro_request.py plans plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
 python3 scripts/aro_request.py plan-execute plan-xxx
+python3 scripts/aro_request.py followup --session agent:<用户ID>
+python3 scripts/aro_request.py followup plan-xxx
 python3 scripts/aro_request.py plans-clear plan-xxx
 ```
 
 - `sessions` / `history` / `plans` / `recover` 默认不再强制绑到 `default` 会话。
 - 只有显式传 `--session` 或 `--session-id` 时，才会收窄到单个会话。
+- `followup` 会按最近已执行计划自动选择合适的只读后续动作，适合接在 `plan-execute` 后面。
 - `session-clear` / `sessions-clear` 是写入型清理命令，用于清理放弃的会话或 pending 115 恢复状态。
 - `plans-clear` 是写入型清理命令，优先使用 `--plan-id` 精确清理；批量清理时再使用 `--session`、`--executed`、`--unexecuted` 或 `--all-plans`。
 

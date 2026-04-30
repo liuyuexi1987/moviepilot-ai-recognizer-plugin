@@ -49,7 +49,7 @@ if payload.get("schema_version") != "external_agent.v1":
     raise SystemExit("agent-resource-officer external-agent schema_version invalid")
 if not payload.get("guide_file_exists"):
     raise SystemExit("agent-resource-officer external-agent guide file missing")
-if len(payload.get("tools") or []) != 3:
+if len(payload.get("tools") or []) != 4:
     raise SystemExit("agent-resource-officer external-agent tool contract invalid")
 print("agent_resource_officer_external_agent_entry_ok")
 PY

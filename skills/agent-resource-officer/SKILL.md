@@ -295,6 +295,8 @@ python3 scripts/aro_request.py plans --limit 10
 python3 scripts/aro_request.py plans plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
 python3 scripts/aro_request.py plan-execute plan-xxx
+python3 scripts/aro_request.py followup --session agent:<用户ID>
+python3 scripts/aro_request.py followup plan-xxx
 python3 scripts/aro_request.py plans-clear plan-xxx
 ```
 
@@ -303,6 +305,7 @@ Notes:
 - `sessions`, `history`, `plans`, and `recover` no longer force `session=default` when you do not pass `--session`.
 - Use `--session` or `--session-id` only when you want to narrow to one conversation.
 - Use `sessions --kind ...` or `sessions --has-pending-p115` when you want recovery-oriented filtering.
+- Use `followup` after `plan-execute` when you want the plugin to choose the correct read-only next step automatically.
 - Use `session-clear` or `sessions-clear` to clear abandoned assistant state after user confirmation.
 - Use `plans-clear --plan-id ...` for exact saved-plan cleanup. Treat bulk cleanup flags as write-side-effect operations requiring confirmation.
 
@@ -372,7 +375,7 @@ python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source 
 
 `mp_search_best` is read-only and token-efficient. Use it when the user asks the agent to recommend the best PT candidate after MP native search. It searches, ranks by the plugin-owned score, and returns the best candidate detail. It still does not download.
 
-After an MP search session, `下载最佳` generates a saved download plan for the current highest-scoring PT candidate. It does not download immediately; after user confirmation, execute the returned `plan_id` with `plan-execute` or route the natural text `执行计划` / `执行 plan-...`.
+After an MP search session, `下载最佳` generates a saved download plan for the current highest-scoring PT candidate. It does not download immediately; after user confirmation, execute the returned `plan_id` with `plan-execute` or route the natural text `执行计划` / `执行 plan-...`. Then prefer `followup` so the plugin itself can decide whether the best next read is download history, lifecycle, subscribes, or transfer history.
 
 Even if a PT candidate scores high, the current default interaction policy is still `plan_id` first. Treat `can_auto_execute` as a score signal for explanation only; do not assume `下载1` or `下载最佳` will bypass confirmation.
 
