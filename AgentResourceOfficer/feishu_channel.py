@@ -645,7 +645,7 @@ class FeishuChannel:
                 volume = torrent.volume_factor if getattr(torrent, "volume_factor", None) else "未知"
                 lines.append(f"{idx}. [{site}] {title}")
                 lines.append(f"   大小：{size} | 做种：{seeders} | 促销：{volume}")
-            lines.append("下一步：回复“下载资源 序号”即可下载选中项。")
+            lines.append("下一步：回复“下载资源 序号”会先生成下载计划，不会静默下载。")
             lines.append("如需长期跟踪，回复“订阅媒体 片名”或“订阅并搜索 片名”。")
             return "\n".join(lines)
         except Exception as exc:
