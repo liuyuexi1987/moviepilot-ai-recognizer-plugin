@@ -6,10 +6,16 @@
 
 这个项目也为外部智能体做了大量适配工作。它不是让智能体直接拼接影巢、盘搜、115 或夸克的底层接口，而是提供统一入口、低 token 摘要、会话续接、编号选择、计划确认和错误恢复，让 WorkBuddy、Hermes、OpenClaw（小龙虾）等智能体可以用更少上下文完成搜索、展示、选择和转存流程。
 
-- 新主线：`Agent云盘资源整合`、`AI识别增强`，形成云盘资源搜索、转存到固定目录、识别增强和智能体入口流程；如果还需要 STRM、302 播放或媒体库全量/增量同步，再配合 `P115StrmHelper`。
+- 新主线：`Agent影视助手`、`AI识别增强`，形成云盘资源搜索、转存到固定目录、识别增强和智能体入口流程；如果还需要 STRM、302 播放或媒体库全量/增量同步，再配合 `P115StrmHelper`。
 - 旧插件区：保留飞书桥接、影巢 OpenAPI、影巢签到、夸克转存、极影视刷新等独立插件，方便老环境继续使用。
 
 如果你是第一次使用，建议先看“新用户推荐方案”，不用一开始就装所有插件。
+
+仓库文档入口：
+
+```text
+docs/INDEX.md
+```
 
 ## 快速开始
 
@@ -22,13 +28,13 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 2. 新用户优先安装这两个插件：
 
 ```text
-Agent云盘资源整合
+Agent影视助手
 AI识别增强
 ```
 
-3. `Agent云盘资源整合` 可以独立完成搜索、解锁和转存到配置好的固定目录。如果你还需要 115 STRM、302 播放、媒体库整理或全量/增量同步，继续保留或安装 `P115StrmHelper`。
+3. `Agent影视助手` 可以独立完成搜索、解锁和转存到配置好的固定目录。如果你还需要 115 STRM、302 播放、媒体库整理或全量/增量同步，继续保留或安装 `P115StrmHelper`。
 
-4. 在 `Agent云盘资源整合` 里按需配置：
+4. 在 `Agent影视助手` 里按需配置：
 
 ```text
 影巢 OpenAPI Key
@@ -43,9 +49,18 @@ AI识别增强
 
 ```text
 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
+docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md
 skills/agent-resource-officer/SKILL.md
 skills/agent-resource-officer/EXTERNAL_AGENTS.md
 ```
+
+如果 `MoviePilot` 不在当前机器，而是在 NAS、Windows 或另一台 Docker 主机上，先看：
+
+```text
+docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md
+```
+
+重点不是换另一套方案，而是把 `ARO_BASE_URL`、盘搜地址和 Docker 网络视角配对。
 
 ## 新用户推荐方案
 
@@ -53,7 +68,7 @@ skills/agent-resource-officer/EXTERNAL_AGENTS.md
 
 推荐安装：
 
-- `AgentResourceOfficer`：Agent云盘资源整合
+- `AgentResourceOfficer`：Agent影视助手
 - `AIRecognizerEnhancer`：AI识别增强
 - `P115StrmHelper`：115 STRM、302、全量/增量同步和媒体库底层能力，来自你的 MoviePilot 插件环境或对应插件仓库
 
@@ -68,12 +83,12 @@ skills/agent-resource-officer/EXTERNAL_AGENTS.md
 - 让外部智能体阅读 [外部智能体接入范式](./docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)。
 - 让它创建或安装自己的 `agent-resource-officer` Skill。
 - 外部智能体只负责理解需求和展示结果，不直接调用影巢、盘搜、115、夸克底层接口。
-- 所有资源动作统一调用 `Agent云盘资源整合` 的 `route` / `pick` / `startup`。
+- 所有资源动作统一调用 `Agent影视助手` 的 `route` / `pick` / `startup`。
 
 典型链路：
 
 ```text
-用户 -> 外部智能体 -> Agent云盘资源整合 -> 影巢/盘搜/115/夸克 -> MoviePilot/P115StrmHelper
+用户 -> 外部智能体 -> Agent影视助手 -> 影巢/盘搜/115/夸克 -> MoviePilot/P115StrmHelper
 ```
 
 ### 方案 B：MP 内置智能体配合
@@ -94,8 +109,8 @@ skills/agent-resource-officer/EXTERNAL_AGENTS.md
 
 - 先在 MoviePilot 设置里开启智能助手 / Agent 相关功能。
 - 在 MoviePilot 的智能设置里填写可用的 LLM API 信息，包括接口地址、API Key 和模型名。
-- 确认 MP 智能助手能正常对话或调用工具后，再启用 `Agent云盘资源整合`。
-- `Agent云盘资源整合` 会注册 MoviePilot 原生 Agent Tool。
+- 确认 MP 智能助手能正常对话或调用工具后，再启用 `Agent影视助手`。
+- `Agent影视助手` 会注册 MoviePilot 原生 Agent Tool。
 - MP 内置智能体可以直接调用插件的搜索、选择、115 登录、待任务、飞书健康检查等工具。
 - TG / 企业微信这类入口本质上是把消息送进 MoviePilot，再由 MP 内置智能体或插件工具执行。
 - 这种方式不需要外部智能体自己维护 Skill，但智能理解能力取决于 MP 当前配置的 LLM 和 Agent 能力。
@@ -131,7 +146,7 @@ skills/agent-resource-officer/EXTERNAL_AGENTS.md
 
 工作方式：
 
-- 在 `Agent云盘资源整合` 设置页开启内置飞书 Channel。
+- 在 `Agent影视助手` 设置页开启内置飞书 Channel。
 - 填入飞书 App ID、App Secret、白名单和回复 ID 类型。
 - 飞书消息直接进入插件，由插件解析命令并回复。
 - 老 `FeishuCommandBridgeLong` 不必同时开启，避免同一个飞书 App 被两个长连接入口监听。
@@ -155,14 +170,14 @@ yc蜘蛛侠
 
 不管选 A、B 还是 C，底层分工都一样：
 
-- `Agent云盘资源整合` 负责资源入口和执行编排。
+- `Agent影视助手` 负责资源入口和执行编排。
 - `AI识别增强` 负责识别失败后的本地 LLM 兜底和规则建议。
 - `P115StrmHelper` 是可选的媒体库基础设施，负责 115 STRM、302、全量/增量同步、失效清理等能力。
 
-`Agent云盘资源整合` 和 `P115StrmHelper` 不是强绑定关系。更准确的理解是：
+`Agent影视助手` 和 `P115StrmHelper` 不是强绑定关系。更准确的理解是：
 
 ```text
-Agent云盘资源整合 = 资源入口和智能体/飞书/工具调度层
+Agent影视助手 = 资源入口和智能体/飞书/工具调度层
 AI识别增强 = 识别失败后的兜底和规则建议层
 P115StrmHelper = 115 媒体库基础设施层
 ```
@@ -184,12 +199,12 @@ P115StrmHelper = 115 媒体库基础设施层
 已经有旧飞书桥接并且不想迁移：
 
 - 可以继续保留 `FeishuCommandBridgeLong`
-- 新用户建议优先用 `Agent云盘资源整合` 内置飞书 Channel
+- 新用户建议优先用 `Agent影视助手` 内置飞书 Channel
 - 同一个飞书 App 不建议同时开启两个长连接入口
 
 ## 第一块：新主线插件
 
-### Agent云盘资源整合
+### Agent影视助手
 
 插件 ID：
 
@@ -197,16 +212,50 @@ P115StrmHelper = 115 媒体库基础设施层
 
 当前版本：
 
-- `0.2.02`
+- `0.2.66`
 
 它是这个仓库当前最推荐的新入口。它负责把资源相关请求统一收口：
 
 - 影巢搜索、候选选片、资源解锁、签到和配额查询
 - 影巢资源入口可单独关闭，单资源积分上限默认 20 分，避免外部智能体误解锁高积分资源
+- 新会话默认评分策略可在插件设置里统一调整，包括 PT 最低做种数、建议确认分数线、自动入库分数线和默认自动化开关
+- 搜索与推荐结果里的 `score_summary` 现在会统一附带 `decision`，外部智能体可直接读取推荐命令和确认提示，不必自己拼下一步话术
+- 写入动作之后的执行回执、统一后续追踪和本地/PT 诊断现在会统一附带 `followup_summary`，用于稳定续接“下载后看哪里、订阅后查哪里、转存后看哪里”
+- `score_summary.decision` 和 `followup_summary` 现在都会给出 `preferred_command`、`fallback_command` 与 `compact_commands`，方便外部智能体优先读短命令，不必自己裁剪提示词
+- `request_templates` 现在也会直接附带外部智能体执行契约与最小循环，方便新接入的智能体少读文档、直接起步
+- `request_templates` 现在还会附带 `entry_playbooks`，把外部智能体、MP 内置智能体、飞书入口各自该调什么 helper/API/Tool 直接列出来
 - 盘搜搜索，115 和夸克分组展示
+- 盘搜和影巢资源列表支持 `最佳片源` 只读查看当前最高评分候选，`选择 1 详情` 查看指定资源详情；不会因为没有编号而误执行转存或解锁
+- 盘搜和影巢资源列表支持 `计划选择 1` 先生成 `plan_id`，确认后才转存或解锁
+- 盘搜和影巢资源列表底部会优先提示 `计划选择`，方便外部智能体默认走安全确认链路
 - 115 分享链接识别、扫码登录、直转、待任务恢复
 - 夸克分享链接识别与转存
-- MP 原生搜索入口
+- MP 原生搜索、下载、订阅和热门推荐调度
+- 外部智能体可直接通过 `assistant/request_templates` 拉 `mp_pt_mainline` 与 `mp_recommendation` 两组低 token 模板，不需要自己猜 workflow body
+- 外部智能体也可以拉 `local_ingest` 模板组，直接接入“下载后有没有入库、卡在哪一步、失败原因是什么”的只读诊断链
+- MP 热门推荐支持按编号继续进入 MP 原生搜索、影巢或盘搜，适合智能体从推荐片单继续推进到资源搜索
+- 推荐列表支持自然语言选择后续来源，例如 `选择 1 盘搜`、`选择1影巢`、`选 2 mp`
+- MP 搜索结果支持 `下载1`、`下载第1个`、`订阅蜘蛛侠`、`订阅并搜索蜘蛛侠` 等自然写法，默认只生成 `plan_id`，确认后才执行
+- MP 下载任务支持 `下载任务`、`暂停下载 1`、`恢复下载 1`、`删除下载 1`；任务控制默认生成 `plan_id`，确认后才操作下载器
+- MP 本地/PT 跟踪链现在有更短的自然语言入口：`记录 片名`、`状态 片名`、`入库 片名`、`诊断 片名`、`最近`、`后续`
+- 统一跟进入口支持 `跟进` 和 `跟进 片名`：有已执行计划时自动追执行后状态；有片名时直接走生命周期；都没有时退回最近活动
+- `记录 片名` 会按 hash 关联下载历史与整理状态，方便判断资源是否已经进入落库流程
+- `状态 片名` 会一次汇总下载任务、下载历史和整理/入库历史
+- `入库 片名`、`诊断 片名`、`最近` 会统一输出结构化 `diagnosis_summary`，外部智能体可以少带说明词，直接走短命令
+- MP 原生媒体识别支持 `识别 片名`，用于让智能体先确认 MoviePilot 的标题、年份、类型和 TMDB/Douban/IMDB 信息
+- MP 原生搜索后支持 `选择 1` 查看 PT 详情、评分理由和风险，再决定是否执行 `下载1`
+- MP 原生搜索后支持 `最佳片源` 或 `mp_search_best` 直接查看当前评分最高的 PT 候选，减少智能体自行读列表的 token
+- MP 原生搜索后支持 `下载最佳`，按当前最高分候选生成下载计划，仍需确认 `plan_id`
+- PT 主线当前统一走计划确认链路：即使评分很高，`下载1` 和 `下载最佳` 也默认先生成 `plan_id`，由用户确认后再真正提交
+- 已生成的下载、订阅和控制计划支持自然语言确认：`执行计划` 执行当前会话最近待执行计划，`执行 plan-xxx` 精确执行指定计划
+- PT 环境诊断支持 `站点状态`、`下载器状态`，只返回脱敏摘要，便于判断站点启用、Cookie 是否存在和下载器绑定情况
+- MP 订阅支持 `订阅列表`、`搜索订阅 1`、`暂停订阅 1`、`恢复订阅 1`、`删除订阅 1`；订阅控制默认生成 `plan_id`
+- MP 整理/入库历史支持 `入库历史`、`入库失败 片名`，用于判断下载后是否已经落库，结果只返回路径摘要
+- 热门探索支持自然语言入口，例如“看看最近有什么热门影视”“豆瓣热门电影”“今日番剧”
+- 智能体偏好画像，以及云盘 / PT 分源评分和自动化建议
+- 偏好画像支持自然语言主入口：`偏好` 查看当前偏好，`保存偏好 4K 杜比 HDR 中字 全集 做种>=3 影巢积分20 不自动入库` 写入偏好，`重置偏好` 恢复首次询问
+- 外部智能体接入时可以直接拉 `preferences_onboarding` 模板组，固定走“读取偏好 -> 读取评分策略 -> 保存偏好”的低 token 首次接入流程
+- `评分策略` 现在也有独立只读入口，外部智能体可以直接读取硬门槛、软提醒和 `score_summary` 约定，不必把规则硬编码进提示词
 - 可选内置飞书 Channel
 - 给 MP 智能助手、外部智能体、WorkBuddy、OpenClaw（小龙虾）、Hermes 使用的统一 API 和 Skill 范式
 
@@ -220,6 +269,8 @@ ps大君夫人
 链接 https://pan.quark.cn/s/xxxx path=/飞书
 链接 https://115cdn.com/s/xxxx path=/待整理
 选择 1
+计划选择 1
+执行计划
 详情
 下一页
 115登录
@@ -284,7 +335,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 
 ### 外部智能体和 Skill
 
-如果你想让 WorkBuddy、OpenClaw（小龙虾）、Hermes、微信侧智能体或其他外部智能体来控制 Agent云盘资源整合，推荐不要只发一段聊天提示词，而是让它读仓库后创建或安装自己的 `agent-resource-officer` Skill。
+如果你想让 WorkBuddy、OpenClaw（小龙虾）、Hermes、微信侧智能体或其他外部智能体来控制 Agent影视助手，推荐不要只发一段聊天提示词，而是让它读仓库后创建或安装自己的 `agent-resource-officer` Skill。
 
 最小复现流程：
 
@@ -326,7 +377,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
 给外部智能体的核心原则：
 
 ```text
-资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent云盘资源整合。
+资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent影视助手。
 不要直接调用影巢、盘搜、115、夸克底层 API。
 搜索走 route，编号选择走 pick，同一个用户或群聊固定使用 agent:会话ID。
 ```
@@ -378,7 +429,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
 
 - 旧飞书长连接兼容入口
 - 保留已有用户熟悉的飞书命令体验
-- 新用户优先使用 `Agent云盘资源整合` 内置飞书 Channel
+- 新用户优先使用 `Agent影视助手` 内置飞书 Channel
 
 适合场景：
 
@@ -388,7 +439,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
 
 注意：
 
-- 同一个飞书 App 不建议同时被 `FeishuCommandBridgeLong` 和 `Agent云盘资源整合` 内置飞书入口监听。
+- 同一个飞书 App 不建议同时被 `FeishuCommandBridgeLong` 和 `Agent影视助手` 内置飞书入口监听。
 - 如果你是新环境，建议只开插件内置飞书入口。
 
 详细说明：
@@ -412,7 +463,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
 
 当前建议：
 
-- 新的智能体和飞书主线优先使用 `Agent云盘资源整合`。
+- 新的智能体和飞书主线优先使用 `Agent影视助手`。
 - 如果你只想单独使用影巢 OpenAPI 插件，也可以继续安装 `HdhiveOpenApi`。
 
 详细说明：
@@ -438,7 +489,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
 当前建议：
 
 - 只想轻量签到：用 `HDHiveDailySign`
-- 已经使用本插件：也可以直接在 `Agent云盘资源整合` 内开启影巢签到
+- 已经使用本插件：也可以直接在 `Agent影视助手` 内开启影巢签到
 - OpenAPI 签到需要 Premium 时，网页 Cookie / 账号密码兜底更适合放在签到插件或插件签到页配置
 
 来源说明：
@@ -468,7 +519,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
 
 当前建议：
 
-- 新主线优先通过 `Agent云盘资源整合` 调用夸克转存
+- 新主线优先通过 `Agent影视助手` 调用夸克转存
 - 如果只需要单独转存夸克分享，可以独立使用 `QuarkShareSaver`
 
 详细说明：
@@ -565,7 +616,7 @@ scripts/
 
 新用户优先从这三个能力开始：
 
-- `Agent云盘资源整合`：资源和智能体统一入口
+- `Agent影视助手`：资源和智能体统一入口
 - `AI识别增强`：识别失败后的本地 LLM 兜底
 - `P115StrmHelper`：115 STRM、302 和媒体库基础设施
 

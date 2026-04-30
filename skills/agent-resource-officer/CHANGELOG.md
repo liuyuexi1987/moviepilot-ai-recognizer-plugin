@@ -1,5 +1,137 @@
 # agent-resource-officer changelog
 
+## 0.1.39
+
+- Added `entry_playbooks` to the helper-facing external-agent payload and request-template summaries so agents can read ready-to-run helper commands, HTTP endpoints, Tool names, and recommended fields from one place.
+- Tightened helper selftest coverage for the new playbook metadata and missing-detail request-template summaries.
+
+## 0.1.38
+
+- Added orchestration metadata to the helper and template summaries, including service/client roles, entry patterns, and the preferred startup -> decide -> route -> followup flow.
+- Clarified that external agents, MP built-in agents, and the Feishu channel all reuse the same assistant protocol instead of maintaining separate state machines.
+
+## 0.1.35
+
+- Added `execution_loop_contract` to the external-agent payload so a new external agent can bootstrap itself from a structured startup -> decide -> route -> policy -> followup loop.
+- Documented the minimal external-agent execution loop in the Skill and external-agent guides.
+
+## 0.1.34
+
+- Added `execution_policy_contract` to the external-agent payload so external agents can consume the helper's execution behavior classes without reading repository docs first.
+- Documented the five recommended behavior branches (`auto_continue`, `auto_continue_then_wait_confirmation`, `wait_user_confirmation`, `show_only`, `stop`) across the Skill and external-agent guides.
+
+## 0.1.33
+
+- Extended the helper-owned execution policy summary to legacy helper summaries such as `decide`, `auto`, `doctor`, and `recover`, so external agents no longer need two different parsing paths.
+- Added selftest coverage for legacy helper summary auto-continue and wait-confirmation behavior.
+
+## 0.1.32
+
+- Added a helper-owned command execution policy summary for `--summary-only`, including `recommended_agent_behavior`, `auto_run_command`, `confirm_command`, `display_command`, `stop_after_auto`, and `reason`.
+- Added `auto_continue_rule` to the external-agent payload so other agents can decide when to auto-run the preferred command and when to stop for confirmation.
+- Added selftest coverage for the new auto-continue decision layer.
+
+## 0.1.31
+
+- Preserved compact command execution semantics in helper summaries: `command_policy`, `preferred_requires_confirmation`, `fallback_requires_confirmation`, and `can_auto_run_preferred`.
+- Taught `summary_command()` to use those confirmation flags instead of only falling back to the old helper inspect/execute flow.
+- Added selftest coverage for top-level command confirmation behavior.
+
+## 0.1.30
+
+- Added top-level compact command extraction for `route`, `pick`, `workflow`, `plan-execute`, and `followup`.
+- Added `--summary-only` / `--command-only` support for those commands, so external agents can ask the helper for just the next command.
+- Added `next_command_rule` to the external-agent payload and documented the top-level `preferred_command` / `compact_commands` contract.
+
+## 0.1.29
+
+- Added `preferences_recipe_command` to the external-agent payload.
+- Taught recipe command generation that `preferences_onboarding` maps to the direct `preferences` helper command.
+- Added selftest coverage for the preferences onboarding recipe and payload handoff.
+
+## 0.1.28
+
+- Added `local_ingest_recipe_command` to the external-agent payload.
+- Taught recipe command generation that `mp_ingest_status` and `mp_local_diagnose` map to direct workflow helper commands.
+- Preserved `diagnosis_summary` in compact helper output so local/PT ingest diagnostics remain structured for external agents.
+
+## 0.1.27
+
+- Added `post_execute_recipe_command` to the external-agent payload.
+- Taught recipe command generation that `execution_followup` maps to `python3 scripts/aro_request.py followup`.
+- Documented the `templates --recipe followup` low-token entry for post-execution tracking.
+
+## 0.1.26
+
+- Added `followup`, a direct helper command for the plugin-owned `query_execution_followup` action.
+- Added positional `plan-xxx` support for `followup`, so `python3 scripts/aro_request.py followup plan-xxx` works without `--plan-id`.
+- Added `followup_command` to the external-agent handoff payload, so other agents can continue after `plan-execute` without guessing the next raw action.
+
+## 0.1.25
+
+- Preserved `follow_up_hint` in compact helper output, so `plan-execute` and related commands no longer drop the plugin's next-step hint.
+- Added a selftest case for `follow_up_hint` passthrough.
+
+## 0.1.24
+
+- Added positional argument support for `workflow`, so `python3 scripts/aro_request.py workflow mp_media_detail 蜘蛛侠` works without `--workflow` and `--keyword`.
+- Added positional session support for `session`, `session-clear`, and `history`, so `python3 scripts/aro_request.py session default` and `python3 scripts/aro_request.py history agent:demo` work without `--session`.
+- Added positional `plan-xxx` support for `plans` and `plans-clear`.
+
+## 0.1.23
+
+- Added positional argument support for `pick`, so `python3 scripts/aro_request.py pick 1` and `python3 scripts/aro_request.py pick 1 详情` work without `--choice` or `--action`.
+- Added positional plan support for `plan-execute`, so `python3 scripts/aro_request.py plan-execute plan-xxx` works without `--plan-id`.
+- Updated the external-agent handoff payload to prefer the shorter positional `pick` command.
+
+## 0.1.22
+
+- Added positional text support for `route`, so `python3 scripts/aro_request.py route "盘搜搜索 大君夫人"` works without `--text`.
+- Kept the old `--text` form for compatibility.
+
+## 0.1.21
+
+- Added direct `--command-only` helper output for the `mp_pt` and `recommend` recipes.
+- Changed recipe command selection to execute the first safe read step directly even when later recipe steps require confirmation.
+
+## 0.1.20
+
+- Added `mp_pt_recipe_command` and `mp_recommend_recipe_command` to the external-agent handoff payload.
+- Documented `mp_pt` and `recommend` request-template recipes for MP native PT and recommendation flows.
+
+## 0.1.19
+
+- Added workflow helper flags for MP download task management: `--status`, `--hash`, `--target`, `--control`, `--downloader`, and `--delete-files`.
+- Added examples for querying, pausing, resuming, and deleting MP download tasks through AgentResourceOfficer.
+
+## 0.1.18
+
+- Added `--mode` to the workflow helper so `mp_recommend_search` can continue a recommended title into MP, HDHive, or PanSou.
+- Documented the recommendation-to-search chain for external agents.
+
+## 0.1.17
+
+- Changed HDHive search helper default to `media_type=auto`, so uncertain titles are not filtered as movies before TV candidates can be found.
+
+## 0.1.16
+
+- Added `scoring-policy` helper command so external agents can explain plugin-owned scoring rules without re-scoring.
+
+## 0.1.15
+
+- Documented compact `score_summary` for choosing scored cloud/PT results without parsing long messages.
+
+## 0.1.14
+
+- Added compact `preference_status` to assistant responses so external agents can detect onboarding without a separate verbose call.
+
+## 0.1.13
+
+- Added `preferences` helper command to read, save, or reset source preferences for external agents.
+- Documented cloud/PT source-specific scoring and MP native search/download/subscribe/recommend workflows.
+- Updated the external-agent handoff prompt to check preferences before automated resource tasks.
+- Changed `workflow` helper behavior so read-only workflows execute directly while write workflows still generate a dry-run plan by default.
+
 ## 0.1.12
 
 - Added `external-agent` helper command to print a compact external-agent prompt and minimal tool contract.

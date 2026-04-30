@@ -30,6 +30,12 @@ bash scripts/package-plugin.sh --all
 
 正式发布前仍建议使用 `pre-release-check.sh`，它会额外检查元数据、Skill helper 和 ZIP 内容。
 
+如果本机已经有可访问的 MoviePilot 实例，并且 `~/.config/agent-resource-officer/config` 配好了 `ARO_BASE_URL` / `ARO_API_KEY`，可以再跑一遍真实只读 smoke：
+
+```bash
+RUN_AGENT_RESOURCE_OFFICER_LIVE_SMOKE=1 bash scripts/pre-release-check.sh
+```
+
 生成目录：
 
 ```text
@@ -40,7 +46,7 @@ dist/
 
 - `AIRecoginzerForwarder-2.0.1.zip`
 - `AIRecognizerEnhancer-0.1.11.zip`
-- `AgentResourceOfficer-0.2.02.zip`
+- `AgentResourceOfficer-0.2.66.zip`
 - `FeishuCommandBridgeLong-0.5.26.zip`
 - `HDHiveDailySign-1.0.0.zip`
 - `HdhiveOpenApi-0.3.0.zip`

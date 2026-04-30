@@ -141,7 +141,7 @@ for zip_file in zip_files:
             if not payload.get("guide_file_exists"):
                 print(f"{zip_file} external-agent guide_file_exists=false")
                 raise SystemExit(1)
-            if len(payload.get("tools") or []) != 3:
+            if len(payload.get("tools") or []) != 4:
                 print(f"{zip_file} external-agent tools 数量无效")
                 raise SystemExit(1)
 

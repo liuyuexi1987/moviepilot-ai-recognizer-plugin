@@ -13,6 +13,11 @@ from base64 import b64decode
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+try:
+    import jieba
+except Exception:
+    jieba = None
+
 for _site_path in (
     "/usr/local/lib/python3.12/site-packages",
     "/usr/local/lib/python3.11/site-packages",
@@ -32,22 +37,39 @@ try:
     from app.chain.subscribe import SubscribeChain
     from app.core.event import eventmanager
     from app.core.metainfo import MetaInfo
+    from app.db.downloadhistory_oper import DownloadHistoryOper
+    from app.db.models.downloadhistory import DownloadHistory
+    from app.db.models.transferhistory import TransferHistory
+    from app.db.site_oper import SiteOper
+    from app.db.subscribe_oper import SubscribeOper
+    from app.db.systemconfig_oper import SystemConfigOper
+    from app.helper.subscribe import SubscribeHelper
     from app.core.plugin import PluginManager
     from app.log import logger
     from app.scheduler import Scheduler
-    from app.schemas.types import EventType
+    from app.schemas.types import EventType, SystemConfigKey, TorrentStatus, media_type_to_agent
     from app.utils.http import RequestUtils
     from app.utils.string import StringUtils
 except Exception:
     DownloadChain = None
+    DownloadHistoryOper = None
+    DownloadHistory = None
+    TransferHistory = None
     MediaChain = None
     SearchChain = None
+    SiteOper = None
     SubscribeChain = None
+    SubscribeHelper = None
+    SubscribeOper = None
+    SystemConfigOper = None
     eventmanager = None
     MetaInfo = None
     PluginManager = None
     Scheduler = None
     EventType = None
+    SystemConfigKey = None
+    TorrentStatus = None
+    media_type_to_agent = None
     RequestUtils = None
     StringUtils = None
 
@@ -475,7 +497,7 @@ class FeishuChannel:
         cache_key = self._cache_key(chat_id, open_id)
 
         if cmd == "/version":
-            self.reply_text(chat_id, open_id, f"Agent云盘资源整合 {getattr(self.plugin, 'plugin_version', '')}\n飞书入口：{'运行中' if self.is_running() else '未运行'}")
+            self.reply_text(chat_id, open_id, f"Agent影视助手 {getattr(self.plugin, 'plugin_version', '')}\n飞书入口：{'运行中' if self.is_running() else '未运行'}")
             return True
 
         if cmd == "/media_search":
@@ -623,12 +645,61 @@ class FeishuChannel:
                 volume = torrent.volume_factor if getattr(torrent, "volume_factor", None) else "未知"
                 lines.append(f"{idx}. [{site}] {title}")
                 lines.append(f"   大小：{size} | 做种：{seeders} | 促销：{volume}")
-            lines.append("下一步：回复“下载资源 序号”即可下载选中项。")
+            lines.append("下一步：回复“下载资源 序号”会先生成下载计划，不会静默下载。")
             lines.append("如需长期跟踪，回复“订阅媒体 片名”或“订阅并搜索 片名”。")
             return "\n".join(lines)
         except Exception as exc:
             logger.error(f"[AgentResourceOfficer][Feishu] 搜索资源失败：{keyword} {exc}\n{traceback.format_exc()}")
             return f"搜索资源失败：{keyword}\n错误：{exc}"
+
+    def _query_media_detail(self, keyword: str, media_type: str = "", year: str = "") -> Dict[str, Any]:
+        if not all([MetaInfo, MediaChain]):
+            return {"success": False, "message": "媒体识别失败：当前环境缺少 MoviePilot 媒体识别依赖。", "item": {}}
+        title_text = str(keyword or "").strip()
+        if not title_text:
+            return {"success": False, "message": "媒体识别失败：缺少片名。", "item": {}}
+        try:
+            meta = MetaInfo(title_text)
+            if year:
+                try:
+                    meta.year = str(year)
+                except Exception:
+                    pass
+            mediainfo = MediaChain().recognize_media(meta=meta)
+            if not mediainfo:
+                return {"success": False, "message": f"未识别到媒体信息：{title_text}", "item": {"keyword": title_text}}
+            season = meta.begin_season if meta.begin_season else getattr(mediainfo, "season", None)
+            media_type_value = getattr(mediainfo, "type", None)
+            media_type_name = getattr(media_type_value, "name", "") or str(media_type_value or "")
+            item = {
+                "keyword": title_text,
+                "title": str(getattr(mediainfo, "title", "") or ""),
+                "original_title": str(getattr(mediainfo, "original_title", "") or ""),
+                "year": str(getattr(mediainfo, "year", "") or ""),
+                "type": media_type_name,
+                "tmdb_id": getattr(mediainfo, "tmdb_id", None),
+                "douban_id": getattr(mediainfo, "douban_id", None),
+                "imdb_id": str(getattr(mediainfo, "imdb_id", "") or ""),
+                "season": season,
+                "category": str(getattr(mediainfo, "category", "") or ""),
+                "overview": str(getattr(mediainfo, "overview", "") or "")[:300],
+            }
+            lines = [
+                f"媒体识别：{title_text}",
+                f"结果：{item.get('title') or '-'} ({item.get('year') or '-'})",
+                f"类型：{item.get('type') or '-'} | TMDB：{item.get('tmdb_id') or '-'} | 豆瓣：{item.get('douban_id') or '-'}",
+            ]
+            if item.get("original_title") and item.get("original_title") != item.get("title"):
+                lines.append(f"原标题：{item.get('original_title')}")
+            if season:
+                lines.append(f"季：S{int(season):02d}" if isinstance(season, int) else f"季：{season}")
+            if item.get("overview"):
+                lines.append(f"简介：{item.get('overview')}")
+            lines.append("说明：这是 MoviePilot 原生识别结果，后续 MP 搜索、订阅和 PT 评分会以它为准。")
+            return {"success": True, "message": "\n".join(lines), "item": item}
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 媒体识别失败：{title_text} {exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"媒体识别失败：{exc}", "item": {"keyword": title_text}}
 
     def _execute_media_download(self, index: int, cache_key: str) -> str:
         if DownloadChain is None:
@@ -653,6 +724,622 @@ class FeishuChannel:
         except Exception as exc:
             logger.error(f"[AgentResourceOfficer][Feishu] 下载资源失败：{torrent.title} {exc}\n{traceback.format_exc()}")
             return f"下载资源失败：{torrent.title}\n错误：{exc}"
+
+    def _query_download_tasks(
+        self,
+        *,
+        downloader: str = "",
+        status: str = "downloading",
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 10,
+    ) -> Dict[str, Any]:
+        if DownloadChain is None:
+            return {"success": False, "message": "查询下载任务失败：当前环境缺少 MoviePilot 下载依赖。", "items": []}
+        try:
+            chain = DownloadChain()
+            status_name = str(status or "downloading").strip().lower()
+            downloader_name = str(downloader or "").strip() or None
+            tasks: List[Any] = []
+            if hash_value:
+                tasks = chain.list_torrents(downloader=downloader_name, hashs=[hash_value]) or []
+            elif status_name == "downloading":
+                tasks = chain.downloading(name=downloader_name) or []
+            else:
+                for torrent_status in [TorrentStatus.DOWNLOADING, TorrentStatus.TRANSFER] if TorrentStatus else []:
+                    tasks.extend(chain.list_torrents(downloader=downloader_name, status=torrent_status) or [])
+            if status_name == "completed":
+                tasks = [task for task in tasks if str(getattr(task, "state", "") or "").lower() in {"seeding", "completed"}]
+            elif status_name == "paused":
+                tasks = [task for task in tasks if str(getattr(task, "state", "") or "").lower() == "paused"]
+            if title:
+                title_lower = title.lower()
+                tasks = [
+                    task for task in tasks
+                    if title_lower in str(getattr(task, "title", "") or getattr(task, "name", "") or "").lower()
+                ]
+            items: List[Dict[str, Any]] = []
+            for index, task in enumerate(tasks[:max(1, min(30, int(limit or 10)))], 1):
+                task_hash = str(getattr(task, "hash", "") or "")
+                history = DownloadHistoryOper().get_by_hash(task_hash) if DownloadHistoryOper and task_hash else None
+                title_text = str(getattr(task, "title", "") or getattr(task, "name", "") or "").strip()
+                if history and getattr(history, "title", None):
+                    title_text = title_text or str(history.title)
+                size_value = getattr(task, "size", None)
+                size_text = StringUtils.str_filesize(size_value) if StringUtils and size_value else ""
+                progress = getattr(task, "progress", None)
+                try:
+                    progress_text = f"{float(progress):.1f}%" if progress is not None else ""
+                except Exception:
+                    progress_text = str(progress or "")
+                items.append({
+                    "index": index,
+                    "hash": task_hash,
+                    "hash_short": task_hash[:8],
+                    "downloader": str(getattr(task, "downloader", "") or ""),
+                    "title": title_text or "未命名任务",
+                    "name": str(getattr(task, "name", "") or ""),
+                    "size": size_text,
+                    "progress": progress_text,
+                    "state": str(getattr(task, "state", "") or ""),
+                    "dlspeed": getattr(task, "dlspeed", None),
+                    "upspeed": getattr(task, "upspeed", None),
+                    "left_time": getattr(task, "left_time", None),
+                    "tags": str(getattr(task, "tags", "") or ""),
+                    "media_title": str(getattr(history, "title", "") or "") if history else "",
+                })
+            status_label = {
+                "downloading": "下载中",
+                "completed": "已完成",
+                "paused": "已暂停",
+                "all": "全部",
+            }.get(status_name, status_name)
+            if not items:
+                return {
+                    "success": True,
+                    "message": f"未找到{status_label}下载任务。",
+                    "items": [],
+                    "total": len(tasks),
+                    "status": status_name,
+                }
+            lines = [f"下载任务：{status_label}，共 {len(tasks)} 条，展示前 {len(items)} 条："]
+            for item in items:
+                details = [
+                    item.get("progress") or "进度未知",
+                    item.get("size") or "大小未知",
+                    item.get("state") or "状态未知",
+                    f"下载器:{item.get('downloader') or '默认'}",
+                    f"Hash:{item.get('hash_short')}",
+                ]
+                lines.append(f"{item.get('index')}. {item.get('title')}")
+                lines.append("   " + " | ".join(details))
+            lines.append("写入操作需确认：可发“暂停下载 1”“恢复下载 1”“删除下载 1”。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": len(tasks),
+                "status": status_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询下载任务失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询下载任务失败：{exc}", "items": []}
+
+    def _control_download_task(
+        self,
+        *,
+        action: str,
+        hash_value: str,
+        downloader: str = "",
+        delete_files: bool = False,
+    ) -> Dict[str, Any]:
+        if DownloadChain is None:
+            return {"success": False, "message": "操作下载任务失败：当前环境缺少 MoviePilot 下载依赖。"}
+        task_hash = str(hash_value or "").strip()
+        if len(task_hash) != 40 or not all(ch in "0123456789abcdefABCDEF" for ch in task_hash):
+            return {"success": False, "message": "操作下载任务失败：hash 格式无效，请先查询下载任务后按编号操作。"}
+        downloader_name = str(downloader or "").strip() or None
+        action_name = str(action or "").strip().lower()
+        try:
+            chain = DownloadChain()
+            if action_name in {"pause", "stop"}:
+                ok = chain.set_downloading(task_hash, "stop", name=downloader_name)
+                label = "暂停"
+            elif action_name in {"resume", "start"}:
+                ok = chain.set_downloading(task_hash, "start", name=downloader_name)
+                label = "恢复"
+            elif action_name in {"delete", "remove"}:
+                ok = chain.remove_torrents(hashs=[task_hash], downloader=downloader_name, delete_file=bool(delete_files))
+                label = "删除"
+            else:
+                return {"success": False, "message": f"操作下载任务失败：不支持的动作 {action}"}
+            suffix = "（包含文件）" if action_name in {"delete", "remove"} and delete_files else ""
+            return {
+                "success": bool(ok),
+                "message": f"{label}下载任务{'成功' if ok else '失败'}：{task_hash[:8]}{suffix}",
+                "hash": task_hash,
+                "downloader": downloader_name or "",
+                "action": action_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 操作下载任务失败：{task_hash} {exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"操作下载任务失败：{exc}"}
+
+    def _query_downloaders(self) -> Dict[str, Any]:
+        if SystemConfigOper is None or SystemConfigKey is None:
+            return {"success": False, "message": "查询下载器失败：当前环境缺少 MoviePilot 配置依赖。", "items": []}
+        try:
+            raw_items = SystemConfigOper().get(SystemConfigKey.Downloaders) or []
+            items: List[Dict[str, Any]] = []
+            for index, item in enumerate(raw_items, 1):
+                if not isinstance(item, dict):
+                    continue
+                items.append({
+                    "index": index,
+                    "name": str(item.get("name") or ""),
+                    "type": str(item.get("type") or ""),
+                    "enabled": bool(item.get("enabled")),
+                    "default": bool(item.get("default")),
+                })
+            enabled = [item for item in items if item.get("enabled")]
+            if not items:
+                return {"success": True, "message": "未配置下载器。", "items": [], "enabled_count": 0}
+            lines = [f"下载器配置：共 {len(items)} 个，启用 {len(enabled)} 个"]
+            for item in items:
+                status = "启用" if item.get("enabled") else "停用"
+                default = "，默认" if item.get("default") else ""
+                lines.append(f"{item.get('index')}. {item.get('name') or '-'} | {item.get('type') or '-'} | {status}{default}")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "enabled_count": len(enabled),
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询下载器失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询下载器失败：{exc}", "items": []}
+
+    def _query_sites(self, *, status: str = "active", name: str = "", limit: int = 30) -> Dict[str, Any]:
+        if SiteOper is None:
+            return {"success": False, "message": "查询站点失败：当前环境缺少 MoviePilot 站点依赖。", "items": []}
+        try:
+            status_name = str(status or "active").strip().lower()
+            name_filter = str(name or "").strip().lower()
+            sites = SiteOper().list_order_by_pri() or []
+            items: List[Dict[str, Any]] = []
+            for site in sites:
+                is_active = bool(getattr(site, "is_active", False))
+                if status_name == "active" and not is_active:
+                    continue
+                if status_name == "inactive" and is_active:
+                    continue
+                site_name = str(getattr(site, "name", "") or "")
+                if name_filter and name_filter not in site_name.lower():
+                    continue
+                cookie = str(getattr(site, "cookie", "") or "")
+                items.append({
+                    "index": len(items) + 1,
+                    "id": getattr(site, "id", None),
+                    "name": site_name,
+                    "domain": str(getattr(site, "domain", "") or ""),
+                    "url": str(getattr(site, "url", "") or ""),
+                    "pri": getattr(site, "pri", None),
+                    "is_active": is_active,
+                    "has_cookie": bool(cookie),
+                    "downloader": str(getattr(site, "downloader", "") or ""),
+                    "proxy": bool(getattr(site, "proxy", False)),
+                    "timeout": getattr(site, "timeout", None),
+                })
+            total = len(items)
+            items = items[:max(1, min(100, int(limit or 30)))]
+            label = {"active": "已启用", "inactive": "已停用", "all": "全部"}.get(status_name, status_name)
+            if not items:
+                return {"success": True, "message": f"未找到{label}站点。", "items": [], "total": total}
+            lines = [f"PT 站点：{label}，共 {total} 个，展示前 {len(items)} 个："]
+            for item in items:
+                cookie_state = "有Cookie" if item.get("has_cookie") else "无Cookie"
+                active_state = "启用" if item.get("is_active") else "停用"
+                lines.append(
+                    f"{item.get('index')}. {item.get('name') or '-'} | {item.get('domain') or '-'} | "
+                    f"{active_state} | {cookie_state} | 优先级:{item.get('pri')} | 下载器:{item.get('downloader') or '默认'}"
+                )
+            lines.append("说明：这里不会返回 Cookie 明文；如站点搜索失败，优先检查是否启用、Cookie 是否存在、站点绑定下载器是否可用。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": total,
+                "status": status_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询站点失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询站点失败：{exc}", "items": []}
+
+    def _query_subscribes(
+        self,
+        *,
+        status: str = "all",
+        media_type: str = "all",
+        name: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        if SubscribeOper is None:
+            return {"success": False, "message": "查询订阅失败：当前环境缺少 MoviePilot 订阅依赖。", "items": []}
+        try:
+            status_name = str(status or "all").strip()
+            media_type_name = str(media_type or "all").strip().lower()
+            name_filter = str(name or "").strip().lower()
+            subscribes = SubscribeOper().list() or []
+            items: List[Dict[str, Any]] = []
+            for sub in subscribes:
+                state = str(getattr(sub, "state", "") or "")
+                if status_name != "all" and state != status_name:
+                    continue
+                sub_type = str(getattr(sub, "type", "") or "").lower()
+                if media_type_name != "all" and media_type_name not in {sub_type, "movie" if sub_type == "电影" else sub_type, "tv" if sub_type == "电视剧" else sub_type}:
+                    continue
+                title = str(getattr(sub, "name", "") or "")
+                if name_filter and name_filter not in title.lower():
+                    continue
+                items.append({
+                    "index": len(items) + 1,
+                    "id": getattr(sub, "id", None),
+                    "name": title or "未命名订阅",
+                    "year": str(getattr(sub, "year", "") or ""),
+                    "type": str(getattr(sub, "type", "") or ""),
+                    "season": getattr(sub, "season", None),
+                    "state": state,
+                    "total_episode": getattr(sub, "total_episode", None),
+                    "lack_episode": getattr(sub, "lack_episode", None),
+                    "start_episode": getattr(sub, "start_episode", None),
+                    "quality": str(getattr(sub, "quality", "") or ""),
+                    "resolution": str(getattr(sub, "resolution", "") or ""),
+                    "effect": str(getattr(sub, "effect", "") or ""),
+                    "include": str(getattr(sub, "include", "") or ""),
+                    "exclude": str(getattr(sub, "exclude", "") or ""),
+                    "sites": getattr(sub, "sites", None),
+                    "downloader": str(getattr(sub, "downloader", "") or ""),
+                    "save_path": str(getattr(sub, "save_path", "") or ""),
+                    "best_version": getattr(sub, "best_version", None),
+                    "tmdbid": getattr(sub, "tmdbid", None),
+                    "doubanid": str(getattr(sub, "doubanid", "") or ""),
+                    "last_update": str(getattr(sub, "last_update", "") or ""),
+                })
+            total = len(items)
+            items = items[:max(1, min(100, int(limit or 20)))]
+            status_label = {"R": "启用", "S": "暂停", "P": "待处理", "N": "完成", "all": "全部"}.get(status_name, status_name)
+            if not items:
+                return {"success": True, "message": f"未找到{status_label}订阅。", "items": [], "total": total}
+            lines = [f"MP 订阅：{status_label}，共 {total} 条，展示前 {len(items)} 条："]
+            for item in items:
+                season = f" S{int(item.get('season')):02d}" if item.get("season") else ""
+                lack = item.get("lack_episode")
+                lack_text = f"缺 {lack} 集" if lack not in (None, "", 0) else "无缺集"
+                filters = " / ".join(value for value in [item.get("resolution"), item.get("effect"), item.get("quality")] if value) or "默认规则"
+                lines.append(f"{item.get('index')}. #{item.get('id')} {item.get('name')} ({item.get('year') or '-'}){season}")
+                lines.append(f"   状态:{item.get('state') or '-'} | {lack_text} | 规则:{filters} | 下载器:{item.get('downloader') or '默认'}")
+            lines.append("写入操作需确认：可发“搜索订阅 1”“暂停订阅 1”“恢复订阅 1”“删除订阅 1”。")
+            return {"success": True, "message": "\n".join(lines), "items": items, "total": total, "status": status_name}
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询订阅失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询订阅失败：{exc}", "items": []}
+
+    def _control_subscribe(self, *, action: str, subscribe_id: int) -> Dict[str, Any]:
+        if SubscribeOper is None:
+            return {"success": False, "message": "操作订阅失败：当前环境缺少 MoviePilot 订阅依赖。"}
+        sid = int(subscribe_id or 0)
+        if sid <= 0:
+            return {"success": False, "message": "操作订阅失败：订阅 ID 无效。"}
+        action_name = str(action or "").strip().lower()
+        try:
+            oper = SubscribeOper()
+            sub = oper.get(sid)
+            if not sub:
+                return {"success": False, "message": f"操作订阅失败：订阅 #{sid} 不存在。"}
+            old_info = sub.to_dict() if hasattr(sub, "to_dict") else {}
+            if action_name in {"search", "run"}:
+                if Scheduler is None:
+                    return {"success": False, "message": "搜索订阅失败：当前环境缺少调度器。"}
+                Scheduler().start(job_id="subscribe_search", **{"sid": sid, "state": None, "manual": True})
+                return {"success": True, "message": f"已触发订阅搜索：#{sid} {getattr(sub, 'name', '')}", "subscribe_id": sid, "action": action_name}
+            if action_name in {"pause", "stop"}:
+                updated = oper.update(sid, {"state": "S"})
+                label = "暂停"
+            elif action_name in {"resume", "start"}:
+                updated = oper.update(sid, {"state": "R"})
+                label = "恢复"
+            elif action_name in {"delete", "remove"}:
+                sub_name = str(getattr(sub, "name", "") or "")
+                sub_year = str(getattr(sub, "year", "") or "")
+                oper.delete(sid)
+                if eventmanager and EventType:
+                    eventmanager.send_event(EventType.SubscribeDeleted, {"subscribe_id": sid, "subscribe_info": old_info})
+                if SubscribeHelper:
+                    SubscribeHelper().sub_done_async({"tmdbid": getattr(sub, "tmdbid", None), "doubanid": getattr(sub, "doubanid", None)})
+                return {"success": True, "message": f"成功删除订阅：#{sid} {sub_name} ({sub_year})", "subscribe_id": sid, "action": action_name}
+            else:
+                return {"success": False, "message": f"操作订阅失败：不支持的动作 {action}"}
+            if eventmanager and EventType:
+                eventmanager.send_event(EventType.SubscribeModified, {
+                    "subscribe_id": sid,
+                    "old_subscribe_info": old_info,
+                    "subscribe_info": updated.to_dict() if updated and hasattr(updated, "to_dict") else {},
+                })
+            return {"success": True, "message": f"{label}订阅成功：#{sid} {getattr(sub, 'name', '')}", "subscribe_id": sid, "action": action_name}
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 操作订阅失败：{sid} {exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"操作订阅失败：{exc}", "subscribe_id": sid}
+
+    @staticmethod
+    def _path_preview(value: Any, max_parts: int = 4) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return ""
+        normalized = text.replace("\\", "/")
+        parts = [part for part in normalized.split("/") if part]
+        if len(parts) <= max_parts:
+            return normalized
+        prefix = "/" if normalized.startswith("/") else ""
+        return f"{prefix}.../" + "/".join(parts[-max_parts:])
+
+    @staticmethod
+    def _transfer_status_bool(status: str) -> Optional[bool]:
+        name = str(status or "all").strip().lower()
+        if name in {"success", "succeeded", "ok", "true", "成功", "已成功"}:
+            return True
+        if name in {"failed", "fail", "error", "false", "失败", "错误"}:
+            return False
+        return None
+
+    def _query_download_history(
+        self,
+        *,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        if DownloadHistory is None or DownloadHistoryOper is None:
+            return {"success": False, "message": "查询下载历史失败：当前环境缺少 MoviePilot 下载历史依赖。", "items": []}
+        try:
+            page_num = max(1, int(page or 1))
+            page_size = max(1, min(50, int(limit or 10)))
+            title_text = str(title or "").strip()
+            hash_text = str(hash_value or "").strip()
+            oper = DownloadHistoryOper()
+            db = getattr(oper, "_db", None)
+            if db is None:
+                records = oper.list_by_page(page=1, count=500) or []
+                if title_text:
+                    title_lower = title_text.lower()
+                    records = [
+                        item for item in records
+                        if title_lower in str(getattr(item, "title", "") or "").lower()
+                        or title_lower in str(getattr(item, "torrent_name", "") or "").lower()
+                        or title_lower in str(getattr(item, "path", "") or "").lower()
+                    ]
+                if hash_text:
+                    records = [
+                        item for item in records
+                        if str(getattr(item, "download_hash", "") or "").lower().startswith(hash_text.lower())
+                    ]
+                total = len(records)
+                selected_records = records[(page_num - 1) * page_size:(page_num - 1) * page_size + page_size]
+            else:
+                query = db.query(DownloadHistory)
+                if title_text:
+                    like = f"%{title_text}%"
+                    query = query.filter(
+                        DownloadHistory.title.like(like)
+                        | DownloadHistory.torrent_name.like(like)
+                        | DownloadHistory.path.like(like)
+                    )
+                if hash_text:
+                    query = query.filter(DownloadHistory.download_hash.like(f"{hash_text}%"))
+                query = query.order_by(DownloadHistory.date.desc(), DownloadHistory.id.desc())
+                total = query.count()
+                selected_records = query.offset((page_num - 1) * page_size).limit(page_size).all()
+
+            items: List[Dict[str, Any]] = []
+            for index, record in enumerate(selected_records, start=(page_num - 1) * page_size + 1):
+                task_hash = str(getattr(record, "download_hash", "") or "")
+                transfer_records = TransferHistory.list_by_hash(download_hash=task_hash) if TransferHistory is not None and task_hash else []
+                transfer_success = any(bool(getattr(item, "status", False)) for item in transfer_records or [])
+                transfer_failed = any(not bool(getattr(item, "status", False)) for item in transfer_records or [])
+                if transfer_success:
+                    transfer_status = "success"
+                    transfer_status_text = "已入库"
+                elif transfer_failed:
+                    transfer_status = "failed"
+                    transfer_status_text = "整理失败"
+                else:
+                    transfer_status = "none"
+                    transfer_status_text = "未见整理记录"
+                transfer_dest = ""
+                transfer_error = ""
+                if transfer_records:
+                    first_transfer = transfer_records[0]
+                    transfer_dest = self._path_preview(getattr(first_transfer, "dest", ""))
+                    transfer_error = str(getattr(first_transfer, "errmsg", "") or "")[:300]
+                item = {
+                    "index": index,
+                    "id": getattr(record, "id", None),
+                    "title": str(getattr(record, "title", "") or "未命名媒体"),
+                    "year": str(getattr(record, "year", "") or ""),
+                    "type": str(getattr(record, "type", "") or ""),
+                    "season": str(getattr(record, "seasons", "") or ""),
+                    "episode": str(getattr(record, "episodes", "") or ""),
+                    "date": str(getattr(record, "date", "") or ""),
+                    "downloader": str(getattr(record, "downloader", "") or ""),
+                    "download_hash": task_hash,
+                    "download_hash_short": task_hash[:8],
+                    "torrent_name": str(getattr(record, "torrent_name", "") or ""),
+                    "torrent_site": str(getattr(record, "torrent_site", "") or ""),
+                    "username": str(getattr(record, "username", "") or ""),
+                    "channel": str(getattr(record, "channel", "") or ""),
+                    "path_preview": self._path_preview(getattr(record, "path", "")),
+                    "tmdbid": getattr(record, "tmdbid", None),
+                    "doubanid": str(getattr(record, "doubanid", "") or ""),
+                    "transfer_status": transfer_status,
+                    "transfer_status_text": transfer_status_text,
+                    "transfer_count": len(transfer_records or []),
+                    "transfer_dest_preview": transfer_dest,
+                }
+                if transfer_error and transfer_status == "failed":
+                    item["transfer_error"] = transfer_error
+                items.append(item)
+
+            title_label = f"：{title_text or hash_text}" if title_text or hash_text else ""
+            if not items:
+                return {
+                    "success": True,
+                    "message": f"未找到下载历史{title_label}。",
+                    "items": [],
+                    "total": total,
+                    "page": page_num,
+                    "limit": page_size,
+                }
+            total_pages = (total + page_size - 1) // page_size if total else 1
+            lines = [f"下载历史{title_label}：第 {page_num}/{total_pages} 页，共 {total} 条，展示 {len(items)} 条："]
+            for item in items:
+                season_episode = " ".join(value for value in [item.get("season"), item.get("episode")] if value)
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) {season_episode}".rstrip())
+                details = [
+                    item.get("date") or "-",
+                    f"站点:{item.get('torrent_site') or '-'}",
+                    f"下载器:{item.get('downloader') or '默认'}",
+                    f"Hash:{item.get('download_hash_short') or '-'}",
+                    f"整理:{item.get('transfer_status_text')}",
+                ]
+                lines.append("   " + " | ".join(details))
+                if item.get("path_preview"):
+                    lines.append(f"   保存：{item.get('path_preview')}")
+                if item.get("transfer_dest_preview"):
+                    lines.append(f"   入库：{item.get('transfer_dest_preview')}")
+                if item.get("transfer_error"):
+                    lines.append(f"   整理错误：{item.get('transfer_error')}")
+            lines.append("说明：这是只读查询，用于追踪下载提交后是否进入整理流程。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": total,
+                "page": page_num,
+                "limit": page_size,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询下载历史失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询下载历史失败：{exc}", "items": []}
+
+    def _query_transfer_history(
+        self,
+        *,
+        title: str = "",
+        status: str = "all",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        if TransferHistory is None:
+            return {"success": False, "message": "查询整理历史失败：当前环境缺少 MoviePilot 整理历史依赖。", "items": []}
+        try:
+            page_num = max(1, int(page or 1))
+            page_size = max(1, min(50, int(limit or 10)))
+            status_bool = self._transfer_status_bool(status)
+            title_text = str(title or "").strip()
+            search_text = title_text
+            if title_text and jieba is not None:
+                try:
+                    search_text = "%".join(jieba.cut(title_text, HMM=False))
+                except Exception:
+                    search_text = title_text
+
+            if search_text:
+                records = TransferHistory.list_by_title(title=search_text, page=1, count=-1, status=None) or []
+                if status_bool is not None:
+                    records = [item for item in records if bool(getattr(item, "status", False)) is status_bool]
+            else:
+                records = TransferHistory.list_by_page(page=1, count=-1, status=status_bool) or []
+
+            total = len(records)
+            start = (page_num - 1) * page_size
+            selected_records = records[start:start + page_size]
+            items: List[Dict[str, Any]] = []
+            for index, record in enumerate(selected_records, start=start + 1):
+                media_type = str(getattr(record, "type", "") or "")
+                if media_type_to_agent is not None:
+                    try:
+                        media_type = media_type_to_agent(media_type)
+                    except Exception:
+                        pass
+                status_ok = bool(getattr(record, "status", False))
+                item = {
+                    "index": index,
+                    "id": getattr(record, "id", None),
+                    "title": str(getattr(record, "title", "") or "未命名媒体"),
+                    "year": str(getattr(record, "year", "") or ""),
+                    "type": media_type,
+                    "category": str(getattr(record, "category", "") or ""),
+                    "season": str(getattr(record, "seasons", "") or ""),
+                    "episode": str(getattr(record, "episodes", "") or ""),
+                    "mode": str(getattr(record, "mode", "") or ""),
+                    "status": "success" if status_ok else "failed",
+                    "status_text": "成功" if status_ok else "失败",
+                    "date": str(getattr(record, "date", "") or ""),
+                    "downloader": str(getattr(record, "downloader", "") or ""),
+                    "download_hash_short": str(getattr(record, "download_hash", "") or "")[:8],
+                    "src_preview": self._path_preview(getattr(record, "src", "")),
+                    "dest_preview": self._path_preview(getattr(record, "dest", "")),
+                    "tmdbid": getattr(record, "tmdbid", None),
+                    "doubanid": str(getattr(record, "doubanid", "") or ""),
+                }
+                errmsg = str(getattr(record, "errmsg", "") or "").strip()
+                if errmsg and not status_ok:
+                    item["errmsg"] = errmsg[:300]
+                items.append(item)
+
+            status_name = str(status or "all").strip().lower()
+            status_label = "成功" if status_bool is True else "失败" if status_bool is False else "全部"
+            title_label = f"：{title_text}" if title_text else ""
+            if not items:
+                return {
+                    "success": True,
+                    "message": f"未找到{status_label}整理历史{title_label}。",
+                    "items": [],
+                    "total": total,
+                    "page": page_num,
+                    "limit": page_size,
+                    "status": status_name,
+                }
+
+            total_pages = (total + page_size - 1) // page_size if total else 1
+            lines = [f"整理历史{title_label}：{status_label}，第 {page_num}/{total_pages} 页，共 {total} 条，展示 {len(items)} 条："]
+            for item in items:
+                season_episode = " ".join(value for value in [item.get("season"), item.get("episode")] if value)
+                label_parts = [
+                    item.get("status_text") or "-",
+                    item.get("type") or "-",
+                    item.get("mode") or "-",
+                    item.get("date") or "-",
+                ]
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) {season_episode}".rstrip())
+                lines.append("   " + " | ".join(label_parts))
+                if item.get("dest_preview"):
+                    lines.append(f"   目标：{item.get('dest_preview')}")
+                if item.get("errmsg"):
+                    lines.append(f"   错误：{item.get('errmsg')}")
+            lines.append("说明：这是只读查询，用于判断下载后是否已经整理入库。")
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "items": items,
+                "total": total,
+                "page": page_num,
+                "limit": page_size,
+                "status": status_name,
+            }
+        except Exception as exc:
+            logger.error(f"[AgentResourceOfficer][Feishu] 查询整理历史失败：{exc}\n{traceback.format_exc()}")
+            return {"success": False, "message": f"查询整理历史失败：{exc}", "items": []}
 
     def _execute_media_subscribe(self, keyword: str, immediate_search: bool) -> str:
         if not all([MetaInfo, SubscribeChain]):

@@ -18,6 +18,14 @@ bash scripts/package-plugin.sh --list
 
 确认输出的插件和版本符合本次发布预期。
 
+同时确认当前对外文档没有落后：
+
+- `README.md`
+- `docs/INDEX.md`
+- `docs/PLUGIN_INSTALL.md`
+- `docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`
+- `docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`
+
 ## 3. 执行完整检查
 
 如果只改了 Skill，可以先跑轻量检查：
@@ -33,6 +41,12 @@ bash scripts/pre-release-check.sh
 ```
 
 这个命令会同步 `plugins/` 和 `plugins.v2/`，检查元数据、Skill helper、ZIP 内容，并重新生成插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`。
+
+如果本机已经跑着可访问的 MoviePilot，并且 `~/.config/agent-resource-officer/config` 已配置 `ARO_BASE_URL` / `ARO_API_KEY`，建议追加一次真实链路检查：
+
+```bash
+RUN_AGENT_RESOURCE_OFFICER_LIVE_SMOKE=1 bash scripts/pre-release-check.sh
+```
 
 ## 4. 上传 ZIP
 

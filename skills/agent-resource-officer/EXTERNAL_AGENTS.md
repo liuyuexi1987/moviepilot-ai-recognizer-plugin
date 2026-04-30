@@ -1,6 +1,6 @@
-# 外部智能体接入 Agent云盘资源整合
+# 外部智能体接入 Agent影视助手
 
-这份文件用于把 `AgentResourceOfficer` 交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体调用。
+这份文件用于把 `AgentResourceOfficer` 交给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体调用。`Agent影视助手 / AgentResourceOfficer` 负责服务端能力执行；外部智能体只做客户端调度与展示。
 
 公开仓库地址：
 
@@ -21,6 +21,40 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 不在提示词里写 Cookie、Token、API Key。
 - 同一个用户或群聊固定使用一个 `session`，例如 `agent:${chat_id}`。
 - 用户明确给出链接或编号后，才继续可能写入的动作。
+- 第一次接入用户时先读取 `preferences`。如果未初始化，询问片源偏好并保存，后续云盘与 PT 评分都复用这份画像。
+- 云盘资源按质量、字幕、完整度、目录和影巢积分评分；PT 资源按做种、免费/促销、下载折算、质量、字幕和匹配度评分。
+- 如果 helper 的 `summary-only` 返回 `recommended_agent_behavior=auto_continue` 或 `auto_continue_then_wait_confirmation`，可以直接执行 `auto_run_command`；其他结果先展示或等待确认。
+
+推荐把外部智能体自身的执行分支固定成 5 类：
+
+- `auto_continue`
+- `auto_continue_then_wait_confirmation`
+- `wait_user_confirmation`
+- `show_only`
+- `stop`
+
+不要再额外发明第三套状态名；直接复用 helper 返回值。
+
+推荐的最小接入循环：
+
+1. 调 `startup`
+2. 调 `decide --summary-only`
+3. 用户发自然语言后，调 `route --summary-only`
+4. 读取 `recommended_agent_behavior`
+5. 如果执行过计划，再调 `followup --summary-only`
+
+三类入口都复用同一套 assistant 协议：
+
+- 外部智能体：优先用 Skill/helper，按 `startup -> decide -> route -> followup` 运行。
+- MP 内置智能体：优先用 Agent Tool / `request_templates`，不要让模型自己拼底层资源 API。
+- 飞书入口：把消息送进插件内置 Channel，底层仍然走 `route / pick / followup`。
+
+如果想用最低 token 方式接入，直接读取 `assistant/request_templates` 返回里的：
+
+- `orchestration_contract`
+- `entry_patterns`
+- `entry_playbooks`
+- `recommended_recipe_detail`
 
 ## 连接变量
 
@@ -38,6 +72,12 @@ MP_API_TOKEN=你的 MoviePilot API_TOKEN
 ```
 
 不要把 `MP_API_TOKEN` 写进提示词正文。它应该放在外部智能体的安全变量、工具密钥或私有配置中。
+
+如果 `MoviePilot` 不在当前机器，而是在 NAS、Windows 或另一台 Docker 主机，请同时阅读：
+
+- `docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`
+
+跨机器时，外部智能体的用法不变，主要变化只是 `BASE_URL` 和旁路服务地址的可达性配置。
 
 ## 从仓库安装 Skill
 
@@ -76,7 +116,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 - Skill 名称建议为 `agent-resource-officer`。
 - Skill 文档中必须写明：不直接调用影巢、盘搜、115、夸克底层 API。
 - Skill 文档中必须写明：不保存、不输出 API Key、Cookie、Token。
-- Skill 至少提供 `startup`、`route`、`pick` 三个入口。
+- Skill 至少提供 `startup`、`route`、`pick`、`preferences` 四个入口。
 - session 示例使用 `agent:会话ID`，不要把平台名写死。
 - 推荐 helper 命令使用 `external-agent`；`workbuddy` 只作为兼容别名。
 - 创建后自测 `盘搜搜索 大君夫人` 应走 `route`，`选择 3` 应沿用同一 session 走 `pick`。
@@ -127,7 +167,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 ## 系统提示词
 
 ```text
-你是 MoviePilot Agent云盘资源整合的外部智能体入口。
+你是 MoviePilot Agent影视助手的外部智能体入口。
 
 核心原则：
 1. 不直接调用影巢、115、夸克、盘搜底层 API。
@@ -136,7 +176,10 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 4. 遇到编号选择、详情、下一页，要沿用同一个 session。
 5. 写入类动作，例如转存、解锁、执行计划，除非用户已经明确选择编号或给出链接，否则不要擅自执行。
 
-每次新会话先调用 startup。需要低 token 调用说明时，调用 request_templates，recipe=external_agent。
+每次新会话先调用 startup。需要低 token 调用说明时，默认调用 request_templates，recipe=external_agent。
+如果当前会话还没有完成偏好初始化，优先调用 request_templates，recipe=preferences。
+如果当前任务已经明确是 MP 原生 PT 搜索、下载、订阅、任务追踪，优先调用 request_templates，recipe=mp_pt。
+如果当前任务已经明确是热门推荐、豆瓣热映、Bangumi 番剧续接，优先调用 request_templates，recipe=recommend。
 
 统一入口：
 POST /api/v1/plugin/AgentResourceOfficer/assistant/route?apikey={MP_API_TOKEN}

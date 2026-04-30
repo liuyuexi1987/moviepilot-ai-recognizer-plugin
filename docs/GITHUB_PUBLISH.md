@@ -16,6 +16,7 @@ Personal MoviePilot plugin suite for agent-driven resource workflows, AI recogni
 
 - README 首页保持中文
 - GitHub 仓库描述使用简短英文
+- 当前对外文档优先以 `docs/INDEX.md` 为导航；不要把历史规划文档当成当前说明
 - 发布前执行一次：
   - `bash scripts/pre-release-check.sh`
 - Release 附件可上传 `dist/` 下生成的插件 ZIP，以及 `dist/skills/` 下生成的公开 Skill ZIP；校验文件在 Release 附件中使用 `PLUGIN_` / `SKILL_` 前缀避免重名
@@ -26,6 +27,16 @@ Personal MoviePilot plugin suite for agent-driven resource workflows, AI recogni
 - 正式发布后执行 `bash scripts/verify-release-download.sh <tag>`，确认公开附件可下载且校验通过
 - GitHub Actions 已支持手动运行，可在 Actions -> CI -> Run workflow 主动触发一次完整发布检查
 - 具体发版步骤见：[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)
+
+## 当前对外文档
+
+真正对用户和外部智能体公开的主文档，发布前至少确认这几份没有落后于代码：
+
+- `README.md`
+- `docs/INDEX.md`
+- `docs/PLUGIN_INSTALL.md`
+- `docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`
+- `docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`
 
 ## 当前 ZIP 覆盖
 

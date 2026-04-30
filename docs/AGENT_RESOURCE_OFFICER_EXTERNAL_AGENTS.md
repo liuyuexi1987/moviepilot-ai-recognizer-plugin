@@ -1,6 +1,6 @@
-# 外部智能体接入 Agent云盘资源整合
+# 外部智能体接入 Agent影视助手
 
-目标：给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体一套统一接入范式。外部智能体只做理解、调度和展示，115 云盘、夸克云盘等云盘资源搜索、解锁、转存、115 登录状态全部交给 `AgentResourceOfficer`。
+目标：给 WorkBuddy、Hermes、OpenClaw（小龙虾）、微信侧智能体或其他外部智能体一套统一接入范式。`Agent影视助手 / AgentResourceOfficer` 负责服务端能力执行；外部智能体只做客户端理解、调度和展示，115 云盘、夸克云盘等云盘资源搜索、解锁、转存、115 登录状态全部交给插件完成。
 
 公开仓库地址：
 
@@ -21,6 +21,40 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 所有调用都走 `AgentResourceOfficer` 的标准 `assistant` 接口。
 - 同一个用户或群聊固定使用同一个 `session`，例如 `agent:${chat_id}`。
 - 搜索和展示是读操作；选择编号、转存、解锁、执行计划是写操作，需要用户明确输入编号或链接。
+- 首次接入建议先读取 `assistant/preferences`。如果未初始化，先询问用户片源偏好，再保存为偏好画像。
+- 云盘资源和 PT 资源分开评分：云盘看清晰度、字幕、完整度、网盘类型和影巢积分；PT 看做种数、免费/促销、下载折算、清晰度、字幕和匹配度。
+- 如果 helper 的 `summary-only` 返回 `recommended_agent_behavior=auto_continue` 或 `auto_continue_then_wait_confirmation`，可以直接执行 `auto_run_command`；其他结果先停下来展示或确认。
+
+推荐把外部智能体自身的执行分支固定成 5 类：
+
+- `auto_continue`
+- `auto_continue_then_wait_confirmation`
+- `wait_user_confirmation`
+- `show_only`
+- `stop`
+
+不要在接入层再定义第三套状态机，直接复用 helper 返回值。
+
+推荐的最小接入循环：
+
+1. 调 `startup`
+2. 调 `decide --summary-only`
+3. 用户发自然语言后，调 `route --summary-only`
+4. 读取 `recommended_agent_behavior`
+5. 如果执行过计划，再调 `followup --summary-only`
+
+三类入口都复用这一套 assistant 协议：
+
+- 外部智能体：优先用 Skill/helper，按 `startup -> decide -> route -> followup` 跑。
+- MP 内置智能体：优先用 Agent Tool / `request_templates`，不要让模型自己拼底层 API。
+- 飞书入口：把消息送进插件内置 Channel，底层仍然走 `route / pick / followup`。
+
+最低 token 接入时，优先读取 `assistant/request_templates` 返回里的：
+
+- `orchestration_contract`
+- `entry_patterns`
+- `entry_playbooks`
+- `recommended_recipe_detail`
 
 ## 必要配置
 
@@ -40,6 +74,12 @@ MP_API_TOKEN=你的 MoviePilot API_TOKEN
 ```
 
 不要把 `MP_API_TOKEN` 写进提示词正文，只放在外部智能体的安全变量、工具密钥或私有配置里。
+
+如果 `MoviePilot` 不在当前机器，而是在 NAS、Windows 或另一台 Docker 主机，请同时阅读：
+
+- `docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`
+
+跨机器时，外部智能体的用法不变，主要变化只是 `BASE_URL` 和旁路服务地址的可达性配置。
 
 ## 从仓库复现 Skill
 
@@ -89,18 +129,19 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 可以直接给外部智能体这段任务：
 
 ```text
-请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，重点阅读 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。然后在你的环境里创建或安装 agent-resource-officer Skill，用于调用 MoviePilot Agent云盘资源整合。
+请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，重点阅读 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。然后在你的环境里创建或安装 agent-resource-officer Skill，用于调用 MoviePilot Agent影视助手。
 
 要求：
 1. 只把通用流程、工具调用方式、会话规则和错误处理写进 Skill。
 2. 不要把 API Key、Cookie、Token、个人路径写进 Skill。
-3. 所有资源搜索、影巢解锁、115/夸克转存、115 登录状态都必须调用 Agent云盘资源整合。
+3. 所有资源搜索、影巢解锁、115/夸克转存、115 登录状态都必须调用 Agent影视助手。
 4. 不要直接调用影巢、盘搜、115、夸克底层 API。
 5. Skill 至少包含 startup、route、pick 三个核心入口。
-6. 同一个用户或群聊固定使用 session=agent:会话ID。
-7. 搜索结果只展示 Agent云盘资源整合返回的内容，编号选择继续调用 pick。
-8. 写入类动作必须等用户明确选择编号或给出链接后再执行。
-9. 创建后请运行 external-agent 或等价自检，确认 schema_version=external_agent.v1。
+6. 增加 preferences 入口。第一次接入用户时先读取偏好，未初始化就询问并保存。
+7. 同一个用户或群聊固定使用 session=agent:会话ID。
+8. 搜索结果只展示 Agent影视助手返回的内容，编号选择继续调用 pick。
+9. 写入类动作必须等用户明确选择编号或给出链接后再执行；下载、订阅、影巢解锁和网盘转存优先生成 plan_id。
+10. 创建后请运行 external-agent 或等价自检，确认 schema_version=external_agent.v1。
 ```
 
 创建完成后，用这两句检查它是否真正理解：
@@ -172,7 +213,7 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 ## 外部智能体系统提示词
 
 ```text
-你是 MoviePilot Agent云盘资源整合的外部智能体入口。
+你是 MoviePilot Agent影视助手的外部智能体入口。
 
 核心原则：
 1. 不直接调用影巢、115、夸克、盘搜底层 API。

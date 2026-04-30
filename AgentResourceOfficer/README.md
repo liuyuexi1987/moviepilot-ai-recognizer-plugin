@@ -1,4 +1,4 @@
-# Agent云盘资源整合
+# Agent影视助手
 
 这是重构中的新主插件目录，用来承接当前仓库里和“资源搜索、解锁、转存、签到、远程入口”相关的能力。
 
@@ -18,6 +18,9 @@
 - 影巢资源解锁
 - 影巢解锁后自动路由到 115 / 夸克执行层
 - 通用分享链接自动路由
+- 智能体偏好画像
+- 云盘 / PT 分源评分
+- MP 原生搜索、下载、订阅与推荐调度
 
 ## 目标
 
@@ -59,7 +62,7 @@
 
 ## 当前状态
 
-- 当前版本：`0.2.02`
+- 当前版本：`0.2.37`
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`
@@ -70,6 +73,9 @@
 - 智能入口新增 `115帮助`，状态回执会附带下一步建议
 - 待继续的 115 任务已支持持久化保存、状态摘要、手动继续、手动取消，并已下沉为原生 Agent Tool 和标准 API
 - 影巢候选已支持新主线分页、`详情` / `审查` 按需补主演，飞书切 `auto` 时也能复用
+- 盘搜和影巢资源阶段已支持安全的 `最佳片源` 和 `选择 1 详情`：只展示评分和详情，不会在缺少编号时误转存或误解锁
+- 盘搜和影巢资源阶段已支持 `计划选择 1`：先生成 `plan_id`，确认后才执行转存、解锁或扣分
+- 盘搜和影巢资源列表底部会优先提示 `计划选择`，让外部智能体默认走安全确认链路
 - 影巢资源搜索 / 解锁 / 转存已加入独立总开关；单资源积分上限默认 20 分，用于拦截高分或积分未知的解锁请求，降低外部智能体一步到位时的误消费风险
 - 影巢签到已收口到本插件：支持普通 / 赌狗签到、OpenAPI Premium 接口、网页 Cookie 兜底和定时任务
 - 影巢网页 Cookie 失效时可由插件使用账号密码自动登录刷新，并自动重试签到
@@ -77,13 +83,34 @@
 - 影巢部分用户态接口受站点 Premium 权限限制；账号信息会优先回退到 `HDHiveDailySign` 的网页快照，签到会优先尝试 `HDHiveDailySign` 现有 Cookie 做网页兜底
 - `115` 自动转存已具备轻量直转层：可优先使用扫码得到的 115 客户端会话，或复用已加载的 115 客户端直接调用分享转存接口；直转失败时再回退 `P115StrmHelper`
 - 已内置可选 `Feishu Channel`：可直接用飞书长连接接收消息，并复用本插件统一入口执行搜索、选择、转存、115 登录和 STRM 调度
+- 已新增智能体偏好画像：第一次接入可询问用户片源偏好，后续云盘和 PT 结果会按偏好评分
+- 偏好画像已接入自然语言主入口：`偏好` 查看，`保存偏好 4K 杜比 HDR 中字 全集 做种>=3 影巢积分20 不自动入库` 写入，`重置偏好` 清除
+- 已新增分源评分：云盘重点看清晰度、HDR/DV、字幕、完整度、目录和影巢积分；PT 重点看做种数、免费/促销、下载折算、清晰度、字幕和匹配度
+- 已接入 MP 原生动作计划：`mp_search`、`mp_search_download`、`mp_subscribe`、`mp_subscribe_and_search`、`mp_recommend`、`mp_recommend_search`
+- MP 推荐列表现在会保存为可继续会话，智能体可直接 `选择 1` 进入 MP 原生搜索，也可传 `mode=hdhive` 或 `mode=pansou` 改走影巢/盘搜
+- 推荐列表选择支持自然语言指定后续来源：`选择 1 盘搜`、`选择1影巢`、`选 2 mp`
+- MP 搜索结果支持更自然的写入命令：`下载1`、`下载第1个`、`订阅蜘蛛侠`、`订阅并搜索蜘蛛侠`；默认只生成 `plan_id`，确认后才执行
+- MP 下载任务支持查询与控制：`下载任务`、`暂停下载 1`、`恢复下载 1`、`删除下载 1`；任务控制默认生成 `plan_id`，确认后才执行
+- MP 下载历史支持只读查询：`下载历史`、`下载历史 片名`，并按 hash 关联整理/入库状态
+- MP 生命周期追踪支持只读聚合查询：`追踪 片名`，一次查看下载任务、下载历史和整理/入库历史
+- MP 原生媒体识别支持只读查询：`识别 片名`，返回 MoviePilot 识别出的标题、年份、类型和 TMDB/Douban/IMDB 信息
+- MP 原生搜索结果支持只读详情：`选择 1` 会展示站点、做种、促销、评分理由和风险，确认下载再执行 `下载1`
+- MP 原生搜索支持最佳候选详情：`最佳片源` 或 `mp_search_best` 会直接展示当前评分最高的 PT 结果
+- MP 原生搜索支持最佳候选下载计划：`下载最佳` 会生成 `plan_id`，确认后才提交下载
+- PT 主线现在统一走安全确认链路：`下载1`、`下载最佳`、订阅、订阅并搜索、下载任务控制、订阅控制默认都先生成 `plan_id`，确认后才真正写入
+- PT 评分会明确展示做种数、免费/促销、下载热度、分辨率、HDR/DV、字幕、标题匹配、站点和发布组等理由；做种数 0 或低于阈值会被标成高风险，但仍由用户决定是否执行计划
+- 已生成计划支持自然语言确认：`执行计划` 会执行当前会话最近待执行计划，`执行 plan-xxx` 会精确执行指定计划
+- MP 站点和下载器支持脱敏诊断：`站点状态`、`下载器状态`，用于排查 PT 搜索/下载环境
+- MP 订阅支持查询与控制：`订阅列表`、`搜索订阅 1`、`暂停订阅 1`、`恢复订阅 1`、`删除订阅 1`；订阅控制默认生成 `plan_id`
+- MP 整理/入库历史支持只读查询：`入库历史`、`入库失败 片名`、`整理成功 片名`，用于判断下载后是否已经落库
+- 智能入口支持自然语言热门探索：`看看最近有什么热门影视`、`热门电影`、`豆瓣热门电影`、`正在热映`、`今日番剧`
 
-这意味着 `Agent云盘资源整合` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
+这意味着 `Agent影视助手` 的“115 分享链接落盘”已经开始和 `P115StrmHelper` 解耦；但 STRM 生成、302、全量/增量同步、媒体库整理仍建议继续交给 `P115StrmHelper`。
 对于登录方式，当前已经不再推荐粘贴网页版 Cookie，而是优先走 `p115client` 同款扫码会话。
 
 ## 飞书入口
 
-`Agent云盘资源整合` 现在可以直接作为飞书入口使用。这个入口默认关闭，开启前建议先关闭旧 `FeishuCommandBridgeLong`，避免同一个飞书机器人被两个插件同时监听。
+`Agent影视助手` 现在可以直接作为飞书入口使用。这个入口默认关闭，开启前建议先关闭旧 `FeishuCommandBridgeLong`，避免同一个飞书机器人被两个插件同时监听。
 
 内置飞书入口只负责收消息、权限校验、回复和二维码图片发送；影巢、盘搜、115、夸克这些资源动作仍统一走 `assistant/route` 与 `assistant/pick`。
 
@@ -102,6 +129,8 @@ ps流浪地球2
 链接 https://115cdn.com/s/xxxx path=/待整理
 链接 https://pan.quark.cn/s/xxxx path=/飞书
 选择 1
+计划选择 1
+执行计划
 详情
 审查
 n 下一页
@@ -119,6 +148,7 @@ MP搜索 片名
 下载资源 1
 订阅媒体 片名
 订阅并搜索 片名
+热门推荐
 刮削 /待整理/
 生成STRM
 全量STRM
@@ -174,6 +204,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/actions`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/workflow`
+- `GET/POST/DELETE /api/v1/plugin/AgentResourceOfficer/assistant/preferences`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/sessions`
 - `POST /api/v1/plugin/AgentResourceOfficer/assistant/sessions/clear`
 - `GET /api/v1/plugin/AgentResourceOfficer/assistant/session`
@@ -197,6 +228,7 @@ MP_CONTAINER=moviepilot-v2 ./scripts/patch-p115strmhelper-mp-compat.sh
 - `agent_resource_officer_execute_action`
 - `agent_resource_officer_execute_actions`
 - `agent_resource_officer_run_workflow`
+- `agent_resource_officer_preferences`
 - `agent_resource_officer_route_share`
 - `agent_resource_officer_sessions`
 - `agent_resource_officer_sessions_clear`
@@ -245,7 +277,7 @@ GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode?client_type=alipaymini&apike
 GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode/check?uid=...&time=...&sign=...&client_type=alipaymini&apikey=你的 MP API Token
 ```
 
-扫码确认成功后，`Agent云盘资源整合` 会自动保存扫码会话，不需要再手动粘贴 Cookie。
+扫码确认成功后，`Agent影视助手` 会自动保存扫码会话，不需要再手动粘贴 Cookie。
 
 ### 4. 按关键词搜索影巢资源
 
@@ -253,12 +285,14 @@ GET /api/v1/plugin/AgentResourceOfficer/p115/qrcode/check?uid=...&time=...&sign=
 POST /api/v1/plugin/AgentResourceOfficer/hdhive/search_by_keyword
 {
   "keyword": "蜘蛛侠",
-  "media_type": "movie",
+  "media_type": "auto",
   "candidate_limit": 10,
   "limit": 12,
   "apikey": "你的 MP API Token"
 }
 ```
+
+`media_type` 可以填 `auto`、`movie` 或 `tv`。不确定电影还是剧集时建议用 `auto`，避免新剧或国剧被默认按电影过滤掉。
 
 ### 5. 解锁影巢资源后自动落盘
 
@@ -280,7 +314,7 @@ POST /api/v1/plugin/AgentResourceOfficer/hdhive/unlock_and_route
 POST /api/v1/plugin/AgentResourceOfficer/session/hdhive/search
 {
   "keyword": "蜘蛛侠",
-  "media_type": "movie",
+  "media_type": "auto",
   "path": "/待整理",
   "apikey": "你的 MP API Token"
 }
@@ -474,14 +508,14 @@ GET /api/v1/plugin/AgentResourceOfficer/assistant/capabilities?apikey=你的 MP 
 - `POST /assistant/action`
 - `agent_resource_officer_execute_action`
 
-这样外部智能体不只可以“读模板”，还可以直接把 `action_templates` 里的 `name + action_body` 回传给 Agent云盘资源整合 执行，进一步减少上层自定义映射逻辑。
+这样外部智能体不只可以“读模板”，还可以直接把 `action_templates` 里的 `name + action_body` 回传给 Agent影视助手 执行，进一步减少上层自定义映射逻辑。
 
 从 `0.1.37` 开始，还新增了：
 
 - `POST /assistant/actions`
 - `agent_resource_officer_execute_actions`
 
-这样外部智能体可以一次提交多个 `action_body`，让 Agent云盘资源整合 在同一个请求里顺序执行多步动作。默认只返回精简执行摘要，进一步减少多次往返和上层 token 消耗；只有显式需要时才附带每一步原始返回。
+这样外部智能体可以一次提交多个 `action_body`，让 Agent影视助手 在同一个请求里顺序执行多步动作。默认只返回精简执行摘要，进一步减少多次往返和上层 token 消耗；只有显式需要时才附带每一步原始返回。
 
 例如：
 

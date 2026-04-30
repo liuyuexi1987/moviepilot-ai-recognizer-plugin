@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.12"
+HELPER_VERSION = "0.1.39"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -24,11 +24,14 @@ HELPER_COMMANDS = [
     "selftest",
     "startup",
     "selfcheck",
+    "scoring-policy",
     "templates",
     "route",
     "pick",
+    "preferences",
     "workflow",
     "plan-execute",
+    "followup",
     "maintain",
     "recover",
     "session",
@@ -43,6 +46,16 @@ HELPER_COMMANDS = [
     "external-agent",
     "workbuddy",
 ]
+WRITE_WORKFLOWS = {
+    "pansou_transfer",
+    "hdhive_unlock",
+    "share_transfer",
+    "mp_search_download",
+    "mp_download_control",
+    "mp_subscribe",
+    "mp_subscribe_control",
+    "mp_subscribe_and_search",
+}
 
 
 def read_config():
@@ -90,12 +103,57 @@ def load_json_arg(value):
     return data if isinstance(data, dict) else {}
 
 
+def normalize_command_args(args):
+    extra = list(getattr(args, "extra", []) or [])
+    command = str(getattr(args, "command", "") or "").strip()
+
+    if command == "route":
+        if not getattr(args, "text", None) and extra:
+            args.text = " ".join(extra).strip()
+    elif command == "pick":
+        if getattr(args, "choice", None) is None and extra:
+            first = extra.pop(0)
+            try:
+                args.choice = int(str(first).strip())
+            except (TypeError, ValueError):
+                if not getattr(args, "action", None):
+                    args.action = str(first).strip()
+        if not getattr(args, "action", None) and extra:
+            args.action = " ".join(str(item).strip() for item in extra if str(item).strip()).strip()
+    elif command == "plan-execute":
+        if not getattr(args, "plan_id", None) and extra:
+            args.plan_id = str(extra[0]).strip()
+    elif command == "followup":
+        if not getattr(args, "plan_id", None) and extra:
+            first = str(extra[0]).strip()
+            if first.startswith("plan-"):
+                args.plan_id = first
+    elif command == "workflow":
+        if getattr(args, "workflow", "hdhive_candidates") == "hdhive_candidates" and extra:
+            args.workflow = str(extra.pop(0)).strip() or args.workflow
+        if not getattr(args, "keyword", None) and extra:
+            args.keyword = " ".join(str(item).strip() for item in extra if str(item).strip()).strip()
+    elif command in {"session", "session-clear", "history"}:
+        if not getattr(args, "session", None) and extra:
+            args.session = str(extra[0]).strip()
+    elif command in {"plans", "plans-clear"}:
+        if not getattr(args, "plan_id", None) and extra:
+            first = str(extra[0]).strip()
+            if first.startswith("plan-"):
+                args.plan_id = first
+
+    return args
+
+
 def external_agent_payload():
     prompt = (
         "你是外部智能体，通过 AgentResourceOfficer 控制 MoviePilot 资源工作流。"
         "不要直接调用影巢、115、夸克或盘搜原始 API。"
         "每个新会话先调用 startup 或 readiness；普通用户指令走 route；"
+        "如果 preferences 未初始化，先询问并保存片源偏好；"
+        "云盘和 PT 使用不同评分规则：云盘看质量/完整度/字幕/影巢积分，PT 看做种/促销/质量/字幕。"
         "编号选择走 pick；写入动作遵守 dry_run、plan_id、execute 的确认流程。"
+        "route/pick/workflow/plan-execute/followup 返回 compact JSON 时，优先读取顶层 command_source、preferred_command、fallback_command、compact_commands 作为下一步。"
         "输出时只展示用户需要选择或执行的信息，不回显 API Key、Cookie、Token。"
     )
     return {
@@ -106,9 +164,149 @@ def external_agent_payload():
         "guide_file_exists": os.path.exists(EXTERNAL_AGENT_GUIDE_PATH),
         "recommended_recipe": "external_agent",
         "recipe_command": "python3 scripts/aro_request.py templates --recipe external_agent --compact",
+        "preferences_recipe_command": "python3 scripts/aro_request.py templates --recipe preferences --compact",
+        "mp_pt_recipe_command": "python3 scripts/aro_request.py templates --recipe mp_pt --compact",
+        "mp_recommend_recipe_command": "python3 scripts/aro_request.py templates --recipe recommend --compact",
+        "post_execute_recipe_command": "python3 scripts/aro_request.py templates --recipe followup --compact",
+        "local_ingest_recipe_command": "python3 scripts/aro_request.py templates --recipe local_ingest --compact",
         "startup_command": "python3 scripts/aro_request.py startup",
-        "route_command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'agent:<会话ID>'",
-        "pick_command": "python3 scripts/aro_request.py pick --choice <编号> --session 'agent:<会话ID>'",
+        "route_command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>'",
+        "pick_command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
+        "followup_command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>'",
+        "next_command_rule": "优先读取 compact 主响应顶层的 preferred_command、fallback_command、compact_commands；只有这些字段为空时，再回退到 error_summary / followup_summary / score_summary.decision。",
+        "auto_continue_rule": "如果 summary-only 输出里 recommended_agent_behavior=auto_continue 或 auto_continue_then_wait_confirmation，则可以直接执行 auto_run_command；如果是 wait_user_confirmation，则先向用户展示 confirm_command；如果是 stop，则不要继续自动执行。",
+        "execution_policy_contract": {
+            "auto_continue": "直接执行 auto_run_command。",
+            "auto_continue_then_wait_confirmation": "先执行 auto_run_command，再停止并向用户展示 confirm_command。",
+            "wait_user_confirmation": "不要自动执行；先向用户展示 confirm_command 或 display_command。",
+            "show_only": "只展示 display_command，不要自动继续。",
+            "stop": "当前没有适合自动继续的命令，不要继续执行。",
+        },
+        "execution_loop_contract": [
+            {
+                "step": "startup",
+                "command": "python3 scripts/aro_request.py startup",
+                "purpose": "检查插件状态并拿到推荐 recipe。",
+            },
+            {
+                "step": "decide",
+                "command": "python3 scripts/aro_request.py decide --summary-only",
+                "purpose": "读取下一步 helper 决策摘要。",
+            },
+            {
+                "step": "route",
+                "command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>' --summary-only",
+                "purpose": "处理搜索、链接、状态查询等主入口。",
+            },
+            {
+                "step": "policy",
+                "command": "读取 recommended_agent_behavior / auto_run_command / confirm_command",
+                "purpose": "按统一 5 类执行范式决定自动继续、确认或停止。",
+            },
+            {
+                "step": "followup",
+                "command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>' --summary-only",
+                "purpose": "执行计划后继续追踪下载、入库或失败诊断。",
+            },
+        ],
+        "entry_patterns": {
+            "external_agent": {
+                "label": "外部智能体",
+                "start_with": "startup",
+                "decide_with": "decide --summary-only",
+                "route_with": "route --summary-only",
+                "followup_with": "followup --summary-only",
+                "notes": "WorkBuddy、Hermes、OpenClaw（小龙虾）优先使用这套 Skill/helper。",
+            },
+            "mp_builtin_agent": {
+                "label": "MP 内置智能体",
+                "start_with": "assistant/request_templates",
+                "decide_with": "agent_resource_officer_request_templates",
+                "route_with": "agent_resource_officer_smart_entry",
+                "followup_with": "agent_resource_officer_execution_followup",
+                "notes": "优先调用 Agent Tool / request_templates，不在模型侧直拼资源接口。",
+            },
+            "feishu_channel": {
+                "label": "飞书入口",
+                "start_with": "飞书消息进入内置 Channel",
+                "decide_with": "插件内置命令解析",
+                "route_with": "route / pick / followup",
+                "followup_with": "followup --summary-only",
+                "notes": "飞书是消息入口，不单独维护另一套状态机。",
+            },
+        },
+        "entry_playbooks": {
+            "external_agent": {
+                "label": "外部智能体最小执行流",
+                "steps": [
+                    {
+                        "step": "startup",
+                        "helper_command": "python3 scripts/aro_request.py startup",
+                        "purpose": "读取启动状态、恢复建议和推荐 recipe。",
+                    },
+                    {
+                        "step": "decide",
+                        "helper_command": "python3 scripts/aro_request.py decide --summary-only",
+                        "purpose": "决定继续会话、初始化偏好还是直接进入 route。",
+                    },
+                    {
+                        "step": "route",
+                        "helper_command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>' --summary-only",
+                        "purpose": "执行自然语言主入口。",
+                    },
+                    {
+                        "step": "followup",
+                        "helper_command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>' --summary-only",
+                        "purpose": "执行计划后继续追踪下载、入库或失败诊断。",
+                    },
+                ],
+            },
+            "mp_builtin_agent": {
+                "label": "MP 内置智能体最小执行流",
+                "steps": [
+                    {
+                        "step": "request_templates",
+                        "tool": "agent_resource_officer_request_templates",
+                        "purpose": "读取最小流程、确认策略和推荐入口。",
+                    },
+                    {
+                        "step": "route",
+                        "tool": "agent_resource_officer_smart_entry",
+                        "purpose": "处理搜索、链接、登录状态等主入口。",
+                    },
+                    {
+                        "step": "followup",
+                        "tool": "agent_resource_officer_execution_followup",
+                        "purpose": "执行计划后继续查看下载、入库和失败状态。",
+                    },
+                ],
+            },
+            "feishu_channel": {
+                "label": "飞书入口最小执行流",
+                "steps": [
+                    {"step": "message_in", "purpose": "用户消息进入内置 Channel。"},
+                    {"step": "route", "purpose": "复用同一套 assistant 协议，不维护单独状态机。"},
+                    {"step": "reply", "purpose": "按确认策略回消息、展示编号或提示下一步。"},
+                ],
+            },
+        },
+        "orchestration_contract": {
+            "service_role": "Agent影视助手 / AgentResourceOfficer 负责服务端能力执行。",
+            "client_role": "外部智能体、MP 内置智能体、飞书入口负责客户端调度与展示。",
+            "recommended_first_call": "startup",
+            "recommended_decision_call": "decide --summary-only",
+            "recommended_route_call": "route --summary-only",
+            "recommended_followup_call": "followup --summary-only",
+            "recommended_read_fields": [
+                "recommended_agent_behavior",
+                "auto_run_command",
+                "confirm_command",
+                "display_command",
+                "preferred_command",
+                "compact_commands",
+            ],
+            "confirmation_rule": "写入动作默认确认制；只有明确标记可自动继续的只读步骤才自动续跑。",
+        },
         "compat_aliases": ["workbuddy"],
         "prompt": prompt,
         "tools": [
@@ -121,14 +319,20 @@ def external_agent_payload():
             {
                 "name": "route_text",
                 "purpose": "处理自然语言资源指令、链接转存、搜索和登录状态查询。",
-                "command": "python3 scripts/aro_request.py route --text '<用户原始指令>' --session 'agent:<会话ID>'",
+                "command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>'",
                 "writes": "depends_on_route",
             },
             {
                 "name": "pick_continue",
                 "purpose": "继续编号选择、详情、审查、下一页等会话动作。",
-                "command": "python3 scripts/aro_request.py pick --choice <编号> --session 'agent:<会话ID>'",
+                "command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
                 "writes": "depends_on_choice",
+            },
+            {
+                "name": "execution_followup",
+                "purpose": "在执行计划后自动追踪下载、订阅或入库状态。",
+                "command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>'",
+                "writes": False,
             },
         ],
     }
@@ -176,6 +380,7 @@ def compact(data):
             "missing_requirements",
             "migration_hint",
             "recommended_action",
+            "follow_up_hint",
             "p115_ready",
             "p115_direct_ready",
             "hdhive_configured",
@@ -198,6 +403,23 @@ def compact(data):
             "recommended_recipe_detail",
             "next_actions",
             "recovery",
+            "scoring_policy",
+            "preference_status",
+            "score_summary",
+            "error_summary",
+            "diagnosis_summary",
+            "followup_summary",
+            "preferences",
+            "needs_onboarding",
+            "initialized",
+            "command_source",
+            "command_policy",
+            "preferred_requires_confirmation",
+            "fallback_requires_confirmation",
+            "can_auto_run_preferred",
+            "preferred_command",
+            "fallback_command",
+            "compact_commands",
         ]
         out = {key: data.get(key) for key in ["success", "message"] if key in data}
         for key in keys:
@@ -243,7 +465,20 @@ def print_json(data):
 
 def summary_command(summary, confirmed=False):
     summary = summary or {}
-    requires_confirmation = bool(summary.get("requires_confirmation"))
+    preferred_command = str(summary.get("preferred_command") or "").strip()
+    fallback_command = str(summary.get("fallback_command") or "").strip()
+    preferred_requires_confirmation = bool(summary.get("preferred_requires_confirmation"))
+    fallback_requires_confirmation = bool(summary.get("fallback_requires_confirmation"))
+    if preferred_command:
+        if confirmed and fallback_command and fallback_requires_confirmation:
+            return fallback_command
+        if not confirmed and preferred_requires_confirmation:
+            return preferred_command
+        return preferred_command
+    if "first_requires_confirmation" in summary:
+        requires_confirmation = bool(summary.get("first_requires_confirmation"))
+    else:
+        requires_confirmation = bool(summary.get("requires_confirmation"))
     command = str(summary.get("execute_helper_command") or "").strip()
     if requires_confirmation and not confirmed:
         command = str(summary.get("inspect_helper_command") or command).strip()
@@ -252,7 +487,196 @@ def summary_command(summary, confirmed=False):
     return command
 
 
+def compact_command_summary(output):
+    payload = output if isinstance(output, dict) else {}
+    compact_commands = [
+        str(item).strip()
+        for item in (payload.get("compact_commands") or [])
+        if str(item).strip()
+    ]
+    preferred_command = str(payload.get("preferred_command") or "").strip()
+    fallback_command = str(payload.get("fallback_command") or "").strip()
+    if preferred_command and not compact_commands:
+        compact_commands = [preferred_command]
+        if fallback_command:
+            compact_commands.append(fallback_command)
+    action = str(payload.get("action") or "").strip()
+    write_effect = str(payload.get("write_effect") or "").strip()
+    ok = bool(payload.get("ok")) if "ok" in payload else bool(payload.get("success"))
+    session = str(payload.get("session") or "").strip()
+    session_id = str(payload.get("session_id") or "").strip()
+    summary = {
+        "success": bool(payload.get("success", ok)),
+        "ok": ok,
+        "action": action,
+        "write_effect": write_effect,
+        "command_source": str(payload.get("command_source") or "").strip(),
+        "command_policy": str(payload.get("command_policy") or "").strip(),
+        "preferred_requires_confirmation": bool(payload.get("preferred_requires_confirmation")),
+        "fallback_requires_confirmation": bool(payload.get("fallback_requires_confirmation")),
+        "can_auto_run_preferred": bool(payload.get("can_auto_run_preferred")) if "can_auto_run_preferred" in payload else write_effect != "write",
+        "preferred_command": preferred_command or (compact_commands[0] if compact_commands else ""),
+        "fallback_command": fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""),
+        "compact_commands": compact_commands[:2],
+        "preferred_helper_command": helper_route_command(preferred_command or (compact_commands[0] if compact_commands else ""), session=session, session_id=session_id),
+        "fallback_helper_command": helper_route_command(fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""), session=session, session_id=session_id),
+        "requires_confirmation": write_effect == "write",
+        "message_head": str(payload.get("message") or payload.get("message_head") or "").strip(),
+    }
+    summary.update(command_execution_policy(summary))
+    return summary
+
+
+def command_execution_policy(summary):
+    summary = summary if isinstance(summary, dict) else {}
+    preferred_command = str(summary.get("preferred_command") or "").strip()
+    fallback_command = str(summary.get("fallback_command") or "").strip()
+    preferred_requires_confirmation = bool(summary.get("preferred_requires_confirmation"))
+    fallback_requires_confirmation = bool(summary.get("fallback_requires_confirmation"))
+    can_auto_run_preferred = bool(summary.get("can_auto_run_preferred"))
+
+    if preferred_command and can_auto_run_preferred and not preferred_requires_confirmation:
+        if fallback_command and fallback_requires_confirmation:
+            return {
+                "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+                "auto_run_command": preferred_command,
+                "confirm_command": fallback_command,
+                "display_command": preferred_command,
+                "stop_after_auto": True,
+                "reason": "首选命令是安全读步骤，可自动继续；后续备选命令涉及确认。",
+                "execution_reason": "首选命令是安全读步骤，可自动继续；后续备选命令涉及确认。",
+            }
+        return {
+            "recommended_agent_behavior": "auto_continue",
+            "auto_run_command": preferred_command,
+            "confirm_command": "",
+            "display_command": preferred_command,
+            "stop_after_auto": False,
+            "reason": "首选命令是安全读步骤，可直接继续。",
+            "execution_reason": "首选命令是安全读步骤，可直接继续。",
+        }
+
+    if preferred_command and preferred_requires_confirmation:
+        return {
+            "recommended_agent_behavior": "wait_user_confirmation",
+            "auto_run_command": "",
+            "confirm_command": preferred_command,
+            "display_command": preferred_command,
+            "stop_after_auto": False,
+            "reason": "首选命令本身需要用户确认，不能自动执行。",
+            "execution_reason": "首选命令本身需要用户确认，不能自动执行。",
+        }
+
+    if preferred_command:
+        return {
+            "recommended_agent_behavior": "show_only",
+            "auto_run_command": "",
+            "confirm_command": "",
+            "display_command": preferred_command,
+            "stop_after_auto": False,
+            "reason": "已有首选命令，但当前不建议自动执行。",
+            "execution_reason": "已有首选命令，但当前不建议自动执行。",
+        }
+
+    if fallback_command and fallback_requires_confirmation:
+        return {
+            "recommended_agent_behavior": "wait_user_confirmation",
+            "auto_run_command": "",
+            "confirm_command": fallback_command,
+            "display_command": fallback_command,
+            "stop_after_auto": False,
+            "reason": "仅存在需要确认的备选命令。",
+            "execution_reason": "仅存在需要确认的备选命令。",
+        }
+
+    if fallback_command:
+        return {
+            "recommended_agent_behavior": "show_only",
+            "auto_run_command": "",
+            "confirm_command": "",
+            "display_command": fallback_command,
+            "stop_after_auto": False,
+            "reason": "仅存在备选命令，建议先展示。",
+            "execution_reason": "仅存在备选命令，建议先展示。",
+        }
+
+    return {
+        "recommended_agent_behavior": "stop",
+        "auto_run_command": "",
+        "confirm_command": "",
+        "display_command": "",
+        "stop_after_auto": False,
+        "reason": "当前没有可继续执行的短命令。",
+        "execution_reason": "当前没有可继续执行的短命令。",
+    }
+
+
+def helper_summary_execution_policy(summary):
+    summary = summary if isinstance(summary, dict) else {}
+    if summary.get("preferred_command") or summary.get("fallback_command"):
+        return command_execution_policy(summary)
+
+    inspect_command = str(summary.get("inspect_helper_command") or "").strip()
+    execute_command = str(summary.get("execute_helper_command") or "").strip()
+    if "first_requires_confirmation" in summary:
+        first_requires_confirmation = bool(summary.get("first_requires_confirmation"))
+    else:
+        first_requires_confirmation = bool(summary.get("requires_confirmation"))
+    requires_confirmation = bool(summary.get("requires_confirmation"))
+
+    if execute_command and not first_requires_confirmation:
+        if requires_confirmation and inspect_command:
+            return {
+                "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+                "auto_run_command": execute_command,
+                "confirm_command": inspect_command,
+                "display_command": execute_command,
+                "stop_after_auto": True,
+                "reason": "当前步骤可直接执行，但后续链路存在确认动作。",
+                "execution_reason": "当前步骤可直接执行，但后续链路存在确认动作。",
+            }
+        return {
+            "recommended_agent_behavior": "auto_continue",
+            "auto_run_command": execute_command,
+            "confirm_command": "",
+            "display_command": execute_command,
+            "stop_after_auto": False,
+            "reason": "当前步骤可直接执行。",
+            "execution_reason": "当前步骤可直接执行。",
+        }
+
+    if inspect_command:
+        return {
+            "recommended_agent_behavior": "wait_user_confirmation" if requires_confirmation else "show_only",
+            "auto_run_command": "",
+            "confirm_command": inspect_command if requires_confirmation else "",
+            "display_command": inspect_command,
+            "stop_after_auto": False,
+            "reason": "当前应先展示检查或确认命令。",
+            "execution_reason": "当前应先展示检查或确认命令。",
+        }
+
+    return {
+        "recommended_agent_behavior": "stop",
+        "auto_run_command": "",
+        "confirm_command": "",
+        "display_command": "",
+        "stop_after_auto": False,
+        "reason": "当前没有可继续执行的 helper 命令。",
+        "execution_reason": "当前没有可继续执行的 helper 命令。",
+    }
+
+
 def print_summary(summary, command_only=False, confirmed=False):
+    if isinstance(summary, dict):
+        policy = helper_summary_execution_policy(summary)
+        if "reason" in summary and policy.get("reason"):
+            policy = {
+                **policy,
+                "execution_reason": policy.get("execution_reason") or policy.get("reason") or "",
+            }
+            policy.pop("reason", None)
+        summary = {**summary, **policy}
     if command_only:
         print(summary_command(summary, confirmed=confirmed))
         return
@@ -262,6 +686,15 @@ def print_summary(summary, command_only=False, confirmed=False):
 def shell_quote(value):
     text = str(value or "")
     return "'" + text.replace("'", "'\"'\"'") + "'"
+
+
+def helper_route_command(command, session="", session_id=""):
+    command_text = str(command or "").strip()
+    if not command_text:
+        return ""
+    session_part = f" --session {shell_quote(session)}" if str(session or "").strip() else ""
+    session_id_part = f" --session-id {shell_quote(session_id)}" if str(session_id or "").strip() else ""
+    return f"python3 scripts/aro_request.py route {shell_quote(command_text)}{session_part}{session_id_part}"
 
 
 def recovery_helper_commands(recovery):
@@ -333,16 +766,20 @@ def recovery_can_resume(recovery, helper_commands=None):
 
 def request_templates_summary(data):
     payload = data_payload(data)
-    detail = payload.get("recommended_recipe_detail") if isinstance(payload, dict) else {}
-    first_call = detail.get("first_call") if isinstance(detail, dict) else {}
+    detail = payload.get("recommended_recipe_detail") if isinstance(payload, dict) and isinstance(payload.get("recommended_recipe_detail"), dict) else {}
+    first_call = detail.get("first_call") if isinstance(detail, dict) and isinstance(detail.get("first_call"), dict) else {}
     return {
         "selected_recipe": payload.get("selected_recipe") or payload.get("recommended_recipe") or "",
         "recommended_recipe": payload.get("recommended_recipe") or "",
         "first_template": detail.get("first_template") or "",
         "first_endpoint": first_call.get("endpoint") or "",
         "first_method": first_call.get("method") or "",
+        "first_requires_confirmation": bool(first_call.get("requires_confirmation")),
         "requires_confirmation": bool(detail.get("confirmation_required_templates")),
         "confirmation_message": detail.get("confirmation_message") or "",
+        "orchestration_contract": payload.get("orchestration_contract") or detail.get("orchestration_contract") or {},
+        "entry_patterns": payload.get("entry_patterns") or detail.get("entry_patterns") or {},
+        "entry_playbooks": payload.get("entry_playbooks") or detail.get("entry_playbooks") or {},
     }
 
 
@@ -371,10 +808,34 @@ def recipe_helper_commands(recipe_summary, recipe_request):
         execute = "python3 scripts/aro_request.py maintain --execute"
     elif first_template == "saved_plan_execute":
         execute = "python3 scripts/aro_request.py plan-execute"
+    elif first_template == "execution_followup":
+        execute = "python3 scripts/aro_request.py followup"
     elif first_template == "pick_continue":
         execute = "python3 scripts/aro_request.py recover --execute"
+    elif first_template == "preferences_get":
+        execute = "python3 scripts/aro_request.py preferences"
+    elif first_template == "scoring_policy":
+        execute = "python3 scripts/aro_request.py scoring-policy"
     elif first_template == "workflow_dry_run":
         execute = "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>"
+    elif first_template == "mp_media_detail":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword <keyword>"
+    elif first_template == "mp_search":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search --keyword <keyword>"
+    elif first_template == "mp_search_detail":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search_detail --keyword <keyword> --choice <编号>"
+    elif first_template == "mp_search_best":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search_best --keyword <keyword>"
+    elif first_template == "mp_search_download_plan":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword <keyword> --choice <编号>"
+    elif first_template == "mp_recommend":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20"
+    elif first_template == "mp_recommend_search":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source tmdb_trending --media-type all --choice <编号> --mode mp --limit 20"
+    elif first_template == "mp_ingest_status":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_ingest_status --keyword <keyword>"
+    elif first_template == "mp_local_diagnose":
+        execute = "python3 scripts/aro_request.py workflow --workflow mp_local_diagnose --keyword <keyword>"
     elif first_endpoint:
         execute = f"# {first_method or 'CALL'} {first_endpoint}"
 
@@ -429,6 +890,14 @@ def selftest_result():
 
     workflow_commands = recipe_helper_commands({"first_template": "workflow_dry_run"}, "plan")
     check("workflow_dry_run_command", workflow_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>")
+    mp_pt_commands = recipe_helper_commands({"first_template": "mp_media_detail"}, "mp_pt")
+    check("mp_pt_recipe_execute_command", mp_pt_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword <keyword>")
+    mp_recommend_commands = recipe_helper_commands({"first_template": "mp_recommend"}, "recommend")
+    check("mp_recommend_recipe_execute_command", mp_recommend_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_recommend --source tmdb_trending --media-type all --limit 20")
+    preferences_commands = recipe_helper_commands({"first_template": "preferences_get"}, "preferences")
+    check("preferences_recipe_execute_command", preferences_commands.get("execute_helper_command") == "python3 scripts/aro_request.py preferences")
+    local_ingest_commands = recipe_helper_commands({"first_template": "mp_ingest_status"}, "local_ingest")
+    check("local_ingest_recipe_execute_command", local_ingest_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_ingest_status --keyword <keyword>")
     maintain_commands = recipe_helper_commands({"first_template": "maintain_preview"}, "maintain")
     check("maintain_preview_command", maintain_commands.get("execute_helper_command") == "python3 scripts/aro_request.py maintain")
     maintain_execute_commands = recipe_helper_commands({"first_template": "maintain_execute"}, "maintain")
@@ -437,6 +906,13 @@ def selftest_result():
     template_summary = request_templates_summary({
         "data": {
             "recommended_recipe": "bootstrap",
+            "orchestration_contract": {
+                "recommended_first_call": "startup",
+                "recommended_route_call": "route --summary-only",
+            },
+            "entry_patterns": {
+                "mp_builtin_agent": {"route_with": "agent_resource_officer_smart_entry"},
+            },
             "recommended_recipe_detail": {
                 "first_template": "startup_probe",
                 "first_call": {"endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/startup", "method": "GET"},
@@ -448,6 +924,24 @@ def selftest_result():
     check("templates_summary_recipe", template_summary.get("recommended_recipe") == "bootstrap")
     check("templates_summary_first_call", template_summary.get("first_template") == "startup_probe" and template_summary.get("first_method") == "GET")
     check("templates_summary_confirmation", template_summary.get("requires_confirmation") is True and template_summary.get("confirmation_message") == "需要确认")
+    check("templates_summary_first_confirmation", template_summary.get("first_requires_confirmation") is False)
+    check("templates_summary_orchestration_contract", (template_summary.get("orchestration_contract") or {}).get("recommended_first_call") == "startup")
+    check("templates_summary_entry_patterns", bool(((template_summary.get("entry_patterns") or {}).get("mp_builtin_agent") or {}).get("route_with")))
+    template_summary_with_playbooks = request_templates_summary({
+        "data": {
+            "recommended_recipe": "external_agent_quickstart",
+            "entry_playbooks": {
+                "external_agent": {
+                    "steps": [{"step": "startup"}, {"step": "decide"}, {"step": "route"}, {"step": "followup"}],
+                },
+                "mp_builtin_agent": {
+                    "steps": [{"step": "request_templates", "tool": "agent_resource_officer_request_templates"}],
+                },
+            },
+        },
+    })
+    check("templates_summary_entry_playbooks", len(((template_summary_with_playbooks.get("entry_playbooks") or {}).get("external_agent") or {}).get("steps") or []) == 4)
+    check("templates_summary_entry_playbooks_mp_tool", bool(((((template_summary_with_playbooks.get("entry_playbooks") or {}).get("mp_builtin_agent") or {}).get("steps") or [{}])[0]).get("tool")))
 
     confirm_summary = {
         "requires_confirmation": True,
@@ -455,6 +949,13 @@ def selftest_result():
         "execute_helper_command": "execute",
     }
     check("command_only_requires_confirmation", summary_command(confirm_summary) == "inspect")
+    later_confirm_summary = {
+        "first_requires_confirmation": False,
+        "requires_confirmation": True,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "execute",
+    }
+    check("command_only_later_confirmation_executes_first_step", summary_command(later_confirm_summary) == "execute")
     check("command_only_confirmed_executes", summary_command(confirm_summary, confirmed=True) == "execute")
     no_confirm_summary = {
         "requires_confirmation": False,
@@ -462,9 +963,105 @@ def selftest_result():
         "execute_helper_command": "execute",
     }
     check("command_only_without_confirmation_executes", summary_command(no_confirm_summary) == "execute")
+    top_level_preferred_summary = {
+        "requires_confirmation": False,
+        "preferred_requires_confirmation": False,
+        "fallback_requires_confirmation": True,
+        "preferred_command": "选择 1",
+        "fallback_command": "下载1",
+    }
+    check("command_only_prefers_top_level_command", summary_command(top_level_preferred_summary) == "选择 1")
+    top_level_confirm_summary = {
+        "requires_confirmation": True,
+        "preferred_requires_confirmation": False,
+        "fallback_requires_confirmation": True,
+        "preferred_command": "选择 1",
+        "fallback_command": "下载1",
+    }
+    check("command_only_confirmed_uses_top_level_fallback", summary_command(top_level_confirm_summary, confirmed=True) == "下载1")
+    top_level_policy_summary = {
+        "preferred_requires_confirmation": False,
+        "fallback_requires_confirmation": True,
+        "can_auto_run_preferred": True,
+        "preferred_command": "选择 1",
+        "fallback_command": "下载1",
+    }
+    top_level_policy = command_execution_policy(top_level_policy_summary)
+    check("command_execution_policy_auto_continue_then_wait", top_level_policy.get("recommended_agent_behavior") == "auto_continue_then_wait_confirmation")
+    confirm_only_policy = command_execution_policy({
+        "preferred_requires_confirmation": True,
+        "preferred_command": "下载1",
+    })
+    check("command_execution_policy_wait_confirmation", confirm_only_policy.get("recommended_agent_behavior") == "wait_user_confirmation" and confirm_only_policy.get("confirm_command") == "下载1")
+    stop_policy = command_execution_policy({})
+    check("command_execution_policy_stop_without_commands", stop_policy.get("recommended_agent_behavior") == "stop")
+    helper_auto_policy = helper_summary_execution_policy({
+        "first_requires_confirmation": False,
+        "requires_confirmation": True,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "execute",
+    })
+    check("helper_execution_policy_auto_then_confirm", helper_auto_policy.get("recommended_agent_behavior") == "auto_continue_then_wait_confirmation" and helper_auto_policy.get("auto_run_command") == "execute")
+    helper_confirm_policy = helper_summary_execution_policy({
+        "requires_confirmation": True,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "",
+    })
+    check("helper_execution_policy_wait_confirmation", helper_confirm_policy.get("recommended_agent_behavior") == "wait_user_confirmation" and helper_confirm_policy.get("confirm_command") == "inspect")
+    helper_stop_policy = helper_summary_execution_policy({})
+    check("helper_execution_policy_stop_without_commands", helper_stop_policy.get("recommended_agent_behavior") == "stop")
 
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
+    check("helper_route_command_with_session", helper_route_command("选择 1", session="agent:demo") == "python3 scripts/aro_request.py route '选择 1' --session 'agent:demo'")
+
+    route_args = normalize_command_args(argparse.Namespace(command="route", extra=["盘搜搜索", "大君夫人"], text=None))
+    check("normalize_route_positional_text", route_args.text == "盘搜搜索 大君夫人")
+
+    pick_choice_args = normalize_command_args(
+        argparse.Namespace(command="pick", extra=["11"], choice=None, action=None)
+    )
+    check("normalize_pick_positional_choice", pick_choice_args.choice == 11 and not pick_choice_args.action)
+
+    pick_action_args = normalize_command_args(
+        argparse.Namespace(command="pick", extra=["详情"], choice=None, action=None)
+    )
+    check("normalize_pick_positional_action", pick_action_args.action == "详情" and pick_action_args.choice is None)
+
+    pick_choice_action_args = normalize_command_args(
+        argparse.Namespace(command="pick", extra=["11", "详情"], choice=None, action=None)
+    )
+    check("normalize_pick_positional_choice_action", pick_choice_action_args.choice == 11 and pick_choice_action_args.action == "详情")
+
+    plan_args = normalize_command_args(
+        argparse.Namespace(command="plan-execute", extra=["plan-123"], plan_id=None)
+    )
+    check("normalize_plan_execute_positional_plan", plan_args.plan_id == "plan-123")
+    followup_args = normalize_command_args(
+        argparse.Namespace(command="followup", extra=["plan-123"], plan_id=None)
+    )
+    check("normalize_followup_positional_plan", followup_args.plan_id == "plan-123")
+
+    workflow_args = normalize_command_args(
+        argparse.Namespace(command="workflow", extra=["mp_media_detail", "蜘蛛侠"], workflow="hdhive_candidates", keyword=None)
+    )
+    check("normalize_workflow_positional_workflow", workflow_args.workflow == "mp_media_detail")
+    check("normalize_workflow_positional_keyword", workflow_args.keyword == "蜘蛛侠")
+
+    session_args = normalize_command_args(
+        argparse.Namespace(command="session", extra=["agent:demo"], session=None)
+    )
+    check("normalize_session_positional_session", session_args.session == "agent:demo")
+
+    history_args = normalize_command_args(
+        argparse.Namespace(command="history", extra=["agent:demo"], session=None)
+    )
+    check("normalize_history_positional_session", history_args.session == "agent:demo")
+
+    plans_args = normalize_command_args(
+        argparse.Namespace(command="plans", extra=["plan-123"], plan_id=None)
+    )
+    check("normalize_plans_positional_plan", plans_args.plan_id == "plan-123")
 
     compact_workflow = compact({
         "success": True,
@@ -477,6 +1074,35 @@ def selftest_result():
     })
     check("compact_preserves_plan_id", compact_workflow.get("plan_id") == "plan-123")
     check("compact_preserves_execute_plan_body", (compact_workflow.get("execute_plan_body") or {}).get("plan_id") == "plan-123")
+    compact_execute = compact({
+        "success": True,
+        "data": {
+            "action": "execute_plan",
+            "recommended_action": "query_mp_download_history",
+            "follow_up_hint": "先查下载历史。",
+        },
+    })
+    check("compact_preserves_follow_up_hint", compact_execute.get("follow_up_hint") == "先查下载历史。")
+    compact_top_level_commands = compact({
+        "success": True,
+        "data": {
+            "action": "mp_media_search",
+            "command_source": "score_summary",
+            "command_policy": "read_then_confirm_write",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": True,
+            "can_auto_run_preferred": True,
+            "preferred_command": "选择 1",
+            "fallback_command": "下载1",
+            "compact_commands": ["选择 1", "下载1"],
+        },
+    })
+    top_level_summary = compact_command_summary(compact_top_level_commands)
+    check("compact_preserves_top_level_preferred_command", compact_top_level_commands.get("preferred_command") == "选择 1")
+    check("compact_command_summary_prefers_top_level", top_level_summary.get("preferred_command") == "选择 1" and top_level_summary.get("command_source") == "score_summary")
+    check("compact_command_summary_preserves_confirmation_flags", top_level_summary.get("fallback_requires_confirmation") is True and top_level_summary.get("can_auto_run_preferred") is True)
+    check("compact_command_summary_builds_helper_command", top_level_summary.get("preferred_helper_command") == "python3 scripts/aro_request.py route '选择 1'")
+    check("compact_command_summary_includes_execution_policy", top_level_summary.get("recommended_agent_behavior") == "auto_continue_then_wait_confirmation" and top_level_summary.get("auto_run_command") == "选择 1")
     compact_clear = compact({
         "success": True,
         "data": {
@@ -503,7 +1129,22 @@ def selftest_result():
     external_agent = external_agent_payload()
     check("external_agent_payload_has_prompt", bool(external_agent.get("prompt")))
     check("external_agent_payload_has_guide", external_agent.get("guide_file_exists") is True)
-    check("external_agent_payload_has_tools", len(external_agent.get("tools") or []) == 3)
+    check("external_agent_payload_has_tools", len(external_agent.get("tools") or []) == 4)
+    check("external_agent_payload_has_followup", bool(external_agent.get("followup_command")))
+    check("external_agent_payload_has_preferences_recipe", bool(external_agent.get("preferences_recipe_command")))
+    check("external_agent_payload_has_mp_pt_recipe", bool(external_agent.get("mp_pt_recipe_command")))
+    check("external_agent_payload_has_mp_recommend_recipe", bool(external_agent.get("mp_recommend_recipe_command")))
+    check("external_agent_payload_has_post_execute_recipe", bool(external_agent.get("post_execute_recipe_command")))
+    check("external_agent_payload_has_local_ingest_recipe", bool(external_agent.get("local_ingest_recipe_command")))
+    check("external_agent_payload_has_next_command_rule", bool(external_agent.get("next_command_rule")))
+    check("external_agent_payload_has_execution_policy_contract", bool((external_agent.get("execution_policy_contract") or {}).get("auto_continue")))
+    check("external_agent_payload_has_execution_loop_contract", len(external_agent.get("execution_loop_contract") or []) >= 5)
+    check("external_agent_payload_has_orchestration_contract_present", bool((external_agent.get("orchestration_contract") or {}).get("recommended_route_call")))
+    check("external_agent_payload_has_feishu_entry_pattern", bool(((external_agent.get("entry_patterns") or {}).get("feishu_channel") or {}).get("route_with")))
+    check("external_agent_payload_has_orchestration_contract_route", (external_agent.get("orchestration_contract") or {}).get("recommended_route_call") == "route --summary-only")
+    check("external_agent_payload_has_entry_patterns", bool(((external_agent.get("entry_patterns") or {}).get("mp_builtin_agent") or {}).get("route_with")))
+    check("external_agent_payload_has_entry_playbooks", len((((external_agent.get("entry_playbooks") or {}).get("external_agent") or {}).get("steps") or [])) >= 4)
+    check("external_agent_payload_has_mp_playbook_tool", bool(((((external_agent.get("entry_playbooks") or {}).get("mp_builtin_agent") or {}).get("steps") or [{}])[0]).get("tool")))
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []
@@ -553,6 +1194,7 @@ def commands_catalog():
             {"name": "readiness", "network": True, "writes": False, "write_condition": "", "purpose": "run config-check, selftest, and live plugin selfcheck"},
             {"name": "startup", "network": True, "writes": False, "write_condition": "", "purpose": "inspect assistant startup state and recommended recipe"},
             {"name": "selfcheck", "network": True, "writes": False, "write_condition": "", "purpose": "run live AgentResourceOfficer protocol health check"},
+            {"name": "scoring-policy", "network": True, "writes": False, "write_condition": "", "purpose": "read plugin-owned cloud/PT scoring rules and hard gates"},
             {"name": "templates", "network": True, "writes": False, "write_condition": "", "purpose": "fetch low-token assistant request templates by recipe or name"},
             {"name": "decide", "network": True, "writes": False, "write_condition": "", "purpose": "choose continue_session or start_recipe and return next helper command"},
             {"name": "doctor", "network": True, "writes": False, "write_condition": "", "purpose": "return startup, selfcheck, sessions, and recovery snapshot"},
@@ -561,8 +1203,10 @@ def commands_catalog():
             {"name": "recover", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "inspect or execute the recommended recovery action"},
             {"name": "route", "network": True, "writes": True, "write_condition": "depends on text and routed action", "purpose": "route natural-language resource requests"},
             {"name": "pick", "network": True, "writes": True, "write_condition": "depends on current session and selected action", "purpose": "continue numbered choices or actions"},
-            {"name": "workflow", "network": True, "writes": True, "write_condition": "saves a dry-run plan; does not unlock or transfer", "purpose": "create dry-run workflow plans"},
+            {"name": "preferences", "network": True, "writes": True, "write_condition": "only with --preferences-json or --reset", "purpose": "read/save/reset source preferences used by cloud and PT scoring"},
+            {"name": "workflow", "network": True, "writes": True, "write_condition": "read workflows execute directly; write workflows save a dry-run plan by default", "purpose": "run or plan preset assistant workflows"},
             {"name": "plan-execute", "network": True, "writes": True, "write_condition": "always executes a saved plan; use --plan-id for exact execution", "purpose": "execute a saved plan by plan_id or latest unexecuted session plan"},
+            {"name": "followup", "network": True, "writes": False, "write_condition": "", "purpose": "run the unified post-execution follow-up action for the latest executed or specified plan"},
             {"name": "maintain", "network": True, "writes": True, "write_condition": "only with --execute", "purpose": "preview or execute low-risk maintenance"},
             {"name": "session", "network": True, "writes": False, "write_condition": "", "purpose": "inspect one assistant session"},
             {"name": "session-clear", "network": True, "writes": True, "write_condition": "clears exactly one assistant session by --session or --session-id", "purpose": "clear one assistant session, including abandoned pending 115 state"},
@@ -582,6 +1226,7 @@ def main():
         "command",
         choices=HELPER_COMMANDS,
     )
+    parser.add_argument("extra", nargs="*")
     parser.add_argument("--base-url")
     parser.add_argument("--api-key")
     parser.add_argument("--recipe")
@@ -599,7 +1244,17 @@ def main():
     parser.add_argument("--path", dest="target_path")
     parser.add_argument("--workflow", default="hdhive_candidates")
     parser.add_argument("--keyword")
-    parser.add_argument("--media-type", default="movie")
+    parser.add_argument("--media-type", default="auto")
+    parser.add_argument("--mode", default="")
+    parser.add_argument("--source", default="")
+    parser.add_argument("--status", default="")
+    parser.add_argument("--hash", dest="hash_value", default="")
+    parser.add_argument("--target", default="")
+    parser.add_argument("--control", default="")
+    parser.add_argument("--downloader", default="")
+    parser.add_argument("--delete-files", action="store_true")
+    parser.add_argument("--preferences-json")
+    parser.add_argument("--reset", action="store_true")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--executed", action="store_true")
@@ -622,7 +1277,7 @@ def main():
     parser.add_argument("--summary-only", action="store_true")
     parser.add_argument("--command-only", action="store_true")
     parser.add_argument("--confirmed", action="store_true")
-    args = parser.parse_args()
+    args = normalize_command_args(parser.parse_args())
 
     if args.executed and args.unexecuted:
         print("--executed and --unexecuted cannot be used together", file=sys.stderr)
@@ -899,6 +1554,9 @@ def main():
         path = assistant_path("startup")
     elif args.command == "selfcheck":
         path = assistant_path("selfcheck")
+    elif args.command == "scoring-policy":
+        path = assistant_path("capabilities")
+        query = {"compact": "true"}
     elif args.command == "feishu-health":
         path = "/api/v1/plugin/AgentResourceOfficer/feishu/health"
     elif args.command == "templates":
@@ -914,8 +1572,9 @@ def main():
     elif args.command == "route":
         method = "POST"
         path = assistant_path("route")
+        route_text = args.text or ""
         body = {
-            "text": args.text or "",
+            "text": route_text,
             "compact": True,
         }
         if args.session:
@@ -938,8 +1597,27 @@ def main():
             body["choice"] = args.choice
         if args.action:
             body["action"] = args.action
+        if args.mode:
+            body["mode"] = args.mode
         if args.target_path:
             body["path"] = args.target_path
+    elif args.command == "preferences":
+        method = "DELETE" if args.reset else "POST" if args.preferences_json else "GET"
+        path = assistant_path("preferences")
+        if method == "GET":
+            query = {"compact": "true"}
+            if args.session:
+                query["session"] = args.session
+            if args.session_id:
+                query["session_id"] = args.session_id
+        else:
+            body = {"compact": True}
+            if args.session:
+                body["session"] = args.session
+            if args.session_id:
+                body["session_id"] = args.session_id
+            if args.preferences_json:
+                body["preferences"] = load_json_arg(args.preferences_json)
     elif args.command == "workflow":
         method = "POST"
         path = assistant_path("workflow")
@@ -948,7 +1626,18 @@ def main():
             "name": args.workflow,
             "keyword": args.keyword or "",
             "media_type": args.media_type,
-            "dry_run": True,
+            "mode": args.mode or "",
+            "choice": args.choice,
+            "path": args.target_path or "",
+            "source": args.source or "",
+            "status": args.status or "",
+            "hash": args.hash_value or "",
+            "target": args.target or "",
+            "control": args.control or "",
+            "downloader": args.downloader or "",
+            "delete_files": bool(args.delete_files),
+            "limit": args.limit,
+            "dry_run": args.workflow in WRITE_WORKFLOWS,
             "compact": True,
         }
         if args.session:
@@ -960,6 +1649,19 @@ def main():
         path = assistant_path("plan/execute")
         body = {
             "prefer_unexecuted": True,
+            "compact": True,
+        }
+        if args.plan_id:
+            body["plan_id"] = args.plan_id
+        if args.session:
+            body["session"] = args.session
+        if args.session_id:
+            body["session_id"] = args.session_id
+    elif args.command == "followup":
+        method = "POST"
+        path = assistant_path("action")
+        body = {
+            "name": "query_execution_followup",
             "compact": True,
         }
         if args.plan_id:
@@ -1118,6 +1820,11 @@ def main():
             "requires_confirmation": recovery_can_resume(recovery, helper_commands),
             **helper_commands,
         }
+        print_summary(summary, command_only=args.command_only, confirmed=args.confirmed)
+        return 0
+    if args.command in {"route", "pick", "workflow", "plan-execute", "followup"} and (args.summary_only or args.command_only) and not args.full:
+        output = compact(result)
+        summary = compact_command_summary(output)
         print_summary(summary, command_only=args.command_only, confirmed=args.confirmed)
         return 0
     output = result if args.full else compact(result)

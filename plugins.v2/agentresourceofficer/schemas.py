@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 class HDHiveSearchSessionToolInput(BaseModel):
     keyword: str = Field(..., description="要搜索的影片或剧集名称")
-    media_type: str = Field(default="movie", description="媒体类型，movie 或 tv")
+    media_type: str = Field(default="auto", description="媒体类型，auto / movie / tv；不确定时用 auto")
     year: Optional[str] = Field(default=None, description="可选年份，用于缩小候选范围")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则使用默认目录")
 
@@ -28,11 +28,11 @@ class AssistantRouteToolInput(BaseModel):
     session: Optional[str] = Field(default="default", description="会话标识，用于关联后续选择、115 待任务与扫码续跑")
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，适合外部智能体按 sessions 列表中的精确会话继续使用")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则按当前模式使用默认目录")
-    mode: Optional[str] = Field(default=None, description="结构化模式：pansou / hdhive")
+    mode: Optional[str] = Field(default=None, description="结构化模式：mp / pansou / hdhive")
     keyword: Optional[str] = Field(default=None, description="结构化搜索关键词")
     url: Optional[str] = Field(default=None, description="结构化分享链接，支持 115 / 夸克")
     access_code: Optional[str] = Field(default=None, description="结构化提取码")
-    media_type: Optional[str] = Field(default=None, description="结构化媒体类型：movie / tv")
+    media_type: Optional[str] = Field(default=None, description="结构化媒体类型：auto / movie / tv")
     year: Optional[str] = Field(default=None, description="结构化年份")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
     action: Optional[str] = Field(default=None, description="结构化动作：p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel / assistant_help")
@@ -44,6 +44,7 @@ class AssistantPickToolInput(BaseModel):
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
     choice: int = Field(default=0, description="选择的编号，从 1 开始；详情或翻页时可为 0")
     action: Optional[str] = Field(default=None, description="可选动作：detail/details/review/详情/审查 或 next/n/下一页")
+    mode: Optional[str] = Field(default=None, description="推荐列表后续搜索方式：mp / hdhive / pansou")
     path: Optional[str] = Field(default=None, description="可选目标目录，不填则沿用会话目录")
     compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
@@ -123,6 +124,7 @@ class AssistantExecuteActionToolInput(BaseModel):
     url: Optional[str] = Field(default=None, description="直链类动作使用的分享链接")
     access_code: Optional[str] = Field(default=None, description="可选提取码")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
+    source: Optional[str] = Field(default=None, description="MP 推荐来源，例如 tmdb_trending / douban_movie_hot / bangumi_calendar")
     kind: Optional[str] = Field(default=None, description="批量清理会话时的类型过滤")
     has_pending_p115: Optional[bool] = Field(default=None, description="批量清理会话时是否仅清理带待继续 115 的会话")
     stale_only: Optional[bool] = Field(default=False, description="批量清理会话时是否只清理过期会话")
@@ -143,7 +145,7 @@ class AssistantExecuteActionsToolInput(BaseModel):
 
 
 class AssistantWorkflowToolInput(BaseModel):
-    name: str = Field(..., description="预设工作流名，例如 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status")
+    name: str = Field(..., description="预设工作流名，例如 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / mp_search / mp_search_download / mp_subscribe / mp_recommend / mp_recommend_search / share_transfer / p115_status")
     session: Optional[str] = Field(default="default", description="工作流会话名")
     session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
     keyword: Optional[str] = Field(default=None, description="搜索关键词")
@@ -153,12 +155,24 @@ class AssistantWorkflowToolInput(BaseModel):
     path: Optional[str] = Field(default=None, description="可选目标目录")
     url: Optional[str] = Field(default=None, description="分享链接")
     access_code: Optional[str] = Field(default=None, description="提取码")
-    media_type: Optional[str] = Field(default=None, description="媒体类型，movie 或 tv")
+    media_type: Optional[str] = Field(default=None, description="媒体类型，auto / movie / tv")
+    mode: Optional[str] = Field(default=None, description="推荐后续搜索方式，mp / hdhive / pansou")
     year: Optional[str] = Field(default=None, description="年份")
     client_type: Optional[str] = Field(default=None, description="115 扫码客户端类型")
+    source: Optional[str] = Field(default=None, description="MP 推荐来源，例如 tmdb_trending / douban_movie_hot / bangumi_calendar")
+    limit: Optional[int] = Field(default=20, description="推荐数量上限")
     dry_run: Optional[bool] = Field(default=False, description="只生成工作流计划，不实际执行")
     stop_on_error: Optional[bool] = Field(default=True, description="遇到失败动作时是否停止")
     include_raw_results: Optional[bool] = Field(default=False, description="是否附带原始执行结果")
+    compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
+
+
+class AssistantPreferencesToolInput(BaseModel):
+    session: Optional[str] = Field(default="default", description="偏好画像会话名；建议外部智能体固定传自己的用户会话")
+    session_id: Optional[str] = Field(default=None, description="可选 assistant:: 会话 ID，优先于 session")
+    user_key: Optional[str] = Field(default=None, description="可选用户键；用于跨 session 共享同一套偏好")
+    preferences: Optional[Dict[str, Any]] = Field(default=None, description="要保存的偏好画像；不传则只读取")
+    reset: Optional[bool] = Field(default=False, description="是否重置偏好画像")
     compact: Optional[bool] = Field(default=True, description="是否使用低 token 回执；默认开启")
 
 

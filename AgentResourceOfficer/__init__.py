@@ -112,10 +112,10 @@ class _RequestContextShim:
 
 
 class AgentResourceOfficer(_PluginBase):
-    plugin_name = "Agent云盘资源整合"
+    plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.02"
+    plugin_version = "0.2.66"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -150,6 +150,10 @@ class AgentResourceOfficer(_PluginBase):
     _p115_client_type = "alipaymini"
     _p115_cookie = ""
     _p115_prefer_direct = True
+    _assistant_default_pt_min_seeders = 3
+    _assistant_default_auto_ingest_enabled = False
+    _assistant_default_auto_ingest_score_threshold = 90
+    _assistant_default_confirm_score_threshold = 70
     _feishu_enabled = False
     _feishu_allow_all = False
     _feishu_reply_enabled = True
@@ -179,6 +183,9 @@ class AgentResourceOfficer(_PluginBase):
     _workflow_plan_store_key = "assistant_workflow_plans"
     _workflow_plan_limit = 50
     _workflow_plans: Dict[str, Dict[str, Any]] = {}
+    _assistant_preferences_store_key = "assistant_preferences"
+    _assistant_preferences_limit = 100
+    _assistant_preferences: Dict[str, Dict[str, Any]] = {}
     _hdhive_checkin_history_store_key = "hdhive_checkin_history"
     _hdhive_checkin_history_limit = 60
     _hdhive_checkin_history: List[Dict[str, Any]] = []
@@ -230,6 +237,93 @@ class AgentResourceOfficer(_PluginBase):
                     return mode, remain
         return "", raw
 
+    @staticmethod
+    def _match_command_prefix(raw: str, prefixes: List[str]) -> Optional[Tuple[str, str]]:
+        text = str(raw or "").strip()
+        for prefix in prefixes:
+            if not text.startswith(prefix):
+                continue
+            remain = text[len(prefix):]
+            if not remain:
+                return prefix, ""
+            return prefix, remain.lstrip(" ：:").strip()
+        return None
+
+    @staticmethod
+    def _normalize_mp_recommend_request(value: Any, default_source: str = "tmdb_trending") -> Tuple[str, str]:
+        raw = str(value or "").strip()
+        compact = re.sub(r"[\s，。？！!?,、:：]+", "", raw).lower()
+        allowed_sources = {
+            "tmdb_trending",
+            "tmdb_movies",
+            "tmdb_tvs",
+            "douban_hot",
+            "douban_movie_hot",
+            "douban_tv_hot",
+            "douban_showing",
+            "douban_movie_showing",
+            "douban_movie_top250",
+            "douban_tv_animation",
+            "bangumi_calendar",
+        }
+        if compact in allowed_sources:
+            if compact == "douban_showing":
+                return "douban_movie_showing", "movie"
+            return compact, "all"
+        source_aliases = {
+            "trending": ("tmdb_trending", "all"),
+            "tmdb": ("tmdb_trending", "all"),
+            "tmdb热门": ("tmdb_trending", "all"),
+            "tmdb电影": ("tmdb_movies", "movie"),
+            "tmdb剧集": ("tmdb_tvs", "tv"),
+            "tmdb电视剧": ("tmdb_tvs", "tv"),
+            "豆瓣": ("douban_hot", "all"),
+            "豆瓣热门": ("douban_hot", "all"),
+            "豆瓣电影": ("douban_movie_hot", "movie"),
+            "豆瓣热门电影": ("douban_movie_hot", "movie"),
+            "豆瓣热映": ("douban_movie_showing", "movie"),
+            "豆瓣电视剧": ("douban_tv_hot", "tv"),
+            "豆瓣剧集": ("douban_tv_hot", "tv"),
+            "豆瓣top250": ("douban_movie_top250", "movie"),
+            "top250": ("douban_movie_top250", "movie"),
+            "douban_showing": ("douban_movie_showing", "movie"),
+            "正在热映": ("douban_movie_showing", "movie"),
+            "热映": ("douban_movie_showing", "movie"),
+            "院线": ("douban_movie_showing", "movie"),
+            "bangumi": ("bangumi_calendar", "tv"),
+            "番剧": ("bangumi_calendar", "tv"),
+            "今日番剧": ("bangumi_calendar", "tv"),
+            "每日放送": ("bangumi_calendar", "tv"),
+            "动画番剧": ("bangumi_calendar", "tv"),
+        }
+        if compact in source_aliases:
+            return source_aliases[compact]
+        if "top250" in compact:
+            return "douban_movie_top250", "movie"
+        if any(token in compact for token in ["bangumi", "番剧", "每日放送", "今日放送", "今日动画"]):
+            return "bangumi_calendar", "tv"
+        if any(token in compact for token in ["正在热映", "热映", "院线"]):
+            return "douban_movie_showing", "movie"
+        if "豆瓣" in compact:
+            if "动画" in compact:
+                return "douban_tv_animation", "tv"
+            if any(token in compact for token in ["电视剧", "剧集", "剧", "tv"]):
+                return "douban_tv_hot", "tv"
+            if any(token in compact for token in ["电影", "movie"]):
+                return "douban_movie_hot", "movie"
+            return "douban_hot", "all"
+        if "tmdb" in compact:
+            if any(token in compact for token in ["电视剧", "剧集", "剧", "tv"]):
+                return "tmdb_tvs", "tv"
+            if any(token in compact for token in ["电影", "movie"]):
+                return "tmdb_movies", "movie"
+            return "tmdb_trending", "all"
+        if any(token in compact for token in ["电视剧", "剧集", "剧集推荐", "热门剧", "热门电视剧"]):
+            return "tmdb_tvs", "tv"
+        if any(token in compact for token in ["电影", "影视电影", "热门电影"]):
+            return "tmdb_movies", "movie"
+        return default_source or "tmdb_trending", "all"
+
     @classmethod
     def _resolve_pan_path_value(cls, value: str) -> str:
         text = str(value or "").strip()
@@ -249,9 +343,81 @@ class AgentResourceOfficer(_PluginBase):
         text = str(value or "").strip().lower()
         if text in {"detail", "details", "review", "详情", "审查"}:
             return "detail"
+        if text in {"best", "best_result", "recommend_best", "最佳", "最佳片源", "推荐片源", "推荐下载", "最优"}:
+            return "best"
+        if text in {"plan", "dry_run", "make_plan", "计划", "生成计划", "计划选择", "计划处理", "转存计划", "解锁计划"}:
+            return "plan"
         if text in {"n", "next", "next_page", "下一页", "下页"} or text.startswith("n "):
             return "next_page"
         return ""
+
+    @staticmethod
+    def _normalize_pick_mode(value: Any) -> str:
+        text = str(value or "").strip().lower()
+        compact = re.sub(r"\s+", "", text)
+        if not compact:
+            return ""
+        if any(token in compact for token in ["hdhive", "影巢", "影潮", "走影巢", "用影巢"]):
+            return "hdhive"
+        if re.search(r"(^|[^a-z])yc($|[^a-z])", text):
+            return "hdhive"
+        if any(token in compact for token in ["pansou", "盘搜", "走盘搜", "用盘搜"]):
+            return "pansou"
+        if re.search(r"(^|[^a-z])ps($|[^a-z])", text):
+            return "pansou"
+        if any(token in compact for token in ["mp", "原生", "moviepilot", "站点", "pt"]):
+            return "mp"
+        return ""
+
+    @classmethod
+    def _parse_pick_text(cls, value: Any) -> Tuple[int, str, str, str]:
+        raw = cls._clean_text(value)
+        action = cls._normalize_pick_action(raw)
+        if action:
+            return 0, "", action, ""
+        alias_pattern = r"^(?:/smart_pick|smart_pick|计划选择|计划处理|生成计划|转存计划|解锁计划|计划(?=\s*\d)|选择|选|继续|pick|plan|dry_run|make_plan)\s*"
+        alias_match = re.match(alias_pattern, raw, flags=re.IGNORECASE)
+        digit_match = re.match(r"^(\d+)(.*)$", raw)
+        if not alias_match and not digit_match:
+            return 0, "", "", ""
+        if digit_match and not alias_match:
+            suffix = cls._clean_text(digit_match.group(2))
+            if suffix and not (
+                suffix.startswith("/")
+                or "=" in suffix
+                or cls._normalize_pick_mode(suffix)
+                or cls._normalize_pick_action(suffix)
+                or suffix.lower() in {"n", "next"}
+            ):
+                return 0, "", "", ""
+        text = re.sub(alias_pattern, "", raw, flags=re.IGNORECASE).strip()
+        if alias_match and cls._normalize_pick_action(alias_match.group(0).strip()) == "plan":
+            action = "plan"
+        index = 0
+        path = ""
+        mode = ""
+        pick_action = action or ""
+        match = re.search(r"\d+", text)
+        if match:
+            index = cls._safe_int(match.group(0), 0)
+        for token in text.split():
+            if "=" not in token:
+                if not pick_action:
+                    pick_action = cls._normalize_pick_action(token)
+                continue
+            key, token_value = token.split("=", 1)
+            key = key.strip().lower()
+            token_value = token_value.strip()
+            if key in {"path", "dir", "目录", "位置"} and token_value:
+                path = cls._resolve_pan_path_value(token_value)
+            elif key in {"mode", "search_mode", "target", "方式", "来源", "渠道"} and token_value:
+                mode = cls._normalize_pick_mode(token_value)
+        if not mode:
+            mode = cls._normalize_pick_mode(text)
+        if not pick_action:
+            suffix = re.sub(r"\d+", " ", text, count=1).strip()
+            pick_action = cls._normalize_pick_action(suffix)
+        return index, path, pick_action, mode
 
     def init_plugin(self, config: Optional[Dict[str, Any]] = None):
         config = config or {}
@@ -282,6 +448,10 @@ class AgentResourceOfficer(_PluginBase):
         self._p115_client_type = P115TransferService.normalize_qrcode_client_type(config.get("p115_client_type"))
         self._p115_cookie = self._clean_text(config.get("p115_cookie"))
         self._p115_prefer_direct = bool(config.get("p115_prefer_direct", True))
+        self._assistant_default_pt_min_seeders = max(0, self._safe_int(config.get("assistant_default_pt_min_seeders"), 3))
+        self._assistant_default_auto_ingest_enabled = bool(config.get("assistant_default_auto_ingest_enabled", False))
+        self._assistant_default_auto_ingest_score_threshold = max(1, min(100, self._safe_int(config.get("assistant_default_auto_ingest_score_threshold"), 90)))
+        self._assistant_default_confirm_score_threshold = max(1, min(100, self._safe_int(config.get("assistant_default_confirm_score_threshold"), 70)))
         self._feishu_enabled = bool(config.get("feishu_enabled", False))
         self._feishu_allow_all = bool(config.get("feishu_allow_all", False))
         self._feishu_reply_enabled = bool(config.get("feishu_reply_enabled", True))
@@ -319,6 +489,7 @@ class AgentResourceOfficer(_PluginBase):
         self._restore_execution_history()
         self._restore_hdhive_checkin_history()
         self._restore_workflow_plans()
+        self._restore_assistant_preferences()
         self._agent_tools_reloaded = False
         self._ensure_feishu_channel().configure(self._build_config())
         if self._enabled and self._feishu_enabled:
@@ -543,10 +714,10 @@ class AgentResourceOfficer(_PluginBase):
         try:
             self.update_config(self._build_config())
         except Exception as exc:
-            logger.warning(f"[Agent云盘资源整合] 影巢自动登录已获取 Cookie，但保存配置失败：{exc}")
+            logger.warning(f"[Agent影视助手] 影巢自动登录已获取 Cookie，但保存配置失败：{exc}")
         return True, cookie_string, login_message or "影巢自动登录成功"
 
-    def _run_hdhive_checkin(self, *, is_gambler: Optional[bool] = None, trigger: str = "Agent云盘资源整合") -> Dict[str, Any]:
+    def _run_hdhive_checkin(self, *, is_gambler: Optional[bool] = None, trigger: str = "Agent影视助手") -> Dict[str, Any]:
         if not self._hdhive_checkin_enabled:
             return self._hdhive_checkin_disabled_response()
         service = self._ensure_hdhive_service()
@@ -689,24 +860,24 @@ class AgentResourceOfficer(_PluginBase):
     def _scheduled_hdhive_checkin(self):
         if not self._enabled or not self._hdhive_checkin_enabled:
             return
-        result = self._run_hdhive_checkin(trigger="Agent云盘资源整合 定时签到")
+        result = self._run_hdhive_checkin(trigger="Agent影视助手 定时签到")
         status = "成功" if result.get("success") else "失败"
-        logger.info(f"[Agent云盘资源整合] 影巢定时签到{status}: {result.get('message')}")
+        logger.info(f"[Agent影视助手] 影巢定时签到{status}: {result.get('message')}")
 
     def get_service(self) -> List[Dict[str, Any]]:
         if not self._enabled or not self._hdhive_checkin_enabled or not self._hdhive_checkin_cron:
             return []
         if CronTrigger is None:
-            logger.warning("[Agent云盘资源整合] apscheduler 不可用，无法注册影巢定时签到")
+            logger.warning("[Agent影视助手] apscheduler 不可用，无法注册影巢定时签到")
             return []
         try:
             trigger = CronTrigger.from_crontab(self._hdhive_checkin_cron)
         except Exception as exc:
-            logger.warning(f"[Agent云盘资源整合] 影巢签到 Cron 配置无效：{self._hdhive_checkin_cron} {exc}")
+            logger.warning(f"[Agent影视助手] 影巢签到 Cron 配置无效：{self._hdhive_checkin_cron} {exc}")
             return []
         return [{
             "id": "agentresourceofficer_hdhive_checkin",
-            "name": "Agent云盘资源整合影巢签到",
+            "name": "Agent影视助手影巢签到",
             "trigger": trigger,
             "func": self._scheduled_hdhive_checkin,
             "kwargs": {},
@@ -741,6 +912,10 @@ class AgentResourceOfficer(_PluginBase):
             "p115_client_type": self._p115_client_type,
             "p115_cookie": self._p115_cookie,
             "p115_prefer_direct": self._p115_prefer_direct,
+            "assistant_default_pt_min_seeders": self._assistant_default_pt_min_seeders,
+            "assistant_default_auto_ingest_enabled": self._assistant_default_auto_ingest_enabled,
+            "assistant_default_auto_ingest_score_threshold": self._assistant_default_auto_ingest_score_threshold,
+            "assistant_default_confirm_score_threshold": self._assistant_default_confirm_score_threshold,
             "feishu_enabled": self._feishu_enabled,
             "feishu_allow_all": self._feishu_allow_all,
             "feishu_reply_enabled": self._feishu_reply_enabled,
@@ -933,19 +1108,19 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/quark/health",
                 "endpoint": self.api_quark_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的夸克配置",
+                "summary": "检查 Agent影视助手 的夸克配置",
             },
             {
                 "path": "/quark/transfer",
                 "endpoint": self.api_quark_transfer,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行夸克分享转存",
+                "summary": "通过 Agent影视助手 执行夸克分享转存",
             },
             {
                 "path": "/hdhive/health",
                 "endpoint": self.api_hdhive_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的影巢配置",
+                "summary": "检查 Agent影视助手 的影巢配置",
             },
             {
                 "path": "/hdhive/account",
@@ -987,49 +1162,49 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/hdhive/search",
                 "endpoint": self.api_hdhive_search,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行影巢资源搜索",
+                "summary": "通过 Agent影视助手 执行影巢资源搜索",
             },
             {
                 "path": "/hdhive/search_by_keyword",
                 "endpoint": self.api_hdhive_search_by_keyword,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行影巢关键词候选搜索",
+                "summary": "通过 Agent影视助手 执行影巢关键词候选搜索",
             },
             {
                 "path": "/hdhive/unlock",
                 "endpoint": self.api_hdhive_unlock,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行影巢资源解锁",
+                "summary": "通过 Agent影视助手 执行影巢资源解锁",
             },
             {
                 "path": "/hdhive/unlock_and_route",
                 "endpoint": self.api_hdhive_unlock_and_route,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 解锁影巢资源并尝试自动路由到对应网盘执行层",
+                "summary": "通过 Agent影视助手 解锁影巢资源并尝试自动路由到对应网盘执行层",
             },
             {
                 "path": "/p115/health",
                 "endpoint": self.api_p115_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的 115 转存依赖状态",
+                "summary": "检查 Agent影视助手 的 115 转存依赖状态",
             },
             {
                 "path": "/p115/qrcode",
                 "endpoint": self.api_p115_qrcode,
                 "methods": ["GET"],
-                "summary": "获取 Agent云盘资源整合 的 115 扫码登录二维码",
+                "summary": "获取 Agent影视助手 的 115 扫码登录二维码",
             },
             {
                 "path": "/p115/qrcode/check",
                 "endpoint": self.api_p115_qrcode_check,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 的 115 扫码登录状态",
+                "summary": "检查 Agent影视助手 的 115 扫码登录状态",
             },
             {
                 "path": "/p115/transfer",
                 "endpoint": self.api_p115_transfer,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 执行 115 分享转存",
+                "summary": "通过 Agent影视助手 执行 115 分享转存",
             },
             {
                 "path": "/p115/pending",
@@ -1053,13 +1228,13 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/share/route",
                 "endpoint": self.api_share_route,
                 "methods": ["POST"],
-                "summary": "通过 Agent云盘资源整合 自动识别 115 / 夸克分享链接并执行对应转存",
+                "summary": "通过 Agent影视助手 自动识别 115 / 夸克分享链接并执行对应转存",
             },
             {
                 "path": "/feishu/health",
                 "endpoint": self.api_feishu_health,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 内置飞书入口状态",
+                "summary": "检查 Agent影视助手 内置飞书入口状态",
             },
             {
                 "path": "/assistant/route",
@@ -1083,7 +1258,7 @@ class AgentResourceOfficer(_PluginBase):
                 "path": "/assistant/readiness",
                 "endpoint": self.api_assistant_readiness,
                 "methods": ["GET"],
-                "summary": "检查 Agent云盘资源整合 是否已准备好给外部智能体调用",
+                "summary": "检查 Agent影视助手 是否已准备好给外部智能体调用",
             },
             {
                 "path": "/assistant/pulse",
@@ -1144,6 +1319,12 @@ class AgentResourceOfficer(_PluginBase):
                 "endpoint": self.api_assistant_workflow,
                 "methods": ["GET", "POST"],
                 "summary": "运行预设工作流，适合外部智能体用更短参数完成常见资源任务",
+            },
+            {
+                "path": "/assistant/preferences",
+                "endpoint": self.api_assistant_preferences,
+                "methods": ["GET", "POST", "DELETE"],
+                "summary": "读取、保存或重置智能体片源偏好画像，用于云盘和 PT 分源评分",
             },
             {
                 "path": "/assistant/plan/execute",
@@ -1321,7 +1502,7 @@ class AgentResourceOfficer(_PluginBase):
                         },
                         "content": [
                             text_line(
-                                "Agent云盘资源整合支持三种接入模式：外部智能体调用 Skill/API、MP 内置智能体调用 Agent Tool、飞书 Channel 直接收命令。",
+                                "Agent影视助手支持三种接入模式：外部智能体调用 Skill/API、MP 内置智能体调用 Agent Tool、飞书 Channel 直接收命令。",
                                 "text-body-2 mb-3",
                             ),
                             text_line(
@@ -1336,10 +1517,10 @@ class AgentResourceOfficer(_PluginBase):
                                 },
                                 "text": (
                                     "把下面这段话直接发给 WorkBuddy、Hermes、OpenClaw（小龙虾）或其他外部智能体：\n"
-                                    "请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，并按 Agent云盘资源整合文档接入我的 MoviePilot。"
+                                    "请阅读 https://github.com/liuyuexi1987/MoviePilot-Plugins ，并按 Agent影视助手文档接入我的 MoviePilot。"
                                     "重点看 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md、skills/agent-resource-officer/SKILL.md、skills/agent-resource-officer/EXTERNAL_AGENTS.md。"
                                     "读完后请在你的环境里创建或安装一个 agent-resource-officer Skill，把这些规则固化下来，不要只依赖普通聊天记忆。"
-                                    "你的职责是理解我的需求、展示候选结果、让我选择编号；资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent云盘资源整合。"
+                                    "你的职责是理解我的需求、展示候选结果、让我选择编号；资源搜索、影巢解锁、115/夸克转存、115 登录状态都调用 Agent影视助手。"
                                     "不要自己拼影巢、盘搜、115 或夸克底层接口，也不要在 Skill 或聊天里写入 API Key、Cookie、Token。"
                                 ),
                             },
@@ -1535,6 +1716,83 @@ class AgentResourceOfficer(_PluginBase):
                                         "props": {
                                             "model": "debug",
                                             "label": "调试模式",
+                                        },
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {
+                        "component": "VRow",
+                        "content": [
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12},
+                                "content": [
+                                    {
+                                        "component": "VAlert",
+                                        "props": {
+                                            "type": "info",
+                                            "variant": "tonal",
+                                            "text": "下面这组是智能体默认评分策略，只影响还没有保存个人偏好的新会话。高分不代表一定执行；遇到影巢高积分、PT 低做种这类硬风险时，插件仍会拦截。",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "assistant_default_pt_min_seeders",
+                                            "label": "PT 最低做种数",
+                                            "type": "number",
+                                            "placeholder": "3",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "assistant_default_confirm_score_threshold",
+                                            "label": "建议确认分数线",
+                                            "type": "number",
+                                            "placeholder": "70",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VTextField",
+                                        "props": {
+                                            "model": "assistant_default_auto_ingest_score_threshold",
+                                            "label": "自动入库分数线",
+                                            "type": "number",
+                                            "placeholder": "90",
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "component": "VCol",
+                                "props": {"cols": 12, "md": 3},
+                                "content": [
+                                    {
+                                        "component": "VSwitch",
+                                        "props": {
+                                            "model": "assistant_default_auto_ingest_enabled",
+                                            "label": "默认允许高分自动入库",
                                         },
                                     }
                                 ],
@@ -2192,7 +2450,7 @@ class AgentResourceOfficer(_PluginBase):
         channel = self._ensure_feishu_channel()
         return {
             "success": True,
-            "message": "Agent云盘资源整合 内置飞书入口状态",
+            "message": "Agent影视助手 内置飞书入口状态",
             "data": {
                 "plugin_version": self.plugin_version,
                 "plugin_enabled": self._enabled,
@@ -2231,7 +2489,7 @@ class AgentResourceOfficer(_PluginBase):
         share_text = self._clean_text(body.get("url") or body.get("share_url") or body.get("share_text"))
         access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        trigger = self._clean_text(body.get("trigger") or "Agent云盘资源整合 API")
+        trigger = self._clean_text(body.get("trigger") or "Agent影视助手 API")
 
         service = self._ensure_quark_service()
         transfer_ok, result, transfer_message = service.transfer_share(
@@ -2303,7 +2561,7 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": "插件未启用"}
 
         is_gambler = self._parse_bool_value(body.get("is_gambler"), self._hdhive_checkin_gambler_mode)
-        return self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent云盘资源整合 API")
+        return self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent影视助手 API")
 
     async def api_hdhive_checkin_history(self, request: Request):
         ok, message = self._check_api_access(request)
@@ -2387,7 +2645,7 @@ class AgentResourceOfficer(_PluginBase):
             return disabled
 
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
-        media_type = self._clean_text(body.get("media_type") or body.get("type") or "movie").lower()
+        media_type = self._clean_text(body.get("media_type") or body.get("type") or "auto").lower()
         year = self._clean_text(body.get("year"))
         candidate_limit = self._safe_int(body.get("candidate_limit"), self._hdhive_candidate_page_size)
         result_limit = self._safe_int(body.get("limit"), 12)
@@ -2632,6 +2890,2826 @@ class AgentResourceOfficer(_PluginBase):
             ), {"limit": limit, "points": points, "limited": True, "reason": "points_over_limit"}
         return True, "", {"limit": limit, "points": points, "limited": False}
 
+    def _default_assistant_preferences(self) -> Dict[str, Any]:
+        return {
+            "schema_version": "preferences.v1",
+            "initialized": False,
+            "prefer_resolution": "4K",
+            "prefer_dolby_vision": True,
+            "prefer_hdr": True,
+            "prefer_chinese_subtitle": True,
+            "prefer_complete_series": True,
+            "prefer_cloud_provider": "",
+            "cloud_default_path": self._hdhive_default_path,
+            "quark_default_path": self._quark_default_path,
+            "p115_default_path": self._p115_default_path,
+            "pt_require_free": False,
+            "pt_min_seeders": self._assistant_default_pt_min_seeders,
+            "pt_prefer_free": True,
+            "hdhive_max_unlock_points": self._hdhive_max_unlock_points,
+            "auto_ingest_enabled": self._assistant_default_auto_ingest_enabled,
+            "auto_ingest_score_threshold": self._assistant_default_auto_ingest_score_threshold,
+            "confirm_score_threshold": self._assistant_default_confirm_score_threshold,
+            "updated_at": 0,
+        }
+
+    def _normalize_preference_key(self, session: Any = None, user_key: Any = None) -> str:
+        key = self._clean_text(user_key)
+        if key:
+            return key
+        session_name = self._clean_text(session) or "default"
+        return f"session:{session_name}"
+
+    def _normalize_assistant_preferences(self, value: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        defaults = self._default_assistant_preferences()
+        payload = dict(value or {})
+        if "resolution_priority" in payload and "prefer_resolution" not in payload:
+            choices = payload.get("resolution_priority")
+            if isinstance(choices, (list, tuple)) and choices:
+                payload["prefer_resolution"] = choices[0]
+            else:
+                payload["prefer_resolution"] = choices
+        if "subtitle_priority" in payload and "prefer_chinese_subtitle" not in payload:
+            subtitle_text = " ".join(str(item) for item in payload.get("subtitle_priority") or []) if isinstance(payload.get("subtitle_priority"), (list, tuple)) else str(payload.get("subtitle_priority") or "")
+            payload["prefer_chinese_subtitle"] = bool(re.search(r"中文|中字|简中|繁中|双语|chinese", subtitle_text, flags=re.IGNORECASE))
+        if "pt_free_only" in payload and "pt_require_free" not in payload:
+            payload["pt_require_free"] = payload.get("pt_free_only")
+        if "preferred_cloud_drive" in payload and "prefer_cloud_provider" not in payload:
+            providers = payload.get("preferred_cloud_drive")
+            payload["prefer_cloud_provider"] = providers[0] if isinstance(providers, (list, tuple)) and providers else providers
+        if "auto_ingest" in payload and "auto_ingest_enabled" not in payload:
+            payload["auto_ingest_enabled"] = payload.get("auto_ingest")
+        if "auto_execute_score_threshold" in payload and "auto_ingest_score_threshold" not in payload:
+            payload["auto_ingest_score_threshold"] = payload.get("auto_execute_score_threshold")
+        normalized = {**defaults, **payload}
+        normalized["schema_version"] = "preferences.v1"
+        normalized["initialized"] = bool(normalized.get("initialized"))
+        normalized["prefer_resolution"] = self._clean_text(normalized.get("prefer_resolution") or defaults["prefer_resolution"]).upper()
+        normalized["prefer_dolby_vision"] = self._parse_bool_value(normalized.get("prefer_dolby_vision"), True)
+        normalized["prefer_hdr"] = self._parse_bool_value(normalized.get("prefer_hdr"), True)
+        normalized["prefer_chinese_subtitle"] = self._parse_bool_value(normalized.get("prefer_chinese_subtitle"), True)
+        normalized["prefer_complete_series"] = self._parse_bool_value(normalized.get("prefer_complete_series"), True)
+        normalized["prefer_cloud_provider"] = self._clean_text(normalized.get("prefer_cloud_provider")).lower()
+        normalized["cloud_default_path"] = self._normalize_path(normalized.get("cloud_default_path") or self._hdhive_default_path)
+        normalized["quark_default_path"] = self._normalize_path(normalized.get("quark_default_path") or self._quark_default_path)
+        normalized["p115_default_path"] = self._normalize_path(normalized.get("p115_default_path") or self._p115_default_path)
+        normalized["pt_require_free"] = self._parse_bool_value(normalized.get("pt_require_free"), False)
+        normalized["pt_min_seeders"] = max(0, self._safe_int(normalized.get("pt_min_seeders"), 3))
+        normalized["pt_prefer_free"] = self._parse_bool_value(normalized.get("pt_prefer_free"), True)
+        normalized["hdhive_max_unlock_points"] = max(0, self._safe_int(normalized.get("hdhive_max_unlock_points"), self._hdhive_max_unlock_points))
+        normalized["auto_ingest_enabled"] = self._parse_bool_value(normalized.get("auto_ingest_enabled"), False)
+        normalized["auto_ingest_score_threshold"] = max(1, min(100, self._safe_int(normalized.get("auto_ingest_score_threshold"), 90)))
+        normalized["confirm_score_threshold"] = max(1, min(100, self._safe_int(normalized.get("confirm_score_threshold"), 70)))
+        normalized["updated_at"] = self._safe_int(normalized.get("updated_at"), 0)
+        return normalized
+
+    def _restore_assistant_preferences(self) -> None:
+        try:
+            restored = self.get_data(self._assistant_preferences_store_key) or {}
+            if isinstance(restored, dict):
+                self._assistant_preferences = {
+                    self._clean_text(key): self._normalize_assistant_preferences(value)
+                    for key, value in restored.items()
+                    if self._clean_text(key) and isinstance(value, dict)
+                }
+        except Exception:
+            self._assistant_preferences = {}
+
+    def _persist_assistant_preferences(self) -> None:
+        try:
+            items = list((self._assistant_preferences or {}).items())[-self._assistant_preferences_limit:]
+            self._assistant_preferences = {key: value for key, value in items if key}
+            self.save_data(key=self._assistant_preferences_store_key, value=self._assistant_preferences)
+        except Exception:
+            pass
+
+    def _assistant_preferences_public_data(self, *, session: str = "", user_key: str = "") -> Dict[str, Any]:
+        key = self._normalize_preference_key(session=session, user_key=user_key)
+        preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(key))
+        questions = [
+            "你更偏好 4K 还是 1080P？",
+            "是否优先杜比视界 / HDR？",
+            "是否必须中文字幕？",
+            "电视剧是否优先全集或完整季？",
+            "PT 资源最低做种数是多少？默认 3。",
+            "影巢单资源最多愿意消耗多少积分？默认 20。",
+            "是否允许 90 分以上资源自动入库？默认关闭。",
+        ]
+        return {
+            "schema_version": "preferences.v1",
+            "key": key,
+            "initialized": bool(preferences.get("initialized")),
+            "preferences": preferences,
+            "needs_onboarding": not bool(preferences.get("initialized")),
+            "onboarding_questions": questions if not bool(preferences.get("initialized")) else [],
+            "defaults": self._default_assistant_preferences(),
+        }
+
+    def _save_assistant_preferences(
+        self,
+        *,
+        session: str = "",
+        user_key: str = "",
+        preferences: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        key = self._normalize_preference_key(session=session, user_key=user_key)
+        current = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(key))
+        incoming = dict(preferences or {})
+        merged = {**current, **incoming}
+        merged["initialized"] = self._parse_bool_value(incoming.get("initialized"), True) if "initialized" in incoming else True
+        merged["updated_at"] = int(time.time())
+        normalized = self._normalize_assistant_preferences(merged)
+        self._assistant_preferences[key] = normalized
+        self._persist_assistant_preferences()
+        return self._assistant_preferences_public_data(session=session, user_key=key)
+
+    def _reset_assistant_preferences(self, *, session: str = "", user_key: str = "") -> Dict[str, Any]:
+        key = self._normalize_preference_key(session=session, user_key=user_key)
+        self._assistant_preferences.pop(key, None)
+        self._persist_assistant_preferences()
+        return self._assistant_preferences_public_data(session=session, user_key=key)
+
+    def _assistant_preferences_status_brief(self, *, session: str = "", user_key: str = "") -> Dict[str, Any]:
+        data = self._assistant_preferences_public_data(session=session, user_key=user_key)
+        prefs = dict(data.get("preferences") or {})
+        brief = {
+            "key": data.get("key"),
+            "initialized": bool(data.get("initialized")),
+            "needs_onboarding": bool(data.get("needs_onboarding")),
+            "summary": {
+                "prefer_resolution": self._clean_text(prefs.get("prefer_resolution")),
+                "prefer_dolby_vision": bool(prefs.get("prefer_dolby_vision")),
+                "prefer_hdr": bool(prefs.get("prefer_hdr")),
+                "prefer_chinese_subtitle": bool(prefs.get("prefer_chinese_subtitle")),
+                "prefer_complete_series": bool(prefs.get("prefer_complete_series")),
+                "prefer_cloud_provider": self._clean_text(prefs.get("prefer_cloud_provider")),
+                "pt_min_seeders": self._safe_int(prefs.get("pt_min_seeders"), 3),
+                "pt_require_free": bool(prefs.get("pt_require_free")),
+                "hdhive_max_unlock_points": self._safe_int(prefs.get("hdhive_max_unlock_points"), self._hdhive_max_unlock_points),
+                "auto_ingest_enabled": bool(prefs.get("auto_ingest_enabled")),
+                "auto_ingest_score_threshold": self._safe_int(prefs.get("auto_ingest_score_threshold"), 90),
+            },
+        }
+        if brief["needs_onboarding"]:
+            brief["onboarding_questions"] = data.get("onboarding_questions") or []
+            brief["recommended_action"] = "ask_user_preferences_then_save"
+        return brief
+
+    def _assistant_default_preferences_template(self) -> Dict[str, Any]:
+        prefs = self._default_assistant_preferences()
+        return {
+            "prefer_resolution": prefs.get("prefer_resolution"),
+            "prefer_dolby_vision": prefs.get("prefer_dolby_vision"),
+            "prefer_hdr": prefs.get("prefer_hdr"),
+            "prefer_chinese_subtitle": prefs.get("prefer_chinese_subtitle"),
+            "prefer_complete_series": prefs.get("prefer_complete_series"),
+            "prefer_cloud_provider": prefs.get("prefer_cloud_provider"),
+            "pt_require_free": prefs.get("pt_require_free"),
+            "pt_min_seeders": prefs.get("pt_min_seeders"),
+            "hdhive_max_unlock_points": prefs.get("hdhive_max_unlock_points"),
+            "p115_default_path": prefs.get("p115_default_path"),
+            "quark_default_path": prefs.get("quark_default_path"),
+            "auto_ingest_enabled": prefs.get("auto_ingest_enabled"),
+            "auto_ingest_score_threshold": prefs.get("auto_ingest_score_threshold"),
+        }
+
+    def _parse_assistant_preferences_text(self, text: str) -> Dict[str, Any]:
+        raw = self._clean_text(text)
+        compact = re.sub(r"\s+", "", raw).lower()
+        payload: Dict[str, Any] = {}
+        if re.search(r"1080|fhd", raw, flags=re.IGNORECASE):
+            payload["prefer_resolution"] = "1080P"
+        elif re.search(r"4k|2160|uhd", raw, flags=re.IGNORECASE):
+            payload["prefer_resolution"] = "4K"
+
+        if re.search(r"(不要|不需要|关闭|禁用).{0,4}(杜比|dv)", raw, flags=re.IGNORECASE):
+            payload["prefer_dolby_vision"] = False
+        elif re.search(r"杜比|dv|dolby", raw, flags=re.IGNORECASE):
+            payload["prefer_dolby_vision"] = True
+
+        if re.search(r"(不要|不需要|关闭|禁用).{0,4}hdr", raw, flags=re.IGNORECASE):
+            payload["prefer_hdr"] = False
+        elif re.search(r"hdr", raw, flags=re.IGNORECASE):
+            payload["prefer_hdr"] = True
+
+        if re.search(r"(不要|不需要|关闭|禁用).{0,6}(中字|中文|字幕)", raw, flags=re.IGNORECASE) or re.search(r"无字幕也可|字幕无所谓", raw):
+            payload["prefer_chinese_subtitle"] = False
+        elif re.search(r"中字|中文|简中|繁中|双语字幕|字幕", raw, flags=re.IGNORECASE):
+            payload["prefer_chinese_subtitle"] = True
+
+        if re.search(r"不强求全集|不要全集|单集也可|更新也可", raw):
+            payload["prefer_complete_series"] = False
+        elif re.search(r"全集|完整季|整季|完结", raw):
+            payload["prefer_complete_series"] = True
+
+        if re.search(r"夸克优先|优先夸克|quark", raw, flags=re.IGNORECASE):
+            payload["prefer_cloud_provider"] = "quark"
+        elif re.search(r"115优先|优先115", raw):
+            payload["prefer_cloud_provider"] = "115"
+
+        if re.search(r"pt.{0,4}(只要|必须).{0,4}免费|只下免费|只要免费", raw, flags=re.IGNORECASE):
+            payload["pt_require_free"] = True
+        elif re.search(r"pt.{0,4}(不限|不强求).{0,4}免费|不只要免费|免费不强求", raw, flags=re.IGNORECASE):
+            payload["pt_require_free"] = False
+
+        seed_match = re.search(r"(?:做种|种子|seeders?|seeder)[^\d]{0,8}(\d+)", raw, flags=re.IGNORECASE)
+        if seed_match:
+            payload["pt_min_seeders"] = self._safe_int(seed_match.group(1), 3)
+
+        points_match = re.search(r"(?:影巢|积分|解锁)[^\d]{0,10}(\d+)", raw)
+        if points_match:
+            payload["hdhive_max_unlock_points"] = self._safe_int(points_match.group(1), self._hdhive_max_unlock_points)
+
+        if re.search(r"(不|不要|关闭|禁用).{0,4}自动入库", raw):
+            payload["auto_ingest_enabled"] = False
+        elif re.search(r"自动入库|自动下载|自动转存", raw):
+            payload["auto_ingest_enabled"] = True
+
+        threshold_match = re.search(r"(?:自动入库(?:评分|分数|阈值)|评分阈值|分数阈值|阈值)[^\d]{0,10}(\d{2,3})", raw)
+        if threshold_match:
+            payload["auto_ingest_score_threshold"] = self._safe_int(threshold_match.group(1), 90)
+
+        for key, target in [
+            ("115目录", "p115_default_path"),
+            ("p115目录", "p115_default_path"),
+            ("夸克目录", "quark_default_path"),
+            ("quark目录", "quark_default_path"),
+            ("云盘目录", "cloud_default_path"),
+        ]:
+            match = re.search(rf"{re.escape(key)}\s*=\s*([^\s，,]+)", raw, flags=re.IGNORECASE)
+            if match:
+                payload[target] = self._normalize_path(match.group(1))
+
+        if "initialized" not in payload and payload:
+            payload["initialized"] = True
+        if "auto_ingest_score_threshold" in payload:
+            payload["auto_ingest_score_threshold"] = max(1, min(100, self._safe_int(payload["auto_ingest_score_threshold"], 90)))
+        if "pt_min_seeders" in payload:
+            payload["pt_min_seeders"] = max(0, self._safe_int(payload["pt_min_seeders"], 3))
+        if "hdhive_max_unlock_points" in payload:
+            payload["hdhive_max_unlock_points"] = max(0, self._safe_int(payload["hdhive_max_unlock_points"], self._hdhive_max_unlock_points))
+        return payload
+
+    @staticmethod
+    def _score_text_blob(item: Any) -> str:
+        if isinstance(item, dict):
+            parts: List[str] = []
+            for value in item.values():
+                if isinstance(value, (dict, list, tuple)):
+                    parts.append(AgentResourceOfficer._score_text_blob(value))
+                elif value is not None:
+                    parts.append(str(value))
+            return " ".join(parts).lower()
+        if isinstance(item, (list, tuple)):
+            return " ".join(AgentResourceOfficer._score_text_blob(value) for value in item).lower()
+        return str(item or "").lower()
+
+    @staticmethod
+    def _score_has_any(text: str, keywords: List[str]) -> bool:
+        return any(keyword.lower() in text for keyword in keywords)
+
+    @staticmethod
+    def _score_level(score: int) -> str:
+        if score >= 90:
+            return "excellent"
+        if score >= 70:
+            return "confirm"
+        return "low"
+
+    def _score_decision(
+        self,
+        *,
+        score: int,
+        risk_reasons: List[str],
+        hard_risk_reasons: Optional[List[str]] = None,
+        preferences: Dict[str, Any],
+        default_action: str,
+    ) -> Dict[str, Any]:
+        threshold = max(1, min(100, self._safe_int(preferences.get("auto_ingest_score_threshold"), 90)))
+        confirm_threshold = max(1, min(100, self._safe_int(preferences.get("confirm_score_threshold"), 70)))
+        auto_enabled = self._parse_bool_value(preferences.get("auto_ingest_enabled"), False)
+        hard_risks = [self._clean_text(item) for item in (hard_risk_reasons or []) if self._clean_text(item)]
+        hard_risk = bool(hard_risks)
+        can_auto = bool(auto_enabled and not hard_risk and score >= threshold)
+        if can_auto:
+            recommended = default_action
+        elif score >= confirm_threshold and not hard_risk:
+            recommended = "ask_confirm"
+        else:
+            recommended = "do_not_auto"
+        return {
+            "score": score,
+            "score_level": self._score_level(score),
+            "risk_reasons": risk_reasons,
+            "hard_risk_reasons": hard_risks,
+            "can_auto_execute": can_auto,
+            "recommended_action": recommended,
+            "auto_ingest_enabled": auto_enabled,
+            "auto_ingest_score_threshold": threshold,
+            "confirm_score_threshold": confirm_threshold,
+        }
+
+    def _score_cloud_resource(
+        self,
+        item: Dict[str, Any],
+        *,
+        preferences: Optional[Dict[str, Any]] = None,
+        source_type: str = "cloud",
+        target_path: str = "",
+    ) -> Dict[str, Any]:
+        prefs = self._normalize_assistant_preferences(preferences)
+        text = self._score_text_blob(item)
+        score = 20
+        reasons: List[str] = []
+        risks: List[str] = []
+        hard_risks: List[str] = []
+        resolution_pref = self._clean_text(prefs.get("prefer_resolution")).lower()
+        provider = self._clean_text(item.get("pan_type") or item.get("channel")).lower()
+        media_type = self._clean_text(item.get("media_type") or item.get("type")).lower()
+        series_like = (
+            media_type in {"tv", "series", "电视剧", "剧集", "番剧"}
+            or bool(re.search(r"\bs\d{1,2}\b|\be\d{1,3}\b|season|第\s*\d+\s*集|[全整]季|全集|完结|更至|更新至|短剧|剧集", text, flags=re.IGNORECASE))
+        )
+
+        if "2160" in text or "4k" in text or "uhd" in text:
+            score += 25
+            reasons.append("4K/UHD +25")
+        elif "1080" in text:
+            score += 16
+            reasons.append("1080P +16")
+        elif "720" in text:
+            score += 6
+            reasons.append("720P +6")
+        if resolution_pref and resolution_pref in text:
+            score += 5
+            reasons.append(f"匹配偏好分辨率 {resolution_pref.upper()} +5")
+
+        if self._score_has_any(text, ["dolby vision", "dovi", "dv", "杜比视界"]):
+            score += 18
+            reasons.append("杜比视界 +18")
+        elif self._score_has_any(text, ["hdr10", "hdr", "hlg", "杜比"]):
+            score += 12
+            reasons.append("HDR +12")
+
+        if self._score_has_any(text, ["中字", "中文字幕", "简中", "繁中", "内封简繁", "双语", "官中"]):
+            score += 14
+            reasons.append("中文字幕 +14")
+        elif self._parse_bool_value(prefs.get("prefer_chinese_subtitle"), True):
+            score -= 5
+            risks.append("未识别到中文字幕")
+
+        if self._score_has_any(text, ["全集", "全季", "完结", "complete", "全 ", "更至", "更0", "更新至"]):
+            score += 12
+            reasons.append("完整度信息 +12")
+        elif series_like and self._parse_bool_value(prefs.get("prefer_complete_series"), True):
+            score -= 6
+            risks.append("未识别到全集/更新完整度")
+
+        if self._score_has_any(text, ["remux", "原盘", "blu-ray", "bluray", "web-dl", "高码率"]):
+            score += 8
+            reasons.append("片源质量标识 +8")
+
+        prefer_provider = self._clean_text(prefs.get("prefer_cloud_provider")).lower()
+        if prefer_provider and provider and prefer_provider == provider:
+            score += 5
+            reasons.append(f"匹配网盘偏好 {provider} +5")
+        if target_path and target_path in {
+            self._clean_text(prefs.get("cloud_default_path")),
+            self._clean_text(prefs.get("p115_default_path")),
+            self._clean_text(prefs.get("quark_default_path")),
+        }:
+            score += 3
+            reasons.append("匹配默认目录 +3")
+
+        if source_type == "hdhive":
+            limit = max(0, self._safe_int(prefs.get("hdhive_max_unlock_points"), self._hdhive_max_unlock_points))
+            points = self._resource_points_value(item)
+            if points == 0:
+                score += 10
+                reasons.append("影巢免费 +10")
+            elif points is None and limit > 0:
+                score -= 20
+                message = "影巢积分未知，禁止自动解锁"
+                risks.append(message)
+                hard_risks.append(message)
+            elif limit > 0 and points is not None and points > limit:
+                score -= 30
+                message = f"影巢积分 {points} 超过上限 {limit}，禁止自动解锁"
+                risks.append(message)
+                hard_risks.append(message)
+            elif points is not None:
+                score += max(0, 10 - points)
+                reasons.append(f"影巢积分 {points}")
+
+        final_score = max(0, min(100, score))
+        decision = self._score_decision(
+            score=final_score,
+            risk_reasons=risks,
+            hard_risk_reasons=hard_risks,
+            preferences=prefs,
+            default_action="auto_ingest_cloud",
+        )
+        return {
+            **decision,
+            "source_type": source_type,
+            "score_reasons": reasons,
+        }
+
+    def _score_pt_resource(
+        self,
+        item: Dict[str, Any],
+        *,
+        preferences: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        prefs = self._normalize_assistant_preferences(preferences)
+        text = self._score_text_blob(item)
+        torrent = item.get("torrent_info") if isinstance(item.get("torrent_info"), dict) else item
+        meta = item.get("meta_info") if isinstance(item.get("meta_info"), dict) else {}
+        media = item.get("media_info") if isinstance(item.get("media_info"), dict) else {}
+        score = 20
+        reasons: List[str] = []
+        risks: List[str] = []
+        hard_risks: List[str] = []
+        min_seeders = max(0, self._safe_int(prefs.get("pt_min_seeders"), 3))
+        seeders = self._safe_int(torrent.get("seeders"), 0)
+        peers = self._safe_int(torrent.get("peers"), 0)
+        volume = self._clean_text(torrent.get("volume_factor") or item.get("volume_factor")).lower()
+        title = self._clean_text(torrent.get("title"))
+        site_name = self._clean_text(torrent.get("site_name"))
+        group_name = self._clean_text(meta.get("resource_team"))
+        media_title = self._clean_text(media.get("title")).lower()
+        media_year = self._clean_text(media.get("year"))
+        resolution_pref = self._clean_text(prefs.get("prefer_resolution")).lower()
+        prefer_dovi = self._parse_bool_value(prefs.get("prefer_dolby_vision"), True)
+        prefer_hdr = self._parse_bool_value(prefs.get("prefer_hdr"), True)
+        prefer_subtitle = self._parse_bool_value(prefs.get("prefer_chinese_subtitle"), True)
+        prefer_complete = self._parse_bool_value(prefs.get("prefer_complete_series"), True)
+
+        if seeders <= 0:
+            message = "做种数 0，禁止自动下载"
+            risks.append(message)
+            hard_risks.append(message)
+            score -= 35
+        elif seeders < min_seeders:
+            message = f"做种数 {seeders}，低于阈值 {min_seeders}，禁止自动下载"
+            risks.append(message)
+            hard_risks.append(message)
+            score -= 25
+        elif seeders >= 20:
+            score += 22
+            reasons.append(f"做种数 {seeders} +22")
+        elif seeders >= 10:
+            score += 16
+            reasons.append(f"做种数 {seeders} +16")
+        else:
+            score += 10
+            reasons.append(f"做种数 {seeders} +10")
+
+        if peers >= seeders * 5 and seeders < 5:
+            score -= 8
+            risks.append("下载需求高但做种偏低")
+        elif peers >= max(8, seeders):
+            score += 6
+            reasons.append(f"下载热度 {peers} +6")
+        elif peers >= 3:
+            score += 3
+            reasons.append(f"下载热度 {peers} +3")
+
+        if self._score_has_any(volume, ["free", "免费", "2xfree", "2x free", "freeleech"]):
+            score += 18
+            reasons.append("免费/促销 +18")
+        elif self._parse_bool_value(prefs.get("pt_require_free"), False):
+            score -= 20
+            message = "用户要求 PT 免费资源"
+            risks.append(message)
+            hard_risks.append(message)
+        elif self._parse_bool_value(prefs.get("pt_prefer_free"), True):
+            reasons.append("普通 PT 资源，未额外扣分")
+
+        if "2160" in text or "4k" in text or "uhd" in text:
+            score += 20
+            reasons.append("4K/UHD +20")
+        elif "1080" in text:
+            score += 12
+            reasons.append("1080P +12")
+        elif "720" in text:
+            score += 4
+            reasons.append("720P +4")
+        if resolution_pref and resolution_pref in text:
+            score += 6
+            reasons.append(f"匹配偏好分辨率 {resolution_pref.upper()} +6")
+        has_dovi = self._score_has_any(text, ["dolby vision", "dovi", "dv", "杜比视界"])
+        has_hdr = self._score_has_any(text, ["hdr10", "hdr", "hlg"])
+        if has_dovi:
+            score += 14
+            reasons.append("杜比视界 +14")
+        elif prefer_dovi:
+            score -= 4
+            risks.append("未识别到杜比视界")
+        if has_hdr:
+            score += 9
+            reasons.append("HDR +9")
+        elif prefer_hdr:
+            score -= 2
+            risks.append("未识别到 HDR")
+        if self._score_has_any(text, ["中字", "简中", "繁中", "双语", "内封", "字幕"]):
+            score += 10
+            reasons.append("字幕信息 +10")
+        elif prefer_subtitle:
+            score -= 5
+            risks.append("未识别到中文字幕")
+        if self._score_has_any(text, ["remux", "原盘", "blu-ray", "bluray", "web-dl", "高码率"]):
+            score += 8
+            reasons.append("片源质量标识 +8")
+        if self._score_has_any(text, ["s01", "season", "全集", "全季", "complete", "完结", "更新至", "更至"]):
+            score += 6
+            reasons.append("季/全集标识 +6")
+        elif prefer_complete and self._score_has_any(text, ["s01", "s02", "e01", "第1集", "season"]):
+            score -= 4
+            risks.append("未识别到全集/完整季")
+
+        if media_title:
+            if media_title in title.lower():
+                score += 8
+                reasons.append("标题匹配媒体名 +8")
+            else:
+                score -= 4
+                risks.append("标题与识别媒体名匹配一般")
+        if media_year and media_year in title:
+            score += 4
+            reasons.append(f"年份匹配 {media_year} +4")
+        if site_name:
+            score += 2
+            reasons.append(f"站点标识 {site_name} +2")
+        if group_name:
+            score += 2
+            reasons.append(f"发布组 {group_name} +2")
+
+        size_text = self._clean_text(torrent.get("size") or item.get("size"))
+        size_value = 0.0
+        size_match = re.search(r"(\d+(?:\.\d+)?)\s*(tb|gb|mb)", size_text, flags=re.IGNORECASE)
+        if size_match:
+            size_value = float(size_match.group(1))
+            unit = size_match.group(2).lower()
+            if unit == "tb":
+                size_value *= 1024
+            elif unit == "mb":
+                size_value /= 1024
+        if size_value > 0:
+            if self._score_has_any(text, ["2160", "4k", "uhd", "remux", "原盘"]) and size_value < 8:
+                score -= 6
+                risks.append(f"体积 {size_text} 偏小，需留意是否压制过度")
+            elif self._score_has_any(text, ["1080", "web-dl", "bluray"]) and size_value >= 4:
+                score += 3
+                reasons.append(f"体积 {size_text} 较充足 +3")
+        if peers >= 30 and seeders >= min_seeders:
+            score += 4
+            reasons.append("热度稳定 +4")
+
+        final_score = max(0, min(100, score))
+        decision = self._score_decision(
+            score=final_score,
+            risk_reasons=risks,
+            hard_risk_reasons=hard_risks,
+            preferences=prefs,
+            default_action="auto_download_pt",
+        )
+        return {
+            **decision,
+            "source_type": "pt",
+            "score_reasons": reasons,
+            "seeders": seeders,
+            "peers": peers,
+            "min_seeders": min_seeders,
+            "volume_factor": volume,
+            "site_name": site_name,
+            "resource_team": group_name,
+        }
+
+    def _attach_cloud_scores(
+        self,
+        items: List[Dict[str, Any]],
+        *,
+        preferences: Optional[Dict[str, Any]] = None,
+        source_type: str = "cloud",
+        target_path: str = "",
+    ) -> List[Dict[str, Any]]:
+        return [
+            {
+                **dict(item or {}),
+                "score": self._score_cloud_resource(
+                    dict(item or {}),
+                    preferences=preferences,
+                    source_type=source_type,
+                    target_path=target_path,
+                ),
+            }
+            for item in items
+            if isinstance(item, dict)
+        ]
+
+    @staticmethod
+    def _format_score_label(item: Dict[str, Any]) -> str:
+        score = item.get("score") if isinstance(item.get("score"), dict) else {}
+        if not score:
+            return ""
+        try:
+            value = int(float(score.get("score") or 0))
+        except Exception:
+            value = 0
+        action = AgentResourceOfficer._clean_text(score.get("recommended_action"))
+        if score.get("can_auto_execute"):
+            suffix = "可自动入库"
+        elif action == "ask_confirm":
+            suffix = "建议确认"
+        else:
+            suffix = "不建议自动"
+        return f"{value}分 {suffix}"
+
+    @staticmethod
+    def _score_decision_label(value: Any) -> str:
+        action = AgentResourceOfficer._clean_text(value)
+        if action == "ask_confirm":
+            return "建议确认"
+        if action == "do_not_auto":
+            return "不建议自动"
+        if action == "auto_ingest_cloud":
+            return "可自动入库"
+        if action == "auto_download_pt":
+            return "可自动下载"
+        return action or "待判断"
+
+    def _score_brief_item(self, item: Dict[str, Any], fallback_index: int = 0) -> Dict[str, Any]:
+        current = dict(item or {})
+        score = current.get("score") if isinstance(current.get("score"), dict) else {}
+        if not score:
+            return {}
+        torrent = current.get("torrent_info") if isinstance(current.get("torrent_info"), dict) else {}
+        index = self._safe_int(
+            current.get("pick_index") or current.get("index") or fallback_index,
+            fallback_index,
+        )
+        title = (
+            self._clean_text(torrent.get("title"))
+            or self._clean_text(current.get("note"))
+            or self._clean_text(current.get("title") or current.get("matched_title"))
+            or "未命名资源"
+        )
+        provider = (
+            self._clean_text(current.get("pan_type") or current.get("channel"))
+            or self._clean_text(torrent.get("site_name"))
+            or self._clean_text(current.get("site"))
+        )
+        reasons = [self._clean_text(value) for value in (score.get("score_reasons") or []) if self._clean_text(value)]
+        risks = [self._clean_text(value) for value in (score.get("risk_reasons") or []) if self._clean_text(value)]
+        hard_risks = [self._clean_text(value) for value in (score.get("hard_risk_reasons") or []) if self._clean_text(value)]
+        brief = {
+            "index": index,
+            "title": title[:160],
+            "provider": provider,
+            "source_type": self._clean_text(score.get("source_type")),
+            "score": self._safe_int(score.get("score"), 0),
+            "score_level": self._clean_text(score.get("score_level")),
+            "recommended_action": self._clean_text(score.get("recommended_action")),
+            "can_auto_execute": bool(score.get("can_auto_execute")),
+            "score_reasons": reasons[:3],
+            "risk_reasons": risks[:2],
+            "hard_risk_reasons": hard_risks[:2],
+        }
+        points_text = self._resource_points_text(current) if current and brief.get("source_type") != "pt" else ""
+        if points_text and points_text != "积分未知":
+            brief["points_text"] = points_text
+        seeders = torrent.get("seeders") if torrent else score.get("seeders")
+        if seeders is not None:
+            brief["seeders"] = seeders
+        volume = self._clean_text(torrent.get("volume_factor") if torrent else score.get("volume_factor"))
+        if volume:
+            brief["volume_factor"] = volume
+        size = self._clean_text(current.get("share_size") or current.get("size") or torrent.get("size"))
+        if size:
+            brief["size"] = size
+        return brief
+
+    def _score_summary(self, items: List[Dict[str, Any]], *, limit: int = 5) -> Dict[str, Any]:
+        scored: List[Dict[str, Any]] = []
+        for index, item in enumerate(items or [], 1):
+            if not isinstance(item, dict):
+                continue
+            brief = self._score_brief_item(item, fallback_index=index)
+            if brief:
+                scored.append(brief)
+        scored.sort(key=lambda value: (
+            1 if value.get("can_auto_execute") else 0,
+            self._safe_int(value.get("score"), 0),
+        ), reverse=True)
+        auto_count = len([item for item in scored if item.get("can_auto_execute")])
+        confirm_count = len([item for item in scored if item.get("recommended_action") == "ask_confirm"])
+        blocked_count = len([item for item in scored if item.get("hard_risk_reasons")])
+        warning_count = len([item for item in scored if item.get("risk_reasons")])
+        summary = {
+            "total_scored": len(scored),
+            "auto_count": auto_count,
+            "confirm_count": confirm_count,
+            "blocked_count": blocked_count,
+            "warning_count": warning_count,
+            "best": scored[0] if scored else None,
+            "top_recommendations": scored[:max(1, min(10, self._safe_int(limit, 5)))],
+        }
+        summary["decision"] = self._score_summary_decision(summary)
+        return summary
+
+    def _score_summary_decision(self, summary: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        data = dict(summary or {})
+        best = data.get("best") if isinstance(data.get("best"), dict) else {}
+        if not best:
+            return {
+                "stage": "no_scored_items",
+                "label": "暂无评分结果",
+                "requires_confirmation": False,
+                "prefer_plan_first": True,
+                "decision_hint": "当前没有可评分条目，先完成搜索或选择后再判断。",
+                "command_policy": "none",
+                "preferred_requires_confirmation": False,
+                "fallback_requires_confirmation": False,
+                "can_auto_run_preferred": False,
+                "preferred_command": "",
+                "fallback_command": "",
+                "compact_commands": [],
+                "recommended_commands": [],
+            }
+        choice = self._safe_int(best.get("index"), 0)
+        source_type = self._clean_text(best.get("source_type")).lower()
+        recommended_action = self._clean_text(best.get("recommended_action"))
+        title = self._clean_text(best.get("title"))
+        hard_risks = [self._clean_text(value) for value in (best.get("hard_risk_reasons") or []) if self._clean_text(value)]
+        risks = [self._clean_text(value) for value in (best.get("risk_reasons") or []) if self._clean_text(value)]
+        risks = [risk for risk in risks if risk not in hard_risks]
+        is_pt = source_type == "pt"
+        detail_command = f"选择 {choice}" if is_pt else f"选择 {choice} 详情"
+        plan_command = f"下载{choice}" if is_pt else f"计划选择 {choice}"
+        commands = [command for command in [detail_command if choice else "", plan_command if choice else "", "执行计划"] if command]
+        if best.get("can_auto_execute"):
+            hint = f"当前最高分候选是 #{choice}{'：' + title if title else ''}，已达到自动化阈值，但默认仍建议先生成计划再执行。"
+            stage = "auto_candidate"
+        elif hard_risks:
+            hint = f"当前最高分候选是 #{choice}{'：' + title if title else ''}，但存在硬风险，不能自动执行。"
+            stage = "blocked"
+        elif recommended_action == "ask_confirm":
+            hint = f"当前最高分候选是 #{choice}{'：' + title if title else ''}，风险可控，建议先看详情再决定。"
+            stage = "confirm"
+        else:
+            hint = f"当前最高分候选是 #{choice}{'：' + title if title else ''}，但综合评分偏低，不建议直接处理。"
+            stage = "low_score"
+        return {
+            "stage": stage,
+            "label": self._score_decision_label("auto_download_pt" if best.get("can_auto_execute") and is_pt else "auto_ingest_cloud" if best.get("can_auto_execute") else recommended_action),
+            "source_type": source_type,
+            "choice": choice,
+            "title": title[:160],
+            "score": self._safe_int(best.get("score"), 0),
+            "requires_confirmation": not bool(best.get("can_auto_execute")),
+            "prefer_plan_first": True,
+            "command_policy": "read_then_confirm_write" if len(commands) > 1 else "safe_read_only",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": bool(len(commands) > 1),
+            "can_auto_run_preferred": bool(commands),
+            "preferred_command": commands[0] if commands else "",
+            "fallback_command": commands[1] if len(commands) > 1 else "",
+            "compact_commands": commands[:2],
+            "recommended_commands": commands,
+            "decision_hint": hint,
+            "top_hard_risk": hard_risks[0] if hard_risks else "",
+            "top_warning": risks[0] if risks else "",
+        }
+
+    @staticmethod
+    def _format_score_summary_decision_lines(summary: Optional[Dict[str, Any]]) -> List[str]:
+        data = dict(summary or {})
+        decision = data.get("decision") if isinstance(data.get("decision"), dict) else {}
+        if not decision:
+            return []
+        lines: List[str] = []
+        label = AgentResourceOfficer._clean_text(decision.get("label"))
+        hint = AgentResourceOfficer._clean_text(decision.get("decision_hint"))
+        commands = [AgentResourceOfficer._clean_text(item) for item in (decision.get("compact_commands") or decision.get("recommended_commands") or []) if AgentResourceOfficer._clean_text(item)]
+        if label:
+            lines.append(f"决策建议：{label}")
+        if hint:
+            lines.append(f"建议：{hint}")
+        if commands:
+            lines.append("下一步：" + " / ".join(commands))
+        return lines
+
+    def _best_scored_source_item(self, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        candidates = [
+            dict(item or {})
+            for item in (items or [])
+            if isinstance(item, dict) and isinstance(item.get("score"), dict)
+        ]
+        if not candidates:
+            return {}
+        return max(
+            candidates,
+            key=lambda item: (
+                1 if (item.get("score") or {}).get("can_auto_execute") else 0,
+                self._safe_int((item.get("score") or {}).get("score"), 0),
+                self._safe_int(item.get("index") or item.get("pick_index"), 0),
+            ),
+        )
+
+    def _format_cloud_item_detail_text(self, item: Dict[str, Any], *, title: str = "云盘资源详情") -> str:
+        current = dict(item or {})
+        score = current.get("score") if isinstance(current.get("score"), dict) else {}
+        score_summary = self._score_summary([current], limit=1) if score else {}
+        index = self._safe_int(current.get("index") or current.get("pick_index"), 0)
+        name = (
+            self._clean_text(current.get("note"))
+            or self._clean_text(current.get("title"))
+            or self._clean_text(current.get("matched_title"))
+            or "未命名资源"
+        )
+        provider = self._clean_text(current.get("channel") or current.get("pan_type") or current.get("provider"))
+        size = self._clean_text(current.get("share_size") or current.get("size"))
+        resolution = self._clean_text(current.get("resolution"))
+        source = self._clean_text(current.get("source") or current.get("source_name"))
+        points = self._resource_points_text(current)
+        lines = [title]
+        if index:
+            lines.append(f"编号：{index}")
+        lines.append(f"资源：{name}")
+        if provider:
+            lines.append(f"网盘：{provider}")
+        if points:
+            lines.append(f"积分：{points}")
+        if resolution:
+            lines.append(f"分辨率：{resolution}")
+        if size:
+            lines.append(f"大小：{size}")
+        if source:
+            lines.append(f"来源：{source}")
+        if score:
+            lines.append(f"评分：{self._safe_int(score.get('score'), 0)} / {self._clean_text(score.get('score_level')) or '-'}")
+            reasons = [self._clean_text(value) for value in (score.get("score_reasons") or []) if self._clean_text(value)]
+            hard_risks = [self._clean_text(value) for value in (score.get("hard_risk_reasons") or []) if self._clean_text(value)]
+            risks = [self._clean_text(value) for value in (score.get("risk_reasons") or []) if self._clean_text(value)]
+            risks = [risk for risk in risks if risk not in hard_risks]
+            if reasons:
+                lines.append("加分理由：" + "；".join(reasons[:6]))
+            if hard_risks:
+                lines.append("硬风险：" + "；".join(hard_risks[:6]))
+            if risks:
+                lines.append("提醒：" + "；".join(risks[:6]))
+        lines.extend(self._format_score_summary_decision_lines(score_summary))
+        return "\n".join(lines)
+
+    def _assistant_scoring_policy_public_data(self) -> Dict[str, Any]:
+        prefs = self._default_assistant_preferences()
+        return {
+            "schema_version": "scoring_policy.v1",
+            "owner": "plugin_rules",
+            "agent_role": "explain_and_confirm_only",
+            "summary": "评分由插件内置规则执行；外部智能体只读取 score_summary、解释原因、请求确认，不能绕过硬风险。",
+            "global_decision": {
+                "auto_execute_requires": [
+                    "auto_ingest_enabled=true",
+                    "score >= auto_ingest_score_threshold",
+                    "hard_risk_reasons 为空",
+                ],
+                "confirm_range": "confirm_score_threshold <= score < auto_ingest_score_threshold 且无硬风险",
+                "default_source": "plugin_config_then_session_preferences",
+                "default_confirm_score_threshold": prefs.get("confirm_score_threshold"),
+                "default_auto_ingest_score_threshold": prefs.get("auto_ingest_score_threshold"),
+                "auto_ingest_default": prefs.get("auto_ingest_enabled"),
+            },
+            "cloud": {
+                "source_types": ["hdhive", "pansou", "115", "quark"],
+                "positive_signals": [
+                    "4K/UHD",
+                    "杜比视界/HDR",
+                    "中文字幕",
+                    "全集/完整季/更新完整度",
+                    "REMUX/原盘/Web-DL/高码率",
+                    "匹配网盘偏好",
+                    "匹配默认目录",
+                ],
+                "hard_gates": [
+                    "影巢积分超过 hdhive_max_unlock_points 时禁止自动解锁",
+                    "影巢积分未知时禁止自动解锁",
+                ],
+                "default_hdhive_max_unlock_points": prefs.get("hdhive_max_unlock_points"),
+                "pansou_cost": "无积分成本，主要按质量、完整度、字幕和网盘类型评分",
+            },
+            "pt": {
+                "source_types": ["moviepilot_native_search", "torrent_search", "subscribe_search"],
+                "positive_signals": [
+                    "做种数高",
+                    "免费/促销/FreeLeech",
+                    "4K/UHD",
+                    "杜比视界/HDR",
+                    "字幕信息",
+                    "REMUX/原盘/Web-DL/高码率",
+                    "季/全集标识",
+                ],
+                "hard_gates": [
+                    "做种数 0 禁止自动下载",
+                    "做种数低于 pt_min_seeders 禁止自动下载",
+                    "用户要求免费时，非免费资源禁止自动下载",
+                ],
+                "default_pt_min_seeders": prefs.get("pt_min_seeders"),
+                "volume_factor_note": "免费/促销明显加分；普通资源默认中性，不强行判废",
+            },
+            "score_summary_contract": {
+                "read_fields": [
+                    "best",
+                    "top_recommendations",
+                    "decision",
+                    "score",
+                    "score_level",
+                    "recommended_action",
+                    "can_auto_execute",
+                    "score_reasons",
+                    "risk_reasons",
+                    "hard_risk_reasons",
+                ],
+                "decision_fields": [
+                    "stage",
+                    "label",
+                    "choice",
+                    "decision_hint",
+                    "preferred_command",
+                    "fallback_command",
+                    "compact_commands",
+                    "recommended_commands",
+                ],
+                "blocked_count": "只统计 hard_risk_reasons，不统计缺字幕等软提醒",
+                "warning_count": "统计 risk_reasons，用于解释需要用户确认的原因",
+                "do_not_parse": "不要解析自然语言 message 来判断自动化，优先读取 score_summary",
+            },
+        }
+
+    @staticmethod
+    def _format_bytes_size(value: Any) -> str:
+        try:
+            size = float(value or 0)
+        except Exception:
+            return ""
+        if size <= 0:
+            return ""
+        units = ["B", "KB", "MB", "GB", "TB"]
+        index = 0
+        while size >= 1024 and index < len(units) - 1:
+            size /= 1024
+            index += 1
+        return f"{size:.2f}{units[index]}" if index else f"{int(size)}B"
+
+    def _mp_context_preview_item(self, context: Any, index: int, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        torrent = getattr(context, "torrent_info", None)
+        meta = getattr(context, "meta_info", None)
+        media = getattr(context, "media_info", None)
+        item = {
+            "index": index,
+            "torrent_info": {
+                "title": self._clean_text(getattr(torrent, "title", "")),
+                "size": self._format_bytes_size(getattr(torrent, "size", None)),
+                "seeders": getattr(torrent, "seeders", None),
+                "peers": getattr(torrent, "peers", None),
+                "site_name": self._clean_text(getattr(torrent, "site_name", "")),
+                "volume_factor": self._clean_text(getattr(torrent, "volume_factor", "")),
+                "page_url": self._clean_text(getattr(torrent, "page_url", "")),
+            },
+            "meta_info": {
+                "season_episode": self._clean_text(getattr(meta, "season_episode", "")),
+                "resource_team": self._clean_text(getattr(meta, "resource_team", "")),
+                "video_encode": self._clean_text(getattr(meta, "video_encode", "")),
+                "edition": self._clean_text(getattr(meta, "edition", "")),
+                "resource_pix": self._clean_text(getattr(meta, "resource_pix", "")),
+            },
+            "media_info": {
+                "title": self._clean_text(getattr(media, "title", "")),
+                "year": self._clean_text(getattr(media, "year", "")),
+                "tmdb_id": getattr(media, "tmdb_id", None),
+                "douban_id": getattr(media, "douban_id", None),
+            },
+        }
+        item["score"] = self._score_pt_resource(item, preferences=preferences)
+        return item
+
+    def _mp_search_cache_preview(self, cache_key: str, preferences: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
+        try:
+            cache = self._ensure_feishu_channel()._get_search_cache(cache_key)
+        except Exception:
+            cache = None
+        results = (cache or {}).get("results") or []
+        preview: List[Dict[str, Any]] = []
+        for index, context in enumerate(results[:max(1, limit)], 1):
+            preview.append(self._mp_context_preview_item(context, index, preferences))
+        return preview
+
+    def _format_mp_search_text(self, keyword: str, message_text: str, preview: List[Dict[str, Any]]) -> str:
+        lines = [message_text.strip()] if message_text else [f"MP 原生搜索：{keyword}"]
+        if preview:
+            score_summary = self._score_summary(preview, limit=5)
+            lines.append("")
+            lines.append("PT 评分摘要：")
+            for item in preview[:10]:
+                torrent = item.get("torrent_info") or {}
+                score = item.get("score") or {}
+                title = torrent.get("title") or "未命名资源"
+                lines.append(f"{item.get('index')}. {self._format_score_label(item)} | [{torrent.get('site_name') or '未知站点'}] {title}")
+                details = [
+                    f"做种：{torrent.get('seeders') if torrent.get('seeders') is not None else '?'}",
+                    f"促销：{torrent.get('volume_factor') or '普通'}",
+                    f"大小：{torrent.get('size') or '未知'}",
+                ]
+                hard_risks = score.get("hard_risk_reasons") or []
+                risks = score.get("risk_reasons") or []
+                risks = [risk for risk in risks if risk not in hard_risks]
+                if hard_risks:
+                    details.append("硬风险：" + "；".join(str(item) for item in hard_risks[:2]))
+                elif risks:
+                    details.append("提醒：" + "；".join(str(item) for item in risks[:2]))
+                lines.append("   " + " | ".join(details))
+            lines.extend(self._format_score_summary_decision_lines(score_summary))
+            lines.append("下载/订阅属于写入动作，默认请先生成 plan_id，再确认执行。")
+        return "\n".join(line for line in lines if line)
+
+    async def _assistant_mp_media_detail(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        cache_key: str,
+        media_type: str = "",
+        year: str = "",
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_media_detail(
+            keyword=keyword,
+            media_type=media_type,
+            year=year,
+        )
+        item = result.get("item") if isinstance(result.get("item"), dict) else {}
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_media_detail",
+            "stage": "media_detail",
+            "keyword": keyword,
+            "items": [item] if item else [],
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "媒体识别完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_media_detail",
+                "ok": bool(result.get("success")),
+                "keyword": keyword,
+                "media_type": media_type,
+                "year": year,
+                "item": item,
+            }),
+        }
+
+    async def _assistant_mp_media_search(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        message_text = self._ensure_feishu_channel()._execute_media_search(keyword, cache_key)
+        failed_prefixes = ("MP 原生搜索失败", "未识别到媒体信息", "搜索资源失败")
+        route_ok = not any(message_text.startswith(prefix) for prefix in failed_prefixes)
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        self._save_session(cache_key, {
+            "kind": "assistant_mp",
+            "stage": "search_result",
+            "keyword": keyword,
+            "items": preview,
+            "target_path": "",
+        })
+        return {
+            "success": route_ok,
+            "message": self._format_mp_search_text(keyword, message_text, preview),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_media_search",
+                "ok": route_ok,
+                "keyword": keyword,
+                "source_type": "pt",
+                "items": preview,
+                "score_summary": self._score_summary(preview, limit=5),
+                "preferences": preferences,
+            }),
+        }
+
+    async def _assistant_mp_result_detail(
+        self,
+        *,
+        choice: int,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        try:
+            cache = self._ensure_feishu_channel()._get_search_cache(cache_key)
+        except Exception:
+            cache = None
+        results = (cache or {}).get("results") or []
+        if choice <= 0 or choice > len(results):
+            return {
+                "success": False,
+                "message": f"序号超出范围，请输入 1 到 {len(results)} 之间的数字。" if results else "没有可继续的 MP 搜索结果，请先发送“MP搜索 片名”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_search_result_detail",
+                    "ok": False,
+                    "error_code": "mp_result_not_found",
+                }),
+            }
+        item = self._mp_context_preview_item(results[choice - 1], choice, preferences=preferences)
+        torrent = item.get("torrent_info") or {}
+        meta = item.get("meta_info") or {}
+        media = item.get("media_info") or {}
+        score = item.get("score") or {}
+        lines = [
+            f"MP 搜索结果详情 #{choice}",
+            f"标题：{torrent.get('title') or '未命名资源'}",
+            f"站点：{torrent.get('site_name') or '未知站点'}",
+            f"大小：{torrent.get('size') or '未知'}",
+            f"做种：{torrent.get('seeders') if torrent.get('seeders') is not None else '?'} | 下载：{torrent.get('peers') if torrent.get('peers') is not None else '?'} | 促销：{torrent.get('volume_factor') or '普通'}",
+        ]
+        media_text = " / ".join(str(part) for part in [
+            media.get("title"),
+            media.get("year"),
+            f"TMDB:{media.get('tmdb_id')}" if media.get("tmdb_id") else "",
+            f"豆瓣:{media.get('douban_id')}" if media.get("douban_id") else "",
+        ] if part)
+        if media_text:
+            lines.append(f"媒体：{media_text}")
+        meta_text = " / ".join(str(part) for part in [
+            meta.get("season_episode"),
+            meta.get("resource_pix"),
+            meta.get("video_encode"),
+            meta.get("edition"),
+            meta.get("resource_team"),
+        ] if part)
+        if meta_text:
+            lines.append(f"识别标签：{meta_text}")
+        score_label = self._format_score_label(item)
+        if score_label:
+            lines.append(f"评分：{score_label}")
+        reasons = [str(value) for value in (score.get("score_reasons") or []) if value]
+        hard_risks = [str(value) for value in (score.get("hard_risk_reasons") or []) if value]
+        risks = [str(value) for value in (score.get("risk_reasons") or []) if value]
+        risks = [risk for risk in risks if risk not in hard_risks]
+        score_summary = self._score_summary([item], limit=1)
+        if reasons:
+            lines.append("加分理由：" + "；".join(reasons[:6]))
+        if hard_risks:
+            lines.append("硬风险：" + "；".join(hard_risks[:6]))
+        if risks:
+            lines.append("提醒：" + "；".join(risks[:6]))
+        if torrent.get("page_url"):
+            lines.append(f"详情页：{torrent.get('page_url')}")
+        lines.extend(self._format_score_summary_decision_lines(score_summary))
+        self._save_session(cache_key, {
+            "kind": "assistant_mp",
+            "stage": "search_result",
+            "keyword": (cache or {}).get("keyword") or "",
+            "items": self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10),
+            "selected_index": choice,
+            "target_path": "",
+        })
+        return {
+            "success": True,
+            "message": "\n".join(lines),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_search_result_detail",
+                "ok": True,
+                "choice": choice,
+                "item": item,
+                "score_summary": score_summary,
+            }),
+        }
+
+    async def _assistant_mp_best_result_detail(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        scored = [
+            item for item in preview
+            if isinstance(item, dict) and isinstance(item.get("score"), dict)
+        ]
+        if not scored:
+            return {
+                "success": False,
+                "message": "没有可评分的 MP 搜索结果，请先发送“MP搜索 片名”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_search_best_detail",
+                    "ok": False,
+                    "error_code": "mp_best_result_not_found",
+                }),
+            }
+        best = max(
+            scored,
+            key=lambda item: (
+                self._safe_int((item.get("score") or {}).get("score"), 0),
+                self._safe_int(((item.get("torrent_info") or {}).get("seeders")), 0),
+            ),
+        )
+        choice = self._safe_int(best.get("index"), 0)
+        result = await self._assistant_mp_result_detail(
+            choice=choice,
+            session=session,
+            cache_key=cache_key,
+            preferences=preferences,
+        )
+        if result.get("success"):
+            result["message"] = f"当前评分最高的 PT 候选是 #{choice}\n{result.get('message') or ''}".strip()
+            data = dict(result.get("data") or {})
+            data["action"] = "mp_search_best_detail"
+            data["best_choice"] = choice
+            result["data"] = data
+        return result
+
+    async def _assistant_mp_best_download_plan(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        scored = [
+            item for item in preview
+            if isinstance(item, dict) and isinstance(item.get("score"), dict)
+        ]
+        if not scored:
+            return {
+                "success": False,
+                "message": "没有可评分的 MP 搜索结果，请先发送“MP搜索 片名”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_best_download_plan",
+                    "ok": False,
+                    "error_code": "mp_best_result_not_found",
+                }),
+            }
+        best = max(
+            scored,
+            key=lambda item: (
+                self._safe_int((item.get("score") or {}).get("score"), 0),
+                self._safe_int(((item.get("torrent_info") or {}).get("seeders")), 0),
+            ),
+        )
+        choice = self._safe_int(best.get("index"), 0)
+        result = self._assistant_mp_download_plan_response(
+            choice=choice,
+            session=session,
+            cache_key=cache_key,
+            preferences=preferences,
+            workflow="mp_best_download",
+            message="最佳片源下载计划已生成",
+        )
+        if result.get("success"):
+            result["message"] = "\n".join(line for line in [
+                f"已选择当前评分最高的 PT 候选：#{choice}",
+                result.get("message") or "",
+            ] if line)
+            data = dict(result.get("data") or {})
+            data["choice"] = choice
+            data["item"] = best
+            result["data"] = data
+        return result
+
+    @staticmethod
+    def _assistant_score_warning_text(score: Dict[str, Any], *, limit: int = 3) -> str:
+        risks = [str(value) for value in (score.get("risk_reasons") or []) if value]
+        if not risks:
+            return ""
+        return "风险提示：" + "；".join(risks[:max(1, limit)])
+
+    def _assistant_mp_download_plan_response(
+        self,
+        *,
+        choice: int,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+        workflow: str = "mp_download",
+        message: str = "PT 下载计划已生成",
+    ) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
+        if not selected:
+            return {
+                "success": False,
+                "message": "没有可继续的 MP 搜索结果，请先发送“MP搜索 片名”后再选择编号。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download",
+                    "ok": False,
+                    "error_code": "mp_result_not_found",
+                    "choice": choice,
+                }),
+            }
+        result = self._save_assistant_pick_plan_response(
+            workflow=workflow,
+            session=session,
+            session_id=cache_key,
+            actions=[{
+                "name": "pick_mp_download",
+                "session": session,
+                "session_id": cache_key,
+                "choice": choice,
+            }],
+            execute_body={
+                "workflow": workflow,
+                "session": session,
+                "session_id": cache_key,
+                "choice": choice,
+                "dry_run": False,
+            },
+            message=message,
+            score_items=[selected],
+            extra_data={
+                "choice": choice,
+                "selected": selected,
+            },
+        )
+        score = selected.get("score") if isinstance(selected.get("score"), dict) else {}
+        warning = self._assistant_score_warning_text(score)
+        if warning:
+            result["message"] = f"{result.get('message')}\n{warning}"
+        return result
+
+    def _assistant_mp_subscribe_plan_response(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        cache_key: str,
+        immediate_search: bool = False,
+    ) -> Dict[str, Any]:
+        keyword = self._clean_text(keyword)
+        if not keyword:
+            return {
+                "success": False,
+                "message": "订阅失败：缺少片名或关键词",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_search" if immediate_search else "mp_subscribe",
+                    "ok": False,
+                    "error_code": "missing_keyword",
+                }),
+            }
+        action_name = "start_mp_subscribe_search" if immediate_search else "start_mp_subscribe"
+        workflow = "mp_subscribe_and_search" if immediate_search else "mp_subscribe"
+        label = "订阅并搜索计划已生成" if immediate_search else "订阅计划已生成"
+        return self._save_assistant_pick_plan_response(
+            workflow=workflow,
+            session=session,
+            session_id=cache_key,
+            actions=[{
+                "name": action_name,
+                "session": session,
+                "session_id": cache_key,
+                "keyword": keyword,
+            }],
+            execute_body={
+                "workflow": workflow,
+                "session": session,
+                "session_id": cache_key,
+                "keyword": keyword,
+                "dry_run": False,
+            },
+            message=label,
+            extra_data={
+                "keyword": keyword,
+                "immediate_search": bool(immediate_search),
+            },
+        )
+
+    def _assistant_mp_download_control_plan_response(
+        self,
+        *,
+        control: str,
+        target: str,
+        session: str,
+        cache_key: str,
+        downloader: str = "",
+        delete_files: bool = False,
+    ) -> Dict[str, Any]:
+        control = self._clean_text(control)
+        target = self._clean_text(target)
+        if not control or not target:
+            return {
+                "success": False,
+                "message": "下载任务操作缺少 control 或 target。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download_control",
+                    "ok": False,
+                    "error_code": "invalid_download_control_args",
+                }),
+            }
+        if not self._resolve_mp_download_task_target(target=target, cache_key=cache_key):
+            return {
+                "success": False,
+                "message": "未找到可操作的下载任务。请先发送“下载任务”获取列表，再按编号操作；也可以直接传 40 位任务 hash。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download_control",
+                    "ok": False,
+                    "error_code": "download_target_not_found",
+                    "target": target,
+                }),
+            }
+        downloader = self._clean_text(downloader)
+        return self._save_assistant_pick_plan_response(
+            workflow="mp_download_control",
+            session=session,
+            session_id=cache_key,
+            actions=[{
+                "name": "mp_download_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+                "downloader": downloader,
+                "delete_files": delete_files,
+            }],
+            execute_body={
+                "workflow": "mp_download_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+                "downloader": downloader,
+                "delete_files": delete_files,
+                "dry_run": False,
+            },
+            message="下载任务操作计划已生成",
+            extra_data={
+                "control": control,
+                "target": target,
+            },
+        )
+
+    def _assistant_mp_subscribe_control_plan_response(
+        self,
+        *,
+        control: str,
+        target: str,
+        session: str,
+        cache_key: str,
+        allow_raw_id: bool = False,
+    ) -> Dict[str, Any]:
+        control = self._clean_text(control)
+        target = self._clean_text(target)
+        if not control or not target:
+            return {
+                "success": False,
+                "message": "订阅操作缺少 control 或 target。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_control",
+                    "ok": False,
+                    "error_code": "invalid_subscribe_control_args",
+                }),
+            }
+        if not self._resolve_mp_subscribe_target(target=target, cache_key=cache_key, allow_raw_id=allow_raw_id):
+            return {
+                "success": False,
+                "message": "未找到可操作的订阅。请先发送“订阅列表”获取列表，再按编号操作；也可以直接传订阅 ID。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_control",
+                    "ok": False,
+                    "error_code": "subscribe_target_not_found",
+                    "target": target,
+                }),
+            }
+        return self._save_assistant_pick_plan_response(
+            workflow="mp_subscribe_control",
+            session=session,
+            session_id=cache_key,
+            actions=[{
+                "name": "mp_subscribe_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+            }],
+            execute_body={
+                "workflow": "mp_subscribe_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+                "dry_run": False,
+            },
+            message="订阅操作计划已生成",
+            extra_data={
+                "control": control,
+                "target": target,
+            },
+        )
+
+    async def _assistant_mp_download(self, *, choice: int, session: str, cache_key: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
+        score = selected.get("score") if isinstance(selected.get("score"), dict) else {}
+        message_text = self._ensure_feishu_channel()._execute_media_download(choice, cache_key)
+        ok = not message_text.startswith("下载资源失败") and not message_text.startswith("没有可用")
+        warning = self._assistant_score_warning_text(score)
+        if warning:
+            message_text = f"{warning}\n{message_text}".strip()
+        return {
+            "success": ok,
+            "message": message_text,
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download",
+                "ok": ok,
+                "choice": choice,
+                "selected": selected,
+                "score": score,
+                "write_effect": "write",
+            }),
+        }
+
+    async def _assistant_mp_subscribe(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        immediate_search: bool = False,
+    ) -> Dict[str, Any]:
+        keyword = self._clean_text(keyword)
+        if not keyword:
+            return {
+                "success": False,
+                "message": "订阅失败：缺少片名或关键词",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_search" if immediate_search else "mp_subscribe",
+                    "ok": False,
+                    "error_code": "missing_keyword",
+                }),
+            }
+        message_text = self._ensure_feishu_channel()._execute_media_subscribe(keyword, immediate_search)
+        ok = not message_text.startswith("订阅失败")
+        return {
+            "success": ok,
+            "message": message_text,
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_subscribe_search" if immediate_search else "mp_subscribe",
+                "ok": ok,
+                "keyword": keyword,
+                "immediate_search": bool(immediate_search),
+                "write_effect": "write",
+            }),
+        }
+
+    def _resolve_mp_download_task_target(self, *, target: str, cache_key: str) -> Dict[str, Any]:
+        target_text = self._clean_text(target)
+        state = self._load_session(cache_key) or {}
+        items = state.get("items") if isinstance(state.get("items"), list) else []
+        index = self._safe_int(target_text, 0)
+        if index > 0:
+            for item in items:
+                if self._safe_int(item.get("index"), 0) == index:
+                    return dict(item)
+        hash_match = re.search(r"\b[0-9a-fA-F]{40}\b", target_text)
+        if hash_match:
+            task_hash = hash_match.group(0)
+            return {"hash": task_hash, "hash_short": task_hash[:8]}
+        short_hash_match = re.search(r"\b[0-9a-fA-F]{6,12}\b", target_text)
+        if short_hash_match:
+            short_hash = short_hash_match.group(0).lower()
+            for item in items:
+                task_hash = self._clean_text(item.get("hash")).lower()
+                if task_hash.startswith(short_hash):
+                    return dict(item)
+        return {}
+
+    async def _assistant_mp_download_tasks(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        status: str = "downloading",
+        title: str = "",
+        hash_value: str = "",
+        downloader: str = "",
+        limit: int = 10,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_download_tasks(
+            downloader=downloader,
+            status=status or "downloading",
+            title=title,
+            hash_value=hash_value,
+            limit=max(1, min(30, self._safe_int(limit, 10))),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_download_tasks",
+            "stage": "download_tasks",
+            "keyword": title or hash_value or status or "downloading",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载任务查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download_tasks",
+                "ok": bool(result.get("success")),
+                "status": result.get("status") or status,
+                "items": items,
+                "total": result.get("total", len(items)),
+            }),
+        }
+
+    async def _assistant_mp_download_control(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        control: str,
+        target: str,
+        downloader: str = "",
+        delete_files: bool = False,
+    ) -> Dict[str, Any]:
+        selected = self._resolve_mp_download_task_target(target=target, cache_key=cache_key)
+        task_hash = self._clean_text(selected.get("hash"))
+        if not task_hash:
+            return {
+                "success": False,
+                "message": "操作下载任务失败：请先发送“下载任务”获取列表，再按编号操作，例如“暂停下载 1”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download_control",
+                    "ok": False,
+                    "error_code": "missing_download_task_hash",
+                    "target": target,
+                }),
+            }
+        result = self._ensure_feishu_channel()._control_download_task(
+            action=control,
+            hash_value=task_hash,
+            downloader=downloader or self._clean_text(selected.get("downloader")),
+            delete_files=delete_files,
+        )
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载任务操作完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download_control",
+                "ok": bool(result.get("success")),
+                "control": control,
+                "target": target,
+                "selected": selected,
+                "result": result,
+                "write_effect": "write",
+            }),
+        }
+
+    async def _assistant_mp_download_history(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_download_history(
+            title=title,
+            hash_value=hash_value,
+            limit=max(1, min(50, self._safe_int(limit, 10))),
+            page=max(1, self._safe_int(page, 1)),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_download_history",
+            "stage": "download_history",
+            "keyword": title or hash_value or "all",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载历史查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_download_history",
+                "ok": bool(result.get("success")),
+                "source_type": "moviepilot_download_history",
+                "title": title,
+                "hash": hash_value,
+                "items": items,
+                "total": self._safe_int(result.get("total"), len(items)),
+                "page": self._safe_int(result.get("page"), page),
+                "limit": self._safe_int(result.get("limit"), limit),
+            }),
+        }
+
+    async def _assistant_mp_downloaders(self, *, session: str, cache_key: str) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_downloaders()
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_downloaders",
+            "stage": "downloaders",
+            "keyword": "downloaders",
+            "items": items,
+            "enabled_count": self._safe_int(result.get("enabled_count"), 0),
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "下载器查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_downloaders",
+                "ok": bool(result.get("success")),
+                "items": items,
+                "enabled_count": self._safe_int(result.get("enabled_count"), 0),
+            }),
+        }
+
+    async def _assistant_mp_sites(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        status: str = "active",
+        name: str = "",
+        limit: int = 30,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_sites(
+            status=status or "active",
+            name=name,
+            limit=max(1, min(100, self._safe_int(limit, 30))),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_sites",
+            "stage": "sites",
+            "keyword": name or status or "active",
+            "items": items,
+            "status": result.get("status") or status,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "站点查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_sites",
+                "ok": bool(result.get("success")),
+                "status": result.get("status") or status,
+                "items": items,
+                "total": self._safe_int(result.get("total"), 0),
+            }),
+        }
+
+    def _resolve_mp_subscribe_target(self, *, target: str, cache_key: str, allow_raw_id: bool = False) -> Dict[str, Any]:
+        target_text = self._clean_text(target)
+        state = self._load_session(cache_key) or {}
+        items = state.get("items") if isinstance(state.get("items"), list) else []
+        index = self._safe_int(target_text, 0)
+        if index > 0:
+            for item in items:
+                if self._safe_int(item.get("index"), 0) == index or self._safe_int(item.get("id"), 0) == index:
+                    return dict(item)
+            if allow_raw_id:
+                return {"id": index}
+        return {}
+
+    async def _assistant_mp_subscribes(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        status: str = "all",
+        media_type: str = "all",
+        name: str = "",
+        limit: int = 20,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_subscribes(
+            status=status or "all",
+            media_type=media_type or "all",
+            name=name,
+            limit=max(1, min(100, self._safe_int(limit, 20))),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_subscribes",
+            "stage": "subscribe_list",
+            "keyword": name or status or "all",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "订阅查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_subscribes",
+                "ok": bool(result.get("success")),
+                "status": result.get("status") or status,
+                "items": items,
+                "total": self._safe_int(result.get("total"), len(items)),
+            }),
+        }
+
+    async def _assistant_mp_subscribe_control(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        control: str,
+        target: str,
+        allow_raw_id: bool = False,
+    ) -> Dict[str, Any]:
+        selected = self._resolve_mp_subscribe_target(target=target, cache_key=cache_key, allow_raw_id=allow_raw_id)
+        subscribe_id = self._safe_int(selected.get("id") or target, 0)
+        if subscribe_id <= 0:
+            return {
+                "success": False,
+                "message": "操作订阅失败：请先发送“订阅列表”获取列表，再按编号操作，例如“搜索订阅 1”。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_control",
+                    "ok": False,
+                    "error_code": "missing_subscribe_id",
+                    "target": target,
+                }),
+            }
+        result = self._ensure_feishu_channel()._control_subscribe(action=control, subscribe_id=subscribe_id)
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "订阅操作完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_subscribe_control",
+                "ok": bool(result.get("success")),
+                "control": control,
+                "target": target,
+                "selected": selected,
+                "result": result,
+                "write_effect": "write",
+            }),
+        }
+
+    async def _assistant_mp_transfer_history(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        status: str = "all",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_transfer_history(
+            title=title,
+            status=status or "all",
+            limit=max(1, min(50, self._safe_int(limit, 10))),
+            page=max(1, self._safe_int(page, 1)),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_transfer_history",
+            "stage": "transfer_history",
+            "keyword": title or status or "all",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": self._clean_text(result.get("message")) or "整理历史查询完成",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_transfer_history",
+                "ok": bool(result.get("success")),
+                "source_type": "moviepilot_transfer_history",
+                "status": result.get("status") or status,
+                "title": title,
+                "items": items,
+                "total": self._safe_int(result.get("total"), len(items)),
+                "page": self._safe_int(result.get("page"), page),
+                "limit": self._safe_int(result.get("limit"), limit),
+            }),
+        }
+
+    def _assistant_mp_detect_stage(
+        self,
+        *,
+        task_items: List[Dict[str, Any]],
+        download_items: List[Dict[str, Any]],
+        transfer_items: List[Dict[str, Any]],
+    ) -> str:
+        def has_term(value: Any, terms: List[str]) -> bool:
+            text = self._clean_text(value).lower()
+            return bool(text) and any(term in text for term in terms)
+
+        failed_terms = ["失败", "错误", "error", "fail", "未识别", "识别失败", "入库失败", "整理失败"]
+        success_terms = ["成功", "完成", "已入库", "已整理", "已转移", "imported", "success", "completed"]
+        running_terms = ["处理中", "进行中", "转移中", "整理中", "入库中", "等待", "队列", "pending", "running"]
+
+        for item in transfer_items:
+            if has_term(item.get("status_text") or item.get("status"), failed_terms):
+                return "failed"
+        for item in download_items:
+            if has_term(item.get("transfer_status_text") or item.get("transfer_status"), failed_terms):
+                return "failed"
+
+        if task_items:
+            return "downloading"
+
+        for item in transfer_items:
+            status_value = item.get("status_text") or item.get("status")
+            if has_term(status_value, success_terms):
+                return "imported"
+            if has_term(status_value, running_terms):
+                return "transferring"
+
+        for item in download_items:
+            transfer_value = item.get("transfer_status_text") or item.get("transfer_status")
+            if has_term(transfer_value, success_terms):
+                return "imported"
+            if has_term(transfer_value, running_terms):
+                return "transferring"
+
+        if transfer_items:
+            return "transferring"
+        if download_items:
+            return "downloaded"
+        return "not_found"
+
+    def _assistant_mp_diagnosis_summary(
+        self,
+        *,
+        keyword: str,
+        hash_value: str,
+        task_items: List[Dict[str, Any]],
+        download_items: List[Dict[str, Any]],
+        transfer_items: List[Dict[str, Any]],
+        force_failed: bool = False,
+    ) -> Dict[str, Any]:
+        stage = "failed" if force_failed else self._assistant_mp_detect_stage(
+            task_items=task_items,
+            download_items=download_items,
+            transfer_items=transfer_items,
+        )
+        matched_count = len(task_items) + len(download_items) + len(transfer_items)
+        matched = matched_count > 0
+        evidence: List[str] = []
+        risk_reasons: List[str] = []
+        recommended_action = ""
+        follow_up_hint = ""
+        confidence = 0.0
+
+        if task_items:
+            first_task = task_items[0]
+            evidence.append(
+                f"下载任务 {self._clean_text(first_task.get('title')) or '-'} | "
+                f"{self._clean_text(first_task.get('progress')) or '-'} | "
+                f"{self._clean_text(first_task.get('state')) or '-'}"
+            )
+        if download_items:
+            first_download = download_items[0]
+            evidence.append(
+                f"下载历史 {self._clean_text(first_download.get('title')) or '-'} | "
+                f"{self._clean_text(first_download.get('date')) or '-'} | "
+                f"{self._clean_text(first_download.get('transfer_status_text')) or '-'}"
+            )
+            transfer_status_text = self._clean_text(first_download.get("transfer_status_text"))
+            if transfer_status_text and any(word in transfer_status_text for word in ["失败", "错误"]):
+                risk_reasons.append(f"下载历史显示整理状态异常：{transfer_status_text}")
+        if transfer_items:
+            first_transfer = transfer_items[0]
+            evidence.append(
+                f"整理历史 {self._clean_text(first_transfer.get('title')) or '-'} | "
+                f"{self._clean_text(first_transfer.get('status_text')) or '-'} | "
+                f"{self._clean_text(first_transfer.get('date')) or '-'}"
+            )
+            status_text = self._clean_text(first_transfer.get("status_text"))
+            if status_text and any(word in status_text for word in ["失败", "错误"]):
+                risk_reasons.append(f"整理历史存在失败记录：{status_text}")
+
+        if stage == "downloading":
+            confidence = 0.95
+            recommended_action = "query_mp_download_tasks"
+            follow_up_hint = "资源仍在下载阶段，优先查看下载任务进度。"
+        elif stage == "downloaded":
+            confidence = 0.85
+            recommended_action = "query_mp_transfer_history"
+            follow_up_hint = "已找到下载历史，但还没有明确的入库记录，下一步查看整理/入库历史。"
+        elif stage == "transferring":
+            confidence = 0.9
+            recommended_action = "query_mp_transfer_history"
+            follow_up_hint = "资源已经进入整理/入库链路，优先查看最近整理历史。"
+        elif stage == "imported":
+            confidence = 0.98
+            recommended_action = "query_mp_transfer_history"
+            follow_up_hint = "已经找到成功入库线索，如需确认最终落地可查看最近整理历史。"
+        elif stage == "failed":
+            confidence = 0.92 if matched else 0.65
+            recommended_action = "query_mp_local_diagnose"
+            follow_up_hint = "已发现失败线索，建议进入本地诊断汇总失败原因和下一步处理建议。"
+        elif stage == "not_found":
+            confidence = 0.95
+            recommended_action = "query_mp_download_history"
+            follow_up_hint = "当前没有找到相关下载任务、下载历史或整理记录。先检查是否真的提交过下载/订阅。"
+        else:
+            confidence = 0.5
+            recommended_action = "query_mp_lifecycle_status"
+            follow_up_hint = "状态不足以判断，建议继续查看生命周期聚合结果。"
+
+        if hash_value:
+            evidence.append(f"Hash 检索：{hash_value}")
+        elif keyword:
+            evidence.append(f"关键词检索：{keyword}")
+
+        return {
+            "status": "ok" if matched else "not_found",
+            "matched": matched,
+            "stage": stage,
+            "confidence": confidence,
+            "evidence": evidence[:6],
+            "risk_reasons": risk_reasons[:6],
+            "recommended_action": recommended_action,
+            "follow_up_hint": follow_up_hint,
+        }
+
+    def _assistant_mp_diagnosis_followups(
+        self,
+        *,
+        session: str,
+        session_id: str,
+        keyword: str,
+        hash_value: str,
+        preferred: str,
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        base_body = {
+            "session": session,
+            "session_id": session_id,
+        }
+        keyword_body = dict(base_body)
+        if keyword:
+            keyword_body["keyword"] = keyword
+        if hash_value:
+            keyword_body["hash"] = hash_value
+        action_order = [preferred]
+        for name in ["query_mp_lifecycle_status", "query_mp_download_history", "query_mp_transfer_history", "query_mp_local_diagnose"]:
+            if name not in action_order:
+                action_order.append(name)
+        templates = [
+            self._assistant_action_template(
+                name=name,
+                description={
+                    "query_mp_lifecycle_status": "聚合查看下载任务、下载历史和整理/入库历史",
+                    "query_mp_download_history": "查看下载历史，并确认是否已经提交过下载",
+                    "query_mp_transfer_history": "查看整理/入库历史，确认是否已经落库或失败",
+                    "query_mp_local_diagnose": "汇总本地/PT 链路的失败线索与处理建议",
+                }.get(name, name),
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                tool="agent_resource_officer_execute_action",
+                body={**keyword_body, "name": name, "compact": True},
+            )
+            for name in action_order[:4]
+        ]
+        return action_order[:4], templates
+
+    def _assistant_followup_command(self, action_name: str, *, keyword: str = "", hash_value: str = "") -> str:
+        target = self._clean_text(keyword or hash_value)
+        mapping = {
+            "query_execution_followup": "后续",
+            "query_mp_download_tasks": "下载任务",
+            "query_mp_subscribes": "订阅列表",
+        }
+        if action_name in mapping:
+            return mapping[action_name]
+        if action_name == "query_mp_ingest_status":
+            return f"入库 {target}".strip()
+        if action_name == "query_mp_lifecycle_status":
+            return f"状态 {target}".strip()
+        if action_name == "query_mp_download_history":
+            return f"记录 {target}".strip()
+        if action_name == "query_mp_transfer_history":
+            return f"入库记录 {target}".strip()
+        if action_name == "query_mp_local_diagnose":
+            return f"诊断 {target}".strip()
+        if action_name == "start_mp_media_search":
+            return f"MP搜索 {target}".strip()
+        return ""
+
+    def _assistant_template_command(
+        self,
+        template: Dict[str, Any],
+        *,
+        keyword: str = "",
+        hash_value: str = "",
+        target: str = "",
+    ) -> str:
+        if not isinstance(template, dict):
+            return ""
+        body = dict(template.get("action_body") or template.get("body") or {})
+        action_name = self._clean_text(body.get("name")) or self._clean_text(template.get("name"))
+        target_text = self._clean_text(target or body.get("keyword") or body.get("hash") or body.get("target"))
+        command = self._assistant_followup_command(
+            action_name,
+            keyword=self._clean_text(keyword or body.get("keyword") or target_text),
+            hash_value=self._clean_text(hash_value or body.get("hash")),
+        )
+        if command:
+            return command
+        if action_name == "query_mp_recent_activity":
+            return "最近"
+        if action_name == "execute_session_latest_plan":
+            return "执行计划"
+        if action_name == "mp_download_control":
+            control = self._clean_text(body.get("control"))
+            mapping = {
+                "pause": "暂停下载",
+                "resume": "恢复下载",
+                "delete": "删除下载",
+            }
+            prefix = mapping.get(control)
+            if prefix and target_text:
+                return f"{prefix} {target_text}"
+            return prefix or "下载任务"
+        if action_name == "mp_subscribe_control":
+            control = self._clean_text(body.get("control"))
+            mapping = {
+                "pause": "暂停订阅",
+                "resume": "恢复订阅",
+                "delete": "删除订阅",
+                "search": "搜索订阅",
+            }
+            prefix = mapping.get(control)
+            if prefix and target_text:
+                return f"{prefix} {target_text}"
+            return prefix or "订阅列表"
+        return ""
+
+    def _assistant_error_summary(
+        self,
+        *,
+        error_code: str,
+        recommended_action: str = "",
+        message_head: str = "",
+        next_actions: Optional[List[Any]] = None,
+        action_templates: Optional[List[Dict[str, Any]]] = None,
+        keyword: str = "",
+        hash_value: str = "",
+        target: str = "",
+    ) -> Dict[str, Any]:
+        code = self._clean_text(error_code)
+        if not code:
+            return {}
+        label_map = {
+            "latest_plan_not_executed": "当前会话还有待执行计划",
+            "plan_not_executed": "指定计划还没有执行",
+            "executed_plan_not_found": "当前没有可追踪的已执行计划",
+            "followup_not_available": "当前计划没有自动追踪动作",
+            "invalid_download_control_args": "下载任务参数不完整",
+            "download_target_not_found": "没有匹配到可操作的下载任务",
+            "invalid_subscribe_control_args": "订阅操作参数不完整",
+            "subscribe_target_not_found": "没有匹配到可操作的订阅",
+        }
+        hint_map = {
+            "latest_plan_not_executed": "先执行计划，再继续查看后续状态。",
+            "plan_not_executed": "先执行这条计划，再继续查看执行后追踪。",
+            "executed_plan_not_found": "先执行下载、订阅或转存计划，再查看后续。",
+            "followup_not_available": "当前计划只能改查状态、记录或最近活动。",
+            "invalid_download_control_args": "先发“下载任务”获取列表，再按编号暂停、恢复或删除。",
+            "download_target_not_found": "先发“下载任务”刷新列表，再按编号操作。",
+            "invalid_subscribe_control_args": "先发“订阅列表”获取列表，再按编号暂停、恢复或删除。",
+            "subscribe_target_not_found": "先发“订阅列表”刷新列表，再按编号操作。",
+        }
+        command_candidates: List[str] = []
+        fallback_map = {
+            "latest_plan_not_executed": ["执行计划", "后续"],
+            "plan_not_executed": ["执行计划", "后续"],
+            "executed_plan_not_found": ["最近"],
+            "followup_not_available": [f"状态 {target}".strip(), f"记录 {target}".strip(), "最近"],
+            "invalid_download_control_args": ["下载任务"],
+            "download_target_not_found": ["下载任务"],
+            "invalid_subscribe_control_args": ["订阅列表"],
+            "subscribe_target_not_found": ["订阅列表"],
+        }
+        for command in fallback_map.get(code, []):
+            command_text = self._clean_text(command)
+            if command_text and command_text not in command_candidates:
+                command_candidates.append(command_text)
+        synthetic_templates: List[Dict[str, Any]] = []
+        action_name = self._clean_text(recommended_action)
+        if action_name:
+            synthetic_templates.append({
+                "name": action_name,
+                "action_body": {
+                    "name": action_name,
+                    "keyword": keyword,
+                    "hash": hash_value,
+                    "target": target,
+                },
+            })
+        synthetic_templates.extend(
+            item for item in (action_templates or []) if isinstance(item, dict)
+        )
+        for item in synthetic_templates:
+            command = self._assistant_template_command(
+                item,
+                keyword=keyword,
+                hash_value=hash_value,
+                target=target,
+            )
+            if command and command not in command_candidates:
+                command_candidates.append(command)
+        for name in [self._clean_text(item) for item in (next_actions or []) if self._clean_text(item)]:
+            command = self._assistant_followup_command(name, keyword=keyword or target, hash_value=hash_value)
+            if command and command not in command_candidates:
+                command_candidates.append(command)
+        preferred_requires_confirmation = code in {"latest_plan_not_executed", "plan_not_executed"}
+        return {
+            "error_code": code,
+            "label": label_map.get(code, message_head or code),
+            "decision_hint": hint_map.get(code, message_head or "当前请求未完成，请先按建议补充上下文。"),
+            "command_policy": "confirm_then_resume" if preferred_requires_confirmation else "safe_read_recovery",
+            "preferred_requires_confirmation": preferred_requires_confirmation,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": not preferred_requires_confirmation and bool(command_candidates),
+            "preferred_command": command_candidates[0] if command_candidates else "",
+            "fallback_command": command_candidates[1] if len(command_candidates) > 1 else "",
+            "compact_commands": command_candidates[:2],
+            "recommended_commands": command_candidates[:3],
+        }
+
+    def _assistant_followup_summary(
+        self,
+        *,
+        category: str,
+        stage: str,
+        recommended_action: str,
+        follow_up_hint: str,
+        next_actions: Optional[List[str]] = None,
+        action_templates: Optional[List[Dict[str, Any]]] = None,
+        keyword: str = "",
+        hash_value: str = "",
+    ) -> Dict[str, Any]:
+        action_names = [self._clean_text(item) for item in (next_actions or []) if self._clean_text(item)]
+        command_candidates: List[str] = []
+        for name in action_names:
+            command = self._assistant_followup_command(name, keyword=keyword, hash_value=hash_value)
+            if command and command not in command_candidates:
+                command_candidates.append(command)
+        label_map = {
+            "mp_download": "下载后追踪",
+            "mp_subscribe": "订阅后追踪",
+            "cloud_write": "云盘落库追踪",
+            "mp_diagnosis": "本地/PT 状态追踪",
+        }
+        return {
+            "category": category,
+            "stage": self._clean_text(stage),
+            "label": label_map.get(category, category or "后续追踪"),
+            "preferred_action": self._clean_text(recommended_action),
+            "decision_hint": self._clean_text(follow_up_hint),
+            "command_policy": "safe_read_only",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": bool(command_candidates),
+            "preferred_command": command_candidates[0] if command_candidates else "",
+            "fallback_command": command_candidates[1] if len(command_candidates) > 1 else "",
+            "compact_commands": command_candidates[:2],
+            "recommended_commands": command_candidates[:3],
+            "next_actions": action_names[:4],
+            "action_templates_count": len([item for item in (action_templates or []) if isinstance(item, dict)]),
+        }
+
+    @staticmethod
+    def _format_followup_summary_lines(summary: Optional[Dict[str, Any]]) -> List[str]:
+        data = dict(summary or {})
+        if not data:
+            return []
+        lines: List[str] = []
+        label = AgentResourceOfficer._clean_text(data.get("label"))
+        stage = AgentResourceOfficer._clean_text(data.get("stage"))
+        hint = AgentResourceOfficer._clean_text(data.get("decision_hint"))
+        commands = [AgentResourceOfficer._clean_text(item) for item in (data.get("compact_commands") or data.get("recommended_commands") or []) if AgentResourceOfficer._clean_text(item)]
+        if label:
+            lines.append(f"后续追踪：{label}{f' | {stage}' if stage else ''}")
+        if hint:
+            lines.append(f"建议：{hint}")
+        if commands:
+            lines.append("可直接继续：" + " / ".join(commands))
+        return lines
+
+    def _assistant_mp_recent_activity_summary(
+        self,
+        *,
+        download_items: List[Dict[str, Any]],
+        transfer_items: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        evidence: List[str] = []
+        for item in download_items[:3]:
+            evidence.append(
+                f"下载 {self._clean_text(item.get('title')) or '-'} | "
+                f"{self._clean_text(item.get('date')) or '-'} | "
+                f"{self._clean_text(item.get('transfer_status_text')) or '-'}"
+            )
+        for item in transfer_items[:3]:
+            evidence.append(
+                f"入库 {self._clean_text(item.get('title')) or '-'} | "
+                f"{self._clean_text(item.get('date')) or '-'} | "
+                f"{self._clean_text(item.get('status_text')) or '-'}"
+            )
+        return {
+            "status": "ok" if (download_items or transfer_items) else "not_found",
+            "matched": bool(download_items or transfer_items),
+            "stage": "unknown",
+            "confidence": 0.8 if (download_items or transfer_items) else 0.95,
+            "evidence": evidence[:6],
+            "risk_reasons": [],
+            "recommended_action": "query_mp_lifecycle_status",
+            "follow_up_hint": "先从最近活动里挑目标，再继续看单个资源的生命周期或本地诊断。",
+        }
+
+    async def _assistant_mp_lifecycle_status(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 5,
+    ) -> Dict[str, Any]:
+        safe_limit = max(1, min(10, self._safe_int(limit, 5)))
+        channel = self._ensure_feishu_channel()
+        task_result = channel._query_download_tasks(
+            status="all",
+            title=title,
+            hash_value=hash_value,
+            limit=safe_limit,
+        )
+        download_result = channel._query_download_history(
+            title=title,
+            hash_value=hash_value,
+            limit=safe_limit,
+        )
+        transfer_result = channel._query_transfer_history(
+            title=title,
+            status="all",
+            limit=safe_limit,
+        )
+        task_items = task_result.get("items") if isinstance(task_result.get("items"), list) else []
+        download_items = download_result.get("items") if isinstance(download_result.get("items"), list) else []
+        transfer_items = transfer_result.get("items") if isinstance(transfer_result.get("items"), list) else []
+        keyword = title or hash_value or "全部"
+        diagnosis_summary = self._assistant_mp_diagnosis_summary(
+            keyword=title,
+            hash_value=hash_value,
+            task_items=task_items,
+            download_items=download_items,
+            transfer_items=transfer_items,
+        )
+        next_actions, action_templates = self._assistant_mp_diagnosis_followups(
+            session=session,
+            session_id=cache_key,
+            keyword=title,
+            hash_value=hash_value,
+            preferred=self._clean_text(diagnosis_summary.get("recommended_action")) or "query_mp_download_history",
+        )
+        followup_summary = self._assistant_followup_summary(
+            category="mp_diagnosis",
+            stage=self._clean_text(diagnosis_summary.get("stage")),
+            recommended_action=self._clean_text(diagnosis_summary.get("recommended_action")),
+            follow_up_hint=self._clean_text(diagnosis_summary.get("follow_up_hint")),
+            next_actions=next_actions,
+            action_templates=action_templates,
+            keyword=title,
+            hash_value=hash_value,
+        )
+        diagnosis_summary["followup_summary"] = followup_summary
+        lines = [f"MP 生命周期追踪：{keyword}"]
+        lines.append(
+            f"结论：{diagnosis_summary.get('stage') or 'unknown'} | "
+            f"置信度 {int(float(diagnosis_summary.get('confidence') or 0) * 100)}%"
+        )
+        lines.append(f"活动下载任务：{len(task_items)} 条；下载历史：{download_result.get('total', len(download_items))} 条；整理历史：{transfer_result.get('total', len(transfer_items))} 条")
+        if task_items:
+            lines.append("下载任务：")
+            for item in task_items[:safe_limit]:
+                lines.append(f"{item.get('index')}. {item.get('title')} | {item.get('progress') or '-'} | {item.get('state') or '-'} | Hash:{item.get('hash_short') or '-'}")
+        if download_items:
+            lines.append("下载历史：")
+            for item in download_items[:safe_limit]:
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) | {item.get('date') or '-'} | {item.get('transfer_status_text') or '-'} | Hash:{item.get('download_hash_short') or '-'}")
+        if transfer_items:
+            lines.append("整理/入库历史：")
+            for item in transfer_items[:safe_limit]:
+                lines.append(f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) | {item.get('status_text') or '-'} | {item.get('date') or '-'}")
+        if not task_items and not download_items and not transfer_items:
+            lines.append("未找到相关任务、下载历史或整理历史。")
+        lines.extend(self._format_followup_summary_lines(followup_summary))
+        lines.append("说明：这是只读聚合查询，用于判断资源处于搜索后、下载中、已下载还是已落库阶段。")
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_lifecycle_status",
+            "stage": "lifecycle_status",
+            "keyword": keyword,
+            "items": {
+                "download_tasks": task_items,
+                "download_history": download_items,
+                "transfer_history": transfer_items,
+            },
+            "target_path": "",
+        })
+        ok = bool(task_result.get("success")) and bool(download_result.get("success")) and bool(transfer_result.get("success"))
+        return {
+            "success": ok,
+            "message": "\n".join(lines),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_lifecycle_status",
+                "ok": ok,
+                "source_type": "moviepilot_lifecycle_status",
+                "title": title,
+                "hash": hash_value,
+                "download_tasks": {
+                    "ok": bool(task_result.get("success")),
+                    "total": self._safe_int(task_result.get("total"), len(task_items)),
+                    "items": task_items,
+                },
+                "download_history": {
+                    "ok": bool(download_result.get("success")),
+                    "total": self._safe_int(download_result.get("total"), len(download_items)),
+                    "items": download_items,
+                },
+                "transfer_history": {
+                    "ok": bool(transfer_result.get("success")),
+                    "total": self._safe_int(transfer_result.get("total"), len(transfer_items)),
+                    "items": transfer_items,
+                },
+                "diagnosis_summary": diagnosis_summary,
+                "followup_summary": followup_summary,
+                "recommended_action": diagnosis_summary.get("recommended_action"),
+                "follow_up_hint": diagnosis_summary.get("follow_up_hint"),
+                "next_actions": next_actions,
+                "action_templates": action_templates,
+            }),
+        }
+
+    async def _assistant_mp_ingest_status(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 5,
+    ) -> Dict[str, Any]:
+        lifecycle = await self._assistant_mp_lifecycle_status(
+            session=session,
+            cache_key=cache_key,
+            title=title,
+            hash_value=hash_value,
+            limit=limit,
+        )
+        lifecycle_data = dict((lifecycle or {}).get("data") or {})
+        diagnosis_summary = dict(lifecycle_data.get("diagnosis_summary") or {})
+        stage = self._clean_text(diagnosis_summary.get("stage")) or "unknown"
+        lines = [
+            f"本地/PT 入库状态：{self._clean_text(title or hash_value) or '全部'}",
+            f"当前阶段：{stage}",
+        ]
+        if diagnosis_summary.get("evidence"):
+            lines.append("证据：")
+            for item in (diagnosis_summary.get("evidence") or [])[:5]:
+                lines.append(f"- {item}")
+        if diagnosis_summary.get("risk_reasons"):
+            lines.append("风险：")
+            for item in (diagnosis_summary.get("risk_reasons") or [])[:5]:
+                lines.append(f"- {item}")
+        lines.extend(self._format_followup_summary_lines(diagnosis_summary.get("followup_summary")))
+        lifecycle_data["action"] = "mp_ingest_status"
+        return {
+            "success": bool(lifecycle.get("success")),
+            "message": "\n".join(lines),
+            "data": lifecycle_data,
+        }
+
+    async def _assistant_mp_ingest_failures(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        limit: int = 10,
+        page: int = 1,
+    ) -> Dict[str, Any]:
+        result = self._ensure_feishu_channel()._query_transfer_history(
+            title=title,
+            status="failed",
+            limit=max(1, min(50, self._safe_int(limit, 10))),
+            page=max(1, self._safe_int(page, 1)),
+        )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        diagnosis_summary = self._assistant_mp_diagnosis_summary(
+            keyword=title,
+            hash_value="",
+            task_items=[],
+            download_items=[],
+            transfer_items=items,
+            force_failed=bool(items),
+        )
+        next_actions, action_templates = self._assistant_mp_diagnosis_followups(
+            session=session,
+            session_id=cache_key,
+            keyword=title,
+            hash_value="",
+            preferred="query_mp_local_diagnose",
+        )
+        lines = [f"本地/PT 失败线索：{self._clean_text(title) or '最近失败'}"]
+        if items:
+            for item in items[: min(len(items), 6)]:
+                lines.append(
+                    f"{item.get('index')}. {item.get('title')} ({item.get('year') or '-'}) | "
+                    f"{item.get('status_text') or '-'} | {item.get('date') or '-'}"
+                )
+        else:
+            lines.append("未找到匹配的整理/入库失败记录。")
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_ingest_failures",
+            "stage": "ingest_failures",
+            "keyword": title or "failed",
+            "items": items,
+            "target_path": "",
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": "\n".join(lines),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_ingest_failures",
+                "ok": bool(result.get("success")),
+                "source_type": "moviepilot_transfer_failures",
+                "title": title,
+                "status": "failed",
+                "items": items,
+                "total": self._safe_int(result.get("total"), len(items)),
+                "page": self._safe_int(result.get("page"), page),
+                "limit": self._safe_int(result.get("limit"), limit),
+                "diagnosis_summary": diagnosis_summary,
+                "recommended_action": diagnosis_summary.get("recommended_action"),
+                "follow_up_hint": diagnosis_summary.get("follow_up_hint"),
+                "next_actions": next_actions,
+                "action_templates": action_templates,
+            }),
+        }
+
+    async def _assistant_mp_recent_activity(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        limit: int = 10,
+        download_only: bool = False,
+        transfer_only: bool = False,
+    ) -> Dict[str, Any]:
+        safe_limit = max(1, min(20, self._safe_int(limit, 10)))
+        channel = self._ensure_feishu_channel()
+        download_result = {"success": True, "items": [], "total": 0}
+        transfer_result = {"success": True, "items": [], "total": 0}
+        if not transfer_only:
+            download_result = channel._query_download_history(title="", hash_value="", limit=safe_limit, page=1)
+        if not download_only:
+            transfer_result = channel._query_transfer_history(title="", status="all", limit=safe_limit, page=1)
+        download_items = download_result.get("items") if isinstance(download_result.get("items"), list) else []
+        transfer_items = transfer_result.get("items") if isinstance(transfer_result.get("items"), list) else []
+        diagnosis_summary = self._assistant_mp_recent_activity_summary(
+            download_items=download_items,
+            transfer_items=transfer_items,
+        )
+        next_actions, action_templates = self._assistant_mp_diagnosis_followups(
+            session=session,
+            session_id=cache_key,
+            keyword="",
+            hash_value="",
+            preferred="query_mp_lifecycle_status",
+        )
+        followup_summary = self._assistant_followup_summary(
+            category="mp_diagnosis",
+            stage=self._clean_text(diagnosis_summary.get("stage")),
+            recommended_action=self._clean_text(diagnosis_summary.get("recommended_action")),
+            follow_up_hint=self._clean_text(diagnosis_summary.get("follow_up_hint")),
+            next_actions=next_actions,
+            action_templates=action_templates,
+            keyword="",
+            hash_value="",
+        )
+        diagnosis_summary["followup_summary"] = followup_summary
+        lines = ["最近本地/PT 活动："]
+        if download_items:
+            lines.append(f"最近下载：{len(download_items)} 条")
+        if transfer_items:
+            lines.append(f"最近入库：{len(transfer_items)} 条")
+        if not download_items and not transfer_items:
+            lines.append("当前没有可展示的最近下载或入库活动。")
+        lines.extend(self._format_followup_summary_lines(followup_summary))
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_recent_activity",
+            "stage": "recent_activity",
+            "keyword": "recent_activity",
+            "items": {
+                "download_history": download_items,
+                "transfer_history": transfer_items,
+            },
+            "target_path": "",
+        })
+        return {
+            "success": bool(download_result.get("success")) and bool(transfer_result.get("success")),
+            "message": "\n".join(lines),
+            "data": self._assistant_response_data(session=session, data={
+                "action": "mp_recent_activity",
+                "ok": bool(download_result.get("success")) and bool(transfer_result.get("success")),
+                "download_history": {
+                    "ok": bool(download_result.get("success")),
+                    "total": self._safe_int(download_result.get("total"), len(download_items)),
+                    "items": download_items,
+                },
+                "transfer_history": {
+                    "ok": bool(transfer_result.get("success")),
+                    "total": self._safe_int(transfer_result.get("total"), len(transfer_items)),
+                    "items": transfer_items,
+                },
+                "diagnosis_summary": diagnosis_summary,
+                "followup_summary": followup_summary,
+                "recommended_action": diagnosis_summary.get("recommended_action"),
+                "follow_up_hint": diagnosis_summary.get("follow_up_hint"),
+                "next_actions": next_actions,
+                "action_templates": action_templates,
+            }),
+        }
+
+    async def _assistant_mp_local_diagnose(
+        self,
+        *,
+        session: str,
+        cache_key: str,
+        title: str = "",
+        hash_value: str = "",
+        limit: int = 5,
+    ) -> Dict[str, Any]:
+        lifecycle = await self._assistant_mp_lifecycle_status(
+            session=session,
+            cache_key=cache_key,
+            title=title,
+            hash_value=hash_value,
+            limit=limit,
+        )
+        lifecycle_data = dict((lifecycle or {}).get("data") or {})
+        diagnosis_summary = dict(lifecycle_data.get("diagnosis_summary") or {})
+        stage = self._clean_text(diagnosis_summary.get("stage")) or "unknown"
+        risk_reasons = diagnosis_summary.get("risk_reasons") or []
+        evidence = diagnosis_summary.get("evidence") or []
+        message_lines = [
+            f"本地诊断：{self._clean_text(title or hash_value) or '全部'}",
+            f"判断阶段：{stage}",
+            f"是否命中记录：{'是' if diagnosis_summary.get('matched') else '否'}",
+        ]
+        if evidence:
+            message_lines.append("诊断证据：")
+            for item in evidence[:6]:
+                message_lines.append(f"- {item}")
+        if risk_reasons:
+            message_lines.append("风险与失败线索：")
+            for item in risk_reasons[:6]:
+                message_lines.append(f"- {item}")
+        if diagnosis_summary.get("follow_up_hint"):
+            message_lines.append(f"建议动作：{diagnosis_summary.get('follow_up_hint')}")
+        lifecycle_data["action"] = "mp_local_diagnose"
+        return {
+            "success": bool(lifecycle.get("success")),
+            "message": "\n".join(message_lines),
+            "data": lifecycle_data,
+        }
+
+    async def _assistant_mp_recommendations(
+        self,
+        *,
+        source: str = "tmdb_trending",
+        media_type: str = "all",
+        limit: int = 20,
+        session: str = "default",
+        cache_key: str = "",
+    ) -> Dict[str, Any]:
+        try:
+            from app.chain.recommend import RecommendChain
+            from app.schemas.types import MediaType, media_type_to_agent
+        except Exception as exc:
+            return {
+                "success": False,
+                "message": f"MP 推荐失败：当前环境缺少推荐依赖 {exc}",
+                "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
+            }
+        max_limit = max(1, min(50, self._safe_int(limit, 20)))
+        source_name = self._clean_text(source) or "tmdb_trending"
+        media_type_name = self._clean_text(media_type) or "all"
+        chain = RecommendChain()
+        try:
+            def collect_items(raw_results: List[Dict[str, Any]], media_type_filter: str = "") -> List[Dict[str, Any]]:
+                current_media_type = media_type_filter or media_type_name
+                collected = []
+                for raw_item in (raw_results or [])[:max_limit]:
+                    if not isinstance(raw_item, dict):
+                        continue
+                    item_type = raw_item.get("type")
+                    if current_media_type != "all":
+                        enum_type = MediaType.from_agent(current_media_type)
+                        agent_type = media_type_to_agent(item_type)
+                        expected_types = {current_media_type}
+                        if current_media_type == "movie":
+                            expected_types.add("电影")
+                        elif current_media_type == "tv":
+                            expected_types.update({"电视剧", "剧集"})
+                        if enum_type and item_type != enum_type and agent_type not in expected_types:
+                            continue
+                    collected.append({
+                        "index": len(collected) + 1,
+                        "title": raw_item.get("title"),
+                        "year": raw_item.get("year"),
+                        "type": media_type_to_agent(item_type),
+                        "tmdb_id": raw_item.get("tmdb_id"),
+                        "douban_id": raw_item.get("douban_id"),
+                        "vote_average": raw_item.get("vote_average"),
+                        "poster_path": raw_item.get("poster_path"),
+                        "detail_link": raw_item.get("detail_link"),
+                    })
+                return collected
+
+            results: List[Dict[str, Any]] = []
+            if source_name == "tmdb_trending":
+                results = await chain.async_tmdb_trending(page=1)
+            elif source_name == "tmdb_movies":
+                results = await chain.async_tmdb_movies(page=1)
+            elif source_name == "tmdb_tvs":
+                results = await chain.async_tmdb_tvs(page=1)
+            elif source_name in {"douban_hot", "douban_movie_hot"}:
+                results = await chain.async_douban_movie_hot(page=1, count=max_limit)
+                if source_name == "douban_hot" and media_type_name in {"all", "tv"}:
+                    results.extend(await chain.async_douban_tv_hot(page=1, count=max_limit))
+            elif source_name == "douban_tv_hot":
+                results = await chain.async_douban_tv_hot(page=1, count=max_limit)
+            elif source_name == "douban_movie_showing":
+                results = await chain.async_douban_movie_showing(page=1, count=max_limit)
+            elif source_name == "douban_movie_top250":
+                results = await chain.async_douban_movie_top250(page=1, count=max_limit)
+            elif source_name == "douban_tv_animation":
+                results = await chain.async_douban_tv_animation(page=1, count=max_limit)
+            elif source_name == "bangumi_calendar":
+                results = await chain.async_bangumi_calendar(page=1, count=max_limit)
+            else:
+                return {
+                    "success": False,
+                    "message": f"不支持的推荐来源：{source_name}",
+                    "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
+                }
+            items = collect_items(results)
+            fallback_source = ""
+            if not items and source_name != "tmdb_trending":
+                fallback_source = "tmdb_trending"
+                fallback_media_type = media_type_name if media_type_name in {"movie", "tv"} else "all"
+                items = collect_items(await chain.async_tmdb_trending(page=1), fallback_media_type)
+            display_source = fallback_source or source_name
+            lines = [f"MP 热门推荐：{display_source}，共 {len(items)} 条"]
+            if fallback_source:
+                lines.append(f"注：{source_name} 当前暂无结果，已自动回退 {fallback_source}。")
+            for item in items[:10]:
+                lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
+            lines.append("下一步：回复“选择 1”进入 MP 原生搜索。")
+            lines.append("如果想转去别的源，也可以回复“选择 1 影巢”或“选择 1 盘搜”。")
+            if cache_key:
+                self._save_session(cache_key, {
+                    "kind": "assistant_mp_recommend",
+                    "stage": "result",
+                    "source": fallback_source or source_name,
+                    "requested_source": source_name,
+                    "media_type": media_type_name,
+                    "keyword": "",
+                    "items": items,
+                    "target_path": "",
+                })
+            return {
+                "success": True,
+                "message": "\n".join(lines),
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_recommendations",
+                    "ok": True,
+                    "source_type": "moviepilot_recommendation",
+                    "source": fallback_source or source_name,
+                    "requested_source": source_name,
+                    "fallback_source": fallback_source,
+                    "media_type": media_type_name,
+                    "items": items,
+                }),
+            }
+        except Exception as exc:
+            logger.error(f"MP 推荐失败：{source_name} {exc}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"MP 推荐失败：{exc}",
+                "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
+            }
+
     def _persist_workflow_plans(self) -> None:
         try:
             items = sorted(
@@ -2691,6 +5769,65 @@ class AgentResourceOfficer(_PluginBase):
         self._workflow_plans[plan_id] = plan
         self._persist_workflow_plans()
         return dict(plan)
+
+    def _save_assistant_pick_plan_response(
+        self,
+        *,
+        workflow: str,
+        session: str,
+        session_id: str,
+        actions: List[Dict[str, Any]],
+        execute_body: Dict[str, Any],
+        message: str,
+        score_items: Optional[List[Dict[str, Any]]] = None,
+        extra_data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        plan = self._save_workflow_plan(
+            workflow=workflow,
+            session=session,
+            session_id=session_id,
+            actions=actions,
+            execute_body=execute_body,
+        )
+        plan_id = self._clean_text(plan.get("plan_id"))
+        template = self._assistant_action_template(
+            name="execute_plan",
+            description="执行刚生成的计划",
+            endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+            tool="agent_resource_officer_execute_plan",
+            body={
+                "plan_id": plan_id,
+                "session": session,
+                "session_id": session_id,
+                "prefer_unexecuted": True,
+            },
+        )
+        data = {
+            "action": "workflow_plan",
+            "ok": True,
+            "plan_id": plan_id,
+            "workflow": workflow,
+            "dry_run": True,
+            "workflow_actions": [dict(item or {}) for item in actions],
+            "estimated_steps": len(actions),
+            "ready_to_execute": True,
+            "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+            "execute_plan_body": {"plan_id": plan_id},
+            "plan_created_at": plan.get("created_at"),
+            "plan_created_at_text": plan.get("created_at_text"),
+            "next_actions": ["execute_plan"],
+            "action_templates": [template],
+            "write_effect": "state",
+        }
+        if score_items:
+            data["score_summary"] = self._score_summary(score_items, limit=1)
+        if extra_data:
+            data.update(extra_data)
+        return {
+            "success": True,
+            "message": f"{message}：{plan_id}\n未实际执行。回复“执行计划 {plan_id}”后才会写入。",
+            "data": self._assistant_response_data(session=session, data=data),
+        }
 
     def _load_workflow_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
         plan = (self._workflow_plans or {}).get(self._clean_text(plan_id))
@@ -2828,7 +5965,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         items = data.get("items") or []
         if not items:
-            return "当前没有 Agent云盘资源整合 保存计划。"
+            return "当前没有 Agent影视助手 保存计划。"
         lines = [f"已保存计划：{len(items)} 条"]
         for index, item in enumerate(items, 1):
             status = "已执行" if item.get("executed") else "待执行"
@@ -2966,7 +6103,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
         items = data.get("items") or []
         if not items:
-            return "当前没有 Agent云盘资源整合 执行历史。"
+            return "当前没有 Agent影视助手 执行历史。"
         lines = [f"最近执行历史：{len(items)} 条"]
         for index, item in enumerate(items, 1):
             status = "成功" if item.get("success") else "失败"
@@ -3217,10 +6354,15 @@ class AgentResourceOfficer(_PluginBase):
         state = dict(session_state or {})
         templates = [dict(item or {}) for item in (action_templates or state.get("action_templates") or []) if isinstance(item, dict)]
         saved_plan = dict(state.get("saved_plan") or {})
+        latest_plan = dict(saved_plan.get("latest") or {})
+        latest_plan_id = self._clean_text(latest_plan.get("plan_id") or saved_plan.get("plan_id"))
+        latest_plan_executed = bool(latest_plan.get("executed"))
         pending_p115 = dict(state.get("pending_p115") or {})
         has_session = bool(state.get("has_session"))
         kind = self._clean_text(state.get("kind"))
         stage = self._clean_text(state.get("stage"))
+        session_name = self._clean_text(state.get("session")) or self._assistant_session_name_from_id(self._clean_text(state.get("session_id")))
+        session_id = self._clean_text(state.get("session_id"))
         mode = ""
         reason = ""
         template: Optional[Dict[str, Any]] = None
@@ -3233,6 +6375,20 @@ class AgentResourceOfficer(_PluginBase):
                 "execute_plan",
                 "execute_session_latest_plan",
             ])
+        elif latest_plan_executed and latest_plan_id:
+            mode = "followup_executed_plan"
+            reason = "当前会话最近一条计划已执行，建议先做统一后续追踪"
+            template = self._assistant_action_template(
+                name="query_execution_followup",
+                description="按最近已执行计划自动追踪下载、订阅或入库后续状态",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                tool="agent_resource_officer_execute_action",
+                body={
+                    **({"session": session_name} if session_name else {}),
+                    **({"session_id": session_id} if session_id else {}),
+                    "plan_id": latest_plan_id,
+                },
+            )
         elif pending_p115.get("has_pending"):
             mode = "resume_pending_115"
             reason = "当前会话存在待继续的 115 任务"
@@ -3244,6 +6400,63 @@ class AgentResourceOfficer(_PluginBase):
             mode = "continue_pansou"
             reason = "当前会话停留在盘搜结果列表"
             template = self._assistant_find_action_template(templates, ["pick_pansou_result"])
+        elif has_session and kind == "assistant_mp":
+            mode = "continue_mp_search"
+            reason = "当前会话停留在 MP 原生搜索结果列表"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_best_result_detail",
+                "query_mp_search_result_detail",
+                "pick_mp_download",
+            ])
+        elif has_session and kind == "assistant_mp_recommend":
+            mode = "continue_mp_recommend"
+            reason = "当前会话停留在 MP 热门推荐列表"
+            template = self._assistant_find_action_template(templates, ["pick_recommend_mp_search"])
+        elif has_session and kind == "assistant_mp_download_tasks":
+            mode = "continue_mp_download_tasks"
+            reason = "当前会话停留在 MP 下载任务列表"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_download_history",
+                "pause_mp_download",
+                "resume_mp_download",
+                "delete_mp_download",
+            ])
+        elif has_session and kind == "assistant_mp_download_history":
+            mode = "continue_mp_download_history"
+            reason = "当前会话停留在 MP 下载历史"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_lifecycle_status",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_downloaders":
+            mode = "continue_mp_downloaders"
+            reason = "当前会话停留在 MP 下载器状态"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_sites",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_sites":
+            mode = "continue_mp_sites"
+            reason = "当前会话停留在 MP 站点状态"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_downloaders",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_subscribes":
+            mode = "continue_mp_subscribes"
+            reason = "当前会话停留在 MP 订阅列表"
+            template = self._assistant_find_action_template(templates, [
+                "start_mp_subscribe",
+                "search_mp_subscribe",
+                "start_mp_media_search",
+            ])
+        elif has_session and kind == "assistant_mp_lifecycle_status":
+            mode = "continue_mp_lifecycle_status"
+            reason = "当前会话停留在 MP 生命周期追踪"
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_download_history",
+                "start_mp_media_search",
+            ])
         elif has_session and kind == "assistant_hdhive" and stage == "candidate":
             mode = "continue_hdhive_candidate"
             reason = "当前会话停留在影巢候选列表"
@@ -3256,6 +6469,10 @@ class AgentResourceOfficer(_PluginBase):
             mode = "continue_115_login"
             reason = "当前会话停留在 115 登录检查阶段"
             template = self._assistant_find_action_template(templates, ["check_115_login", "show_115_status"])
+        elif self._assistant_find_action_template(templates, ["preferences_save"]):
+            mode = "onboard_preferences"
+            reason = "智能体片源偏好未初始化，建议先询问并保存用户偏好"
+            template = self._assistant_find_action_template(templates, ["preferences_save"])
         else:
             mode = "start_new"
             reason = "当前没有待恢复的执行状态，可直接开始新任务"
@@ -3331,7 +6548,192 @@ class AgentResourceOfficer(_PluginBase):
                     for idx, item in enumerate(items[:6])
                     if isinstance(item, dict)
                 ],
+                "score_summary": self._score_summary(items, limit=5),
                 "suggested_actions": ["smart_pick.choice", "session_clear"],
+            })
+        elif kind == "assistant_mp":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(((item.get("torrent_info") or {}).get("title")) or item.get("title")),
+                        "site": self._clean_text((item.get("torrent_info") or {}).get("site_name")),
+                        "seeders": (item.get("torrent_info") or {}).get("seeders"),
+                        "volume_factor": self._clean_text((item.get("torrent_info") or {}).get("volume_factor")),
+                        "score": (item.get("score") or {}).get("score") if isinstance(item.get("score"), dict) else None,
+                        "score_level": (item.get("score") or {}).get("score_level") if isinstance(item.get("score"), dict) else "",
+                        "recommended_action": (item.get("score") or {}).get("recommended_action") if isinstance(item.get("score"), dict) else "",
+                        "risk_reasons": (item.get("score") or {}).get("risk_reasons", [])[:2] if isinstance(item.get("score"), dict) else [],
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "score_summary": self._score_summary(items, limit=5),
+                "suggested_actions": ["mp_download.choice", "mp_subscribe.keyword", "session_clear"],
+            })
+        elif kind == "assistant_mp_download_tasks":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(item.get("title")),
+                        "hash_short": self._clean_text(item.get("hash_short")),
+                        "downloader": self._clean_text(item.get("downloader")),
+                        "progress": self._clean_text(item.get("progress")),
+                        "state": self._clean_text(item.get("state")),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": (
+                    ["mp_download_control.pause", "mp_download_control.resume", "mp_download_control.delete", "session_clear"]
+                    if items else
+                    ["mp_media_search", "mp_download_history", "session_clear"]
+                ),
+            })
+        elif kind == "assistant_mp_download_history":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(item.get("title")),
+                        "year": self._clean_text(item.get("year")),
+                        "date": self._clean_text(item.get("date")),
+                        "transfer_status_text": self._clean_text(item.get("transfer_status_text")),
+                        "download_hash_short": self._clean_text(item.get("download_hash_short")),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_lifecycle_status", "mp_media_search", "session_clear"],
+            })
+        elif kind == "assistant_mp_downloaders":
+            items = state.get("items") or []
+            payload.update({
+                "enabled_count": self._safe_int(state.get("enabled_count"), 0),
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "name": self._clean_text(item.get("name")),
+                        "type": self._clean_text(item.get("type")),
+                        "enabled": bool(item.get("enabled")),
+                        "default": bool(item.get("default")),
+                    }
+                    for item in items[:8]
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_sites", "mp_media_search", "session_clear"],
+            })
+        elif kind == "assistant_mp_sites":
+            items = state.get("items") or []
+            payload.update({
+                "status": self._clean_text(state.get("status")),
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "name": self._clean_text(item.get("name")),
+                        "domain": self._clean_text(item.get("domain")),
+                        "enabled": bool(item.get("enabled")),
+                        "has_cookie": bool(item.get("has_cookie")),
+                        "priority": item.get("priority"),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_downloaders", "mp_media_search", "session_clear"],
+            })
+        elif kind == "assistant_mp_subscribes":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "id": self._safe_int(item.get("id"), 0),
+                        "title": self._clean_text(item.get("name")),
+                        "year": self._clean_text(item.get("year")),
+                        "state": self._clean_text(item.get("state")),
+                        "lack_episode": item.get("lack_episode"),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": (
+                    ["mp_subscribe_control.search", "mp_subscribe_control.pause", "mp_subscribe_control.resume", "mp_subscribe_control.delete", "session_clear"]
+                    if items else
+                    ["mp_subscribe.keyword", "mp_media_search", "session_clear"]
+                ),
+            })
+        elif kind == "assistant_mp_lifecycle_status":
+            result_groups = state.get("items") if isinstance(state.get("items"), dict) else {}
+            task_items = result_groups.get("download_tasks") if isinstance(result_groups.get("download_tasks"), list) else []
+            download_items = result_groups.get("download_history") if isinstance(result_groups.get("download_history"), list) else []
+            transfer_items = result_groups.get("transfer_history") if isinstance(result_groups.get("transfer_history"), list) else []
+            payload.update({
+                "download_task_count": len(task_items),
+                "download_history_count": len(download_items),
+                "transfer_history_count": len(transfer_items),
+                "items_preview": [
+                    {
+                        "kind": "download_task",
+                        "title": self._clean_text(item.get("title")),
+                        "progress": self._clean_text(item.get("progress")),
+                        "state": self._clean_text(item.get("state")),
+                    }
+                    for item in task_items[:3]
+                    if isinstance(item, dict)
+                ] + [
+                    {
+                        "kind": "download_history",
+                        "title": self._clean_text(item.get("title")),
+                        "date": self._clean_text(item.get("date")),
+                        "transfer_status_text": self._clean_text(item.get("transfer_status_text")),
+                    }
+                    for item in download_items[:3]
+                    if isinstance(item, dict)
+                ] + [
+                    {
+                        "kind": "transfer_history",
+                        "title": self._clean_text(item.get("title")),
+                        "date": self._clean_text(item.get("date")),
+                        "status_text": self._clean_text(item.get("status_text")),
+                    }
+                    for item in transfer_items[:3]
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_media_search", "mp_download_history", "session_clear"],
+            })
+        elif kind == "assistant_mp_recommend":
+            items = state.get("items") or []
+            payload.update({
+                "source": self._clean_text(state.get("source")),
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(item.get("title")),
+                        "year": self._clean_text(item.get("year")),
+                        "type": self._clean_text(item.get("type")),
+                        "tmdb_id": self._clean_text(item.get("tmdb_id")),
+                        "douban_id": self._clean_text(item.get("douban_id")),
+                        "vote_average": item.get("vote_average"),
+                    }
+                    for idx, item in enumerate(items[:10])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": [
+                    "smart_pick.choice",
+                    "smart_pick.choice mode=hdhive",
+                    "smart_pick.choice mode=pansou",
+                    "session_clear",
+                ],
             })
         elif kind == "assistant_hdhive":
             if stage == "candidate":
@@ -3387,10 +6789,15 @@ class AgentResourceOfficer(_PluginBase):
                             "episodes": self._resource_episode_text(item),
                             "subtitle": self._resource_subtitle_text(item),
                             "remark": self._resource_remark_text(item),
+                            "score": (item.get("score") or {}).get("score") if isinstance(item.get("score"), dict) else None,
+                            "score_level": (item.get("score") or {}).get("score_level") if isinstance(item.get("score"), dict) else "",
+                            "recommended_action": (item.get("score") or {}).get("recommended_action") if isinstance(item.get("score"), dict) else "",
+                            "risk_reasons": (item.get("score") or {}).get("risk_reasons", [])[:2] if isinstance(item.get("score"), dict) else [],
                         }
                         for idx, item in enumerate(resources[:8])
                         if isinstance(item, dict)
                     ],
+                    "score_summary": self._score_summary(resources, limit=5),
                     "suggested_actions": ["smart_pick.choice", "session_clear"],
                 })
         elif kind == "assistant_p115_login":
@@ -3428,6 +6835,9 @@ class AgentResourceOfficer(_PluginBase):
         }
         if result["kind"] == "assistant_pansou":
             result["result_count"] = len(payload.get("items") or [])
+        elif result["kind"] == "assistant_mp_recommend":
+            result["result_count"] = len(payload.get("items") or [])
+            result["source"] = self._clean_text(payload.get("source"))
         elif result["kind"] == "assistant_hdhive":
             if result["stage"] == "candidate":
                 candidates = payload.get("candidates") or []
@@ -3474,6 +6884,8 @@ class AgentResourceOfficer(_PluginBase):
         session_name = self._assistant_session_name_from_id(session_id)
         saved_plan = self._session_workflow_plan_public_data(session=session_name, session_id=session_id)
         latest = dict(saved_plan.get("latest") or {})
+        latest_plan_id = self._clean_text(latest.get("plan_id"))
+        latest_executed = bool(latest.get("executed"))
         return {
             "session": session_name,
             "session_id": self._assistant_session_id(session_name),
@@ -3488,19 +6900,19 @@ class AgentResourceOfficer(_PluginBase):
             "has_pending_plan": bool(saved_plan.get("has_pending")),
             "saved_plan": latest or None,
             "recovery": {
-                "mode": "resume_saved_plan" if saved_plan.get("has_pending") else "inspect_plan_only_session",
+                "mode": "resume_saved_plan" if saved_plan.get("has_pending") else "followup_executed_plan" if latest_executed and latest_plan_id else "inspect_plan_only_session",
                 "reason": "当前会话只有 dry_run 计划，尚未生成交互会话缓存",
-                "can_resume": bool(saved_plan.get("has_pending")),
-                "recommended_action": "execute_session_latest_plan" if saved_plan.get("has_pending") else "inspect_session",
-                "recommended_tool": "agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_session_state",
+                "can_resume": bool(saved_plan.get("has_pending") or (latest_executed and latest_plan_id)),
+                "recommended_action": "execute_session_latest_plan" if saved_plan.get("has_pending") else "query_execution_followup" if latest_executed and latest_plan_id else "inspect_session",
+                "recommended_tool": "agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_execute_action" if latest_executed and latest_plan_id else "agent_resource_officer_session_state",
                 "action_template": self._assistant_action_template(
-                    name="execute_session_latest_plan" if saved_plan.get("has_pending") else "inspect_session",
-                    description="按 session_id 执行该会话最近一条待执行计划" if saved_plan.get("has_pending") else "查看某个会话的详细状态",
-                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute" if saved_plan.get("has_pending") else "/api/v1/plugin/AgentResourceOfficer/assistant/session",
-                    tool="agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_session_state",
-                    body={"session_id": self._assistant_session_id(session_name), "prefer_unexecuted": True} if saved_plan.get("has_pending") else {"session_id": self._assistant_session_id(session_name)},
+                    name="execute_session_latest_plan" if saved_plan.get("has_pending") else "query_execution_followup" if latest_executed and latest_plan_id else "inspect_session",
+                    description="按 session_id 执行该会话最近一条待执行计划" if saved_plan.get("has_pending") else "按最近已执行计划自动追踪下载、订阅或入库后续状态" if latest_executed and latest_plan_id else "查看某个会话的详细状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute" if saved_plan.get("has_pending") else "/api/v1/plugin/AgentResourceOfficer/assistant/action" if latest_executed and latest_plan_id else "/api/v1/plugin/AgentResourceOfficer/assistant/session",
+                    tool="agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_execute_action" if latest_executed and latest_plan_id else "agent_resource_officer_session_state",
+                    body={"session_id": self._assistant_session_id(session_name), "prefer_unexecuted": True} if saved_plan.get("has_pending") else {"session_id": self._assistant_session_id(session_name), "name": "query_execution_followup", "plan_id": latest_plan_id} if latest_executed and latest_plan_id else {"session_id": self._assistant_session_id(session_name)},
                 ),
-                "alternatives": ["execute_session_latest_plan", "inspect_session"],
+                "alternatives": ["execute_session_latest_plan", "inspect_session"] if saved_plan.get("has_pending") else ["query_execution_followup", "inspect_session"] if latest_executed and latest_plan_id else ["inspect_session"],
             },
         }
 
@@ -3544,14 +6956,24 @@ class AgentResourceOfficer(_PluginBase):
             "url",
             "access_code",
             "client_type",
+            "status",
+            "hash",
+            "target",
+            "control",
+            "downloader",
+            "delete_files",
             "kind",
             "has_pending_p115",
             "stale_only",
             "all_sessions",
             "limit",
+            "page",
             "plan_id",
             "prefer_unexecuted",
+            "preferences",
             "compact",
+            "mode",
+            "source",
         ]:
             if key in body_payload:
                 action_body[key] = body_payload.get(key)
@@ -3566,6 +6988,46 @@ class AgentResourceOfficer(_PluginBase):
             "action_tool": "agent_resource_officer_execute_action",
             "action_body": action_body,
         }
+
+    @staticmethod
+    def _assistant_compact_action_templates(
+        primary: Optional[Dict[str, Any]] = None,
+        templates: Optional[List[Dict[str, Any]]] = None,
+        *,
+        limit: int = 6,
+    ) -> List[Dict[str, Any]]:
+        result: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in [primary, *(templates or [])]:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            result.append(dict(item))
+            if len(result) >= max(1, limit):
+                break
+        return result
+
+    @staticmethod
+    def _assistant_compact_next_actions(
+        primary: Optional[List[Any]] = None,
+        secondary: Optional[List[Any]] = None,
+        *,
+        limit: int = 6,
+    ) -> List[str]:
+        result: List[str] = []
+        seen: set[str] = set()
+        for item in [*(primary or []), *(secondary or [])]:
+            name = str(item or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            result.append(name)
+            if len(result) >= max(1, limit):
+                break
+        return result
 
     def _assistant_action_templates(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         session_name = self._clean_text(data.get("session")) or "default"
@@ -3583,9 +7045,19 @@ class AgentResourceOfficer(_PluginBase):
             "session_id": session_id,
         }
         templates: List[Dict[str, Any]] = []
+        preference_status = self._assistant_preferences_status_brief(session=session_name)
+        preference_template = self._assistant_action_template(
+            name="preferences_save",
+            description="保存智能体片源偏好；首次接入建议先询问用户后再保存",
+            endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/preferences",
+            tool="agent_resource_officer_preferences",
+            body={**base_state, "preferences": self._assistant_default_preferences_template()},
+        )
 
         if not data.get("has_session"):
             templates = []
+            if preference_status.get("needs_onboarding"):
+                templates.append(preference_template)
             saved_plan = dict(data.get("saved_plan") or {})
             if saved_plan.get("has_pending"):
                 templates.append(
@@ -3610,7 +7082,77 @@ class AgentResourceOfficer(_PluginBase):
                     description="发起新的影巢候选搜索",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                     tool="agent_resource_officer_smart_entry",
-                    body={**base_route, "mode": "hdhive", "keyword": "<关键词>", "media_type": "movie"},
+                    body={**base_route, "mode": "hdhive", "keyword": "<关键词>", "media_type": "auto"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="发起新的 MP 原生搜索，返回 PT 候选和评分摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": "<关键词>"},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_media_detail",
+                    description="使用 MoviePilot 原生识别确认媒体信息和 TMDB/Douban/IMDB ID",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_media_detail", "keyword": "<关键词>", "media_type": "auto"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_recommendations",
+                    description="查看 MP 原生热门推荐，例如 TMDB、豆瓣或 Bangumi",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "start_mp_recommendations", "source": "tmdb_trending", "media_type": "all"},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_download_tasks",
+                    description="查看 MP 下载任务状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_download_tasks", "status": "downloading"},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_download_history",
+                    description="查看 MP 下载历史，并关联整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_download_history", "limit": 10},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_lifecycle_status",
+                    description="聚合查看 MP 下载任务、下载历史和整理/入库历史",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_lifecycle_status", "keyword": "<关键词>", "limit": 5},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_downloaders",
+                    description="查看 MP 下载器配置摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_downloaders"},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_sites",
+                    description="查看 MP 站点启用状态和 Cookie 是否存在，不返回 Cookie 明文",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_sites", "status": "active", "limit": 30},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_subscribes",
+                    description="查看 MP 订阅列表",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_subscribes", "status": "all", "limit": 20},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_transfer_history",
+                    description="查看 MP 最近整理/入库历史，用于判断下载后是否已落库",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_route, "name": "query_mp_transfer_history", "status": "all", "limit": 10},
                 ),
                 self._assistant_action_template(
                     name="start_115_login",
@@ -3638,6 +7180,8 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_state, "prefer_unexecuted": True},
                 )
             )
+        if preference_status.get("needs_onboarding"):
+            templates.append(preference_template)
 
         templates.append(
             self._assistant_action_template(
@@ -3650,15 +7194,252 @@ class AgentResourceOfficer(_PluginBase):
         )
 
         if kind == "assistant_pansou":
-            templates.append(
+            templates.extend([
                 self._assistant_action_template(
                     name="pick_pansou_result",
                     description="按编号选择盘搜结果继续转存",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                     tool="agent_resource_officer_smart_pick",
                     body={**base_pick, "choice": "<1-N>", "path": target_path or self._p115_default_path},
-                )
-            )
+                ),
+                self._assistant_action_template(
+                    name="plan_pansou_result",
+                    description="按编号生成盘搜转存计划，不立即写入",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "action": "plan", "path": target_path or self._p115_default_path},
+                ),
+            ])
+        elif kind == "assistant_mp":
+            templates.extend([
+                self._assistant_action_template(
+                    name="query_mp_best_result_detail",
+                    description="查看当前 MP 搜索结果里评分最高的 PT 候选详情",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_best_result_detail"},
+                ),
+                self._assistant_action_template(
+                    name="pick_mp_best_download",
+                    description="按当前评分最高的 MP 搜索结果生成下载计划；不会静默下载",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "pick_mp_best_download"},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_search_result_detail",
+                    description="按编号查看 MP 原生搜索结果详情和 PT 评分理由",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_search_result_detail", "choice": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="pick_mp_download",
+                    description="按编号为 MP 原生搜索结果生成下载计划；不会立即下载",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "pick_mp_download", "choice": "<1-N>"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_subscribe",
+                    description="按当前关键词生成 MP 订阅计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "start_mp_subscribe", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_subscribe_search",
+                    description="按当前关键词生成“订阅并搜索”计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "start_mp_subscribe_search", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_download_tasks":
+            has_items = bool(data.get("items")) or self._safe_int(data.get("result_count"), 0) > 0
+            if has_items:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="pause_mp_download",
+                        description="按编号暂停下载任务；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_download_control", "control": "pause", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="resume_mp_download",
+                        description="按编号恢复下载任务；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_download_control", "control": "resume", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="delete_mp_download",
+                        description="按编号删除下载任务；默认不删除文件",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_download_control", "control": "delete", "target": "<1-N>", "delete_files": False},
+                    ),
+                ])
+            else:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="query_mp_download_history",
+                        description="当前没有下载中任务，改查下载历史和整理状态",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "query_mp_download_history", "limit": 10},
+                    ),
+                    self._assistant_action_template(
+                        name="start_mp_media_search",
+                        description="重新发起 MP 原生搜索",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "mode": "mp", "keyword": "<关键词>"},
+                    ),
+                ])
+        elif kind == "assistant_mp_download_history":
+            templates.extend([
+                self._assistant_action_template(
+                    name="query_mp_lifecycle_status",
+                    description="按关键词聚合查看下载任务、下载历史和整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_lifecycle_status", "keyword": data.get("keyword") or "<关键词>", "limit": 5},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="按关键词重新发起 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_downloaders":
+            templates.extend([
+                self._assistant_action_template(
+                    name="query_mp_sites",
+                    description="查看 PT 站点启用状态和 Cookie 是否存在",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_sites", "status": "active", "limit": 30},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="发起新的 MP 原生搜索，返回 PT 候选和评分摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_sites":
+            templates.extend([
+                self._assistant_action_template(
+                    name="query_mp_downloaders",
+                    description="查看 MP 下载器配置摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_downloaders"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="发起新的 MP 原生搜索，返回 PT 候选和评分摘要",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_subscribes":
+            has_items = bool(data.get("items")) or self._safe_int(data.get("result_count"), 0) > 0
+            if has_items:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="search_mp_subscribe",
+                        description="按编号触发订阅搜索；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "search", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="pause_mp_subscribe",
+                        description="按编号暂停订阅；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "pause", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="resume_mp_subscribe",
+                        description="按编号恢复订阅；写入动作建议先 dry_run 生成计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "resume", "target": "<1-N>"},
+                    ),
+                    self._assistant_action_template(
+                        name="delete_mp_subscribe",
+                        description="按编号删除订阅",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "mp_subscribe_control", "control": "delete", "target": "<1-N>"},
+                    ),
+                ])
+            else:
+                templates.extend([
+                    self._assistant_action_template(
+                        name="start_mp_subscribe",
+                        description="按关键词生成新的 MP 订阅计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "start_mp_subscribe", "keyword": data.get("keyword") or "<关键词>"},
+                    ),
+                    self._assistant_action_template(
+                        name="start_mp_media_search",
+                        description="按关键词重新发起 MP 原生搜索",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "mode": "mp", "keyword": data.get("keyword") or "<关键词>"},
+                    ),
+                ])
+        elif kind == "assistant_mp_lifecycle_status":
+            templates.extend([
+                self._assistant_action_template(
+                    name="query_mp_download_history",
+                    description="继续查看 MP 下载历史",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_download_history", "title": data.get("keyword") or "", "limit": 10},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="按当前关键词重新发起 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+            ])
+        elif kind == "assistant_mp_recommend":
+            templates.extend([
+                self._assistant_action_template(
+                    name="pick_recommend_mp_search",
+                    description="按编号选择推荐条目并进入 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "mp"},
+                ),
+                self._assistant_action_template(
+                    name="pick_recommend_hdhive_search",
+                    description="按编号选择推荐条目并进入影巢候选搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "hdhive"},
+                ),
+                self._assistant_action_template(
+                    name="pick_recommend_pansou_search",
+                    description="按编号选择推荐条目并进入盘搜搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "pansou"},
+                ),
+            ])
         elif kind == "assistant_hdhive" and stage == "candidate":
             templates.extend([
                 self._assistant_action_template(
@@ -3684,15 +7465,22 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ])
         elif kind == "assistant_hdhive" and stage == "resource":
-            templates.append(
+            templates.extend([
                 self._assistant_action_template(
                     name="pick_hdhive_resource",
                     description="按编号选择影巢资源，解锁并路由到对应网盘",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                     tool="agent_resource_officer_smart_pick",
                     body={**base_pick, "choice": "<1-N>", "path": target_path or self._hdhive_default_path},
-                )
-            )
+                ),
+                self._assistant_action_template(
+                    name="plan_hdhive_resource",
+                    description="按编号生成影巢解锁/转存计划，不立即扣分或写入",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "action": "plan", "path": target_path or self._hdhive_default_path},
+                ),
+            ])
         elif kind == "assistant_p115_login":
             templates.extend([
                 self._assistant_action_template(
@@ -3905,7 +7693,7 @@ class AgentResourceOfficer(_PluginBase):
         recovery = dict((data or {}).get("recovery") or {})
         selected = dict((data or {}).get("selected_session") or {})
         lines = [
-            "Agent云盘资源整合 恢复入口",
+            "Agent影视助手 恢复入口",
             f"范围：{(data or {}).get('scope') or 'session'}",
             f"会话：{(data or {}).get('session') or 'default'}",
             f"模式：{recovery.get('mode') or 'unknown'}",
@@ -3948,6 +7736,7 @@ class AgentResourceOfficer(_PluginBase):
         session_name = self._clean_text(payload.get("session") or session_state.get("session")) or "default"
         session_id = self._clean_text(payload.get("session_id") or session_state.get("session_id")) or self._assistant_session_id(session_name)
         action_template = recovery.get("action_template") if isinstance(recovery.get("action_template"), dict) else None
+        session_templates = session_state.get("action_templates") if isinstance(session_state.get("action_templates"), list) else []
         payload.update({
             "protocol_version": "assistant.v1",
             "compact": True,
@@ -3960,7 +7749,7 @@ class AgentResourceOfficer(_PluginBase):
                 ]
                 if item
             ][:6],
-            "action_templates": [action_template] if action_template else [],
+            "action_templates": self._assistant_compact_action_templates(action_template, session_templates),
         })
         return payload
 
@@ -3994,7 +7783,10 @@ class AgentResourceOfficer(_PluginBase):
             },
             "recovery": recovery,
             "next_actions": state.get("suggested_actions") or [],
-            "action_templates": [recovery.get("action_template")] if isinstance(recovery.get("action_template"), dict) else [],
+            "action_templates": self._assistant_compact_action_templates(
+                recovery.get("action_template") if isinstance(recovery.get("action_template"), dict) else None,
+                state.get("action_templates") if isinstance(state.get("action_templates"), list) else [],
+            ),
         }
         for key in [
             "result_count",
@@ -4005,6 +7797,7 @@ class AgentResourceOfficer(_PluginBase):
             "total_resources",
             "resource_count_115",
             "resource_count_quark",
+            "score_summary",
             "client_type",
         ]:
             if key in state:
@@ -4132,11 +7925,9 @@ class AgentResourceOfficer(_PluginBase):
             "action_templates": templates,
         }
 
-    def _assistant_actions_compact_data(self, actions_data: Dict[str, Any]) -> Dict[str, Any]:
-        data = dict(actions_data or {})
-        session_state = dict(data.get("session_state") or {})
+    def _assistant_compact_action_results(self, rows: Any) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
-        for item in data.get("results") or []:
+        for item in rows or []:
             if not isinstance(item, dict):
                 continue
             results.append({
@@ -4153,7 +7944,413 @@ class AgentResourceOfficer(_PluginBase):
                 "has_pending_p115": bool(item.get("has_pending_p115")),
                 "next_actions": item.get("next_actions") or [],
             })
+            if isinstance(item.get("score_summary"), dict):
+                results[-1]["score_summary"] = item.get("score_summary")
+            if isinstance(item.get("diagnosis_summary"), dict):
+                results[-1]["diagnosis_summary"] = item.get("diagnosis_summary")
+        return results
+
+    def _assistant_plan_execute_followup(
+        self,
+        *,
+        workflow: str,
+        session: str,
+        session_id: str,
+        session_state: Optional[Dict[str, Any]] = None,
+        ok: bool,
+        plan_id: str = "",
+    ) -> Dict[str, Any]:
+        if not ok:
+            return {"next_actions": [], "action_templates": [], "recommended_action": "", "follow_up_hint": ""}
+
+        workflow_name = self._clean_text(workflow)
+        state = dict(session_state or {})
+        session_name = self._clean_text(session or state.get("session")) or "default"
+        session_cache = self._clean_text(session_id or state.get("session_id")) or self._assistant_session_id(session_name)
+        keyword = self._clean_text(state.get("keyword"))
+        base_route = {
+            "session": session_name,
+            "session_id": session_cache,
+        }
+        base_state = {
+            "session": session_name,
+            "session_id": session_cache,
+        }
+        keyword_value = keyword or "<关键词>"
+        next_actions: List[str] = []
+        templates: List[Dict[str, Any]] = []
+        follow_up_hint = ""
+        clean_plan_id = self._clean_text(plan_id)
+
+        if workflow_name in {"mp_best_download", "mp_download", "mp_search_download", "mp_download_control"}:
+            next_actions = ["query_execution_followup", "query_mp_ingest_status", "query_mp_lifecycle_status", "query_mp_local_diagnose"]
+            follow_up_hint = "可以先执行统一后续追踪；它会自动去查下载历史，再继续判断是否已整理、已入库或失败。"
+            templates = [
+                self._assistant_action_template(
+                    name="query_execution_followup",
+                    description="按最近已执行计划自动查询下载后的统一后续状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={
+                        **base_state,
+                        "name": "query_execution_followup",
+                        **({"plan_id": clean_plan_id} if clean_plan_id else {}),
+                    },
+                ),
+                self._assistant_action_template(
+                    name="query_mp_ingest_status",
+                    description="按关键词判断当前处于下载、整理、入库还是失败阶段",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_ingest_status", "keyword": keyword_value, "limit": 5},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_download_history",
+                    description="查看下载历史，并继续追踪整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_download_history", "keyword": keyword_value, "limit": 10},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_lifecycle_status",
+                    description="按关键词聚合查看下载任务、下载历史和整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_lifecycle_status", "keyword": keyword_value, "limit": 5},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_local_diagnose",
+                    description="汇总失败线索并给出本地/PT 入库诊断建议",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_local_diagnose", "keyword": keyword_value, "limit": 5},
+                ),
+            ]
+        elif workflow_name in {"mp_subscribe", "mp_subscribe_and_search", "mp_subscribe_control"}:
+            next_actions = ["query_execution_followup", "query_mp_subscribes", "query_mp_ingest_status", "start_mp_media_search"]
+            follow_up_hint = "可以先执行统一后续追踪；它会自动查订阅列表，再决定是否继续搜索或进入入库追踪。"
+            templates = [
+                self._assistant_action_template(
+                    name="query_execution_followup",
+                    description="按最近已执行计划自动查询订阅后的统一后续状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={
+                        **base_state,
+                        "name": "query_execution_followup",
+                        **({"plan_id": clean_plan_id} if clean_plan_id else {}),
+                    },
+                ),
+                self._assistant_action_template(
+                    name="query_mp_subscribes",
+                    description="查看订阅列表，确认当前订阅是否已生效",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_subscribes", "status": "all", "keyword": keyword, "limit": 20},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_ingest_status",
+                    description="按关键词判断当前处于下载、整理、入库还是失败阶段",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_ingest_status", "keyword": keyword_value, "limit": 5},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="按当前关键词重新发起 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": keyword_value},
+                ),
+            ]
+        elif workflow_name in {"share_transfer", "pansou_transfer_selected", "hdhive_unlock", "hdhive_unlock_selected"}:
+            next_actions = ["query_execution_followup", "query_mp_transfer_history", "query_mp_local_diagnose"]
+            follow_up_hint = "可以先执行统一后续追踪；它会自动查整理/入库历史，失败时再切到本地诊断。"
+            templates = [
+                self._assistant_action_template(
+                    name="query_execution_followup",
+                    description="按最近已执行计划自动查询云盘转存后的统一后续状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={
+                        **base_state,
+                        "name": "query_execution_followup",
+                        **({"plan_id": clean_plan_id} if clean_plan_id else {}),
+                    },
+                ),
+                self._assistant_action_template(
+                    name="query_mp_transfer_history",
+                    description="查看最近整理/入库历史，确认转存资源是否已落库",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_transfer_history", "keyword": keyword, "status": "all", "limit": 10},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_local_diagnose",
+                    description="汇总下载后未入库或整理失败的诊断线索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_local_diagnose", "keyword": keyword_value, "limit": 5},
+                ),
+            ]
+
+        category = "cloud_write"
+        if workflow_name in {"mp_best_download", "mp_download", "mp_search_download", "mp_download_control"}:
+            category = "mp_download"
+        elif workflow_name in {"mp_subscribe", "mp_subscribe_and_search", "mp_subscribe_control"}:
+            category = "mp_subscribe"
+        followup_summary = self._assistant_followup_summary(
+            category=category,
+            stage=self._clean_text(workflow_name),
+            recommended_action=next_actions[0] if next_actions else "",
+            follow_up_hint=follow_up_hint,
+            next_actions=next_actions,
+            action_templates=templates,
+            keyword=keyword,
+        )
         return {
+            "next_actions": next_actions,
+            "action_templates": templates,
+            "recommended_action": next_actions[0] if next_actions else "",
+            "follow_up_hint": follow_up_hint,
+            "followup_summary": followup_summary,
+        }
+
+    async def _assistant_execution_followup(
+        self,
+        request: Request,
+        *,
+        session: str,
+        session_id: str,
+        plan_id: str = "",
+    ) -> Dict[str, Any]:
+        session_name, cache_key = self._normalize_assistant_session_ref(
+            session=session or "default",
+            session_id=session_id,
+        )
+        target_plan_id = self._clean_text(plan_id)
+        plan = self._find_workflow_plan(
+            plan_id=target_plan_id,
+            session=session_name,
+            session_id=cache_key,
+            executed=True if not target_plan_id else None,
+        )
+        if target_plan_id and plan and not bool(plan.get("executed")):
+            return {
+                "success": False,
+                "message": f"计划 {target_plan_id} 还没有执行，暂时无法做执行后追踪。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "execution_followup",
+                    "ok": False,
+                    "error_code": "plan_not_executed",
+                    "plan_id": target_plan_id,
+                }),
+            }
+        if not plan:
+            latest_any = self._find_workflow_plan(session=session_name, session_id=cache_key, executed=None)
+            error_code = "executed_plan_not_found"
+            if latest_any and not bool(latest_any.get("executed")):
+                error_code = "latest_plan_not_executed"
+            return {
+                "success": False,
+                "message": "当前会话没有可追踪的已执行计划，请先执行下载、订阅或转存计划。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "execution_followup",
+                    "ok": False,
+                    "error_code": error_code,
+                    "plan_id": target_plan_id,
+                }),
+            }
+
+        source_plan = self._workflow_plan_public_item(plan, include_actions=False)
+        state = self._load_session(self._clean_text(plan.get("session_id"))) or {}
+        followup = self._assistant_plan_execute_followup(
+            workflow=self._clean_text(plan.get("workflow")),
+            session=self._clean_text(plan.get("session")) or session_name,
+            session_id=self._clean_text(plan.get("session_id")) or cache_key,
+            session_state=state,
+            ok=bool(plan.get("last_success")) if plan.get("last_success") is not None else True,
+            plan_id=self._clean_text(plan.get("plan_id")),
+        )
+        action_templates = [item for item in (followup.get("action_templates") or []) if isinstance(item, dict)]
+        resolved_template = next(
+            (item for item in action_templates if self._clean_text(item.get("name")) != "query_execution_followup"),
+            {},
+        )
+        resolved_name = self._clean_text(resolved_template.get("name"))
+        if not resolved_name:
+            return {
+                "success": False,
+                "message": "当前执行计划没有可自动继续的只读追踪动作。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "execution_followup",
+                    "ok": False,
+                    "error_code": "followup_not_available",
+                    "plan_id": self._clean_text(plan.get("plan_id")),
+                    "source_plan": source_plan,
+                }),
+            }
+        action_body = dict(resolved_template.get("action_body") or resolved_template.get("body") or {})
+        action_body["compact"] = False
+        action_body["apikey"] = self._extract_apikey(request, {})
+        result = await self.api_assistant_action(_JsonRequestShim(request, action_body))
+        payload = dict(result.get("data") or {})
+        payload.update({
+            "action": "execution_followup",
+            "ok": bool(result.get("success")),
+            "plan_id": self._clean_text(plan.get("plan_id")),
+            "workflow": self._clean_text(plan.get("workflow")),
+            "source_plan": source_plan,
+            "recommended_action": self._clean_text(followup.get("recommended_action")),
+            "follow_up_hint": self._clean_text(followup.get("follow_up_hint")),
+            "resolved_followup_action": resolved_name,
+            "followup_summary": followup.get("followup_summary") or {},
+        })
+        message_lines = [
+            f"已执行后续追踪：{resolved_name}",
+            self._clean_text(result.get("message")),
+        ]
+        message_lines.extend(self._format_followup_summary_lines(followup.get("followup_summary")))
+        return {
+            "success": bool(result.get("success")),
+            "message": "\n".join(line for line in message_lines if line).strip(),
+            "data": self._assistant_response_data(session=session_name, data=payload),
+        }
+
+    async def _assistant_smart_followup(
+        self,
+        request: Request,
+        *,
+        session: str,
+        session_id: str,
+        keyword: str = "",
+        hash_value: str = "",
+        limit: int = 5,
+    ) -> Dict[str, Any]:
+        session_name, cache_key = self._normalize_assistant_session_ref(
+            session=session or "default",
+            session_id=session_id,
+        )
+        title = self._clean_text(keyword)
+        hash_text = self._clean_text(hash_value)
+        saved_plan = self._session_workflow_plan_public_data(session=session_name, session_id=cache_key)
+        latest_plan = dict(saved_plan.get("latest") or {})
+        latest_plan_id = self._clean_text(latest_plan.get("plan_id"))
+        latest_executed = bool(latest_plan.get("executed"))
+
+        if title or hash_text:
+            result = await self._assistant_mp_lifecycle_status(
+                session=session_name,
+                cache_key=cache_key,
+                title=title,
+                hash_value=hash_text,
+                limit=limit,
+            )
+            payload = dict(result.get("data") or {})
+            followup_summary = {}
+            if isinstance(payload.get("followup_summary"), dict):
+                followup_summary = dict(payload.get("followup_summary") or {})
+            elif isinstance(payload.get("diagnosis_summary"), dict):
+                followup_summary = dict((payload.get("diagnosis_summary") or {}).get("followup_summary") or {})
+            payload.update({
+                "action": "smart_followup",
+                "ok": bool(result.get("success")),
+                "resolved_followup_action": "mp_lifecycle_status",
+                "smart_mode": "keyword_lifecycle",
+                "followup_summary": followup_summary,
+            })
+            return {
+                "success": bool(result.get("success")),
+                "message": "\n".join(
+                    line for line in [
+                        "智能跟进：按关键词查看本地/PT 状态",
+                        self._clean_text(result.get("message")),
+                    ] if line
+                ).strip(),
+                "data": self._assistant_response_data(session=session_name, data=payload),
+            }
+
+        if latest_executed and latest_plan_id:
+            result = await self._assistant_execution_followup(
+                request,
+                session=session_name,
+                session_id=cache_key,
+                plan_id=latest_plan_id,
+            )
+            payload = dict(result.get("data") or {})
+            payload.update({
+                "action": "smart_followup",
+                "ok": bool(result.get("success")),
+                "resolved_followup_action": self._clean_text(payload.get("resolved_followup_action")) or "execution_followup",
+                "smart_mode": "executed_plan_followup",
+            })
+            return {
+                "success": bool(result.get("success")),
+                "message": "\n".join(
+                    line for line in [
+                        "智能跟进：按最近已执行计划继续追踪",
+                        self._clean_text(result.get("message")),
+                    ] if line
+                ).strip(),
+                "data": self._assistant_response_data(session=session_name, data=payload),
+            }
+
+        if saved_plan.get("has_pending"):
+            template = self._assistant_action_template(
+                name="execute_session_latest_plan",
+                description="按 session_id 执行该会话最近一条待执行计划",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+                tool="agent_resource_officer_execute_plan",
+                body={"session_id": self._assistant_session_id(session_name), "prefer_unexecuted": True},
+            )
+            return {
+                "success": False,
+                "message": "当前会话还有待执行计划，先执行计划，再继续跟进。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "smart_followup",
+                    "ok": False,
+                    "error_code": "latest_plan_not_executed",
+                    "recommended_action": "execute_session_latest_plan",
+                    "follow_up_hint": "当前会话还有待执行计划，先执行计划，再继续跟进。",
+                    "action_templates": [template],
+                    "smart_mode": "pending_plan_blocked",
+                }),
+            }
+
+        result = await self._assistant_mp_recent_activity(
+            session=session_name,
+            cache_key=cache_key,
+            limit=max(5, limit),
+        )
+        payload = dict(result.get("data") or {})
+        followup_summary = {}
+        if isinstance(payload.get("followup_summary"), dict):
+            followup_summary = dict(payload.get("followup_summary") or {})
+        elif isinstance(payload.get("diagnosis_summary"), dict):
+            followup_summary = dict((payload.get("diagnosis_summary") or {}).get("followup_summary") or {})
+        payload.update({
+            "action": "smart_followup",
+            "ok": bool(result.get("success")),
+            "resolved_followup_action": "mp_recent_activity",
+            "smart_mode": "recent_activity_fallback",
+            "followup_summary": followup_summary,
+        })
+        return {
+            "success": bool(result.get("success")),
+            "message": "\n".join(
+                line for line in [
+                    "智能跟进：当前没有指定片名，也没有已执行计划，先看最近活动",
+                    self._clean_text(result.get("message")),
+                ] if line
+            ).strip(),
+            "data": self._assistant_response_data(session=session_name, data=payload),
+        }
+
+    def _assistant_actions_compact_data(self, actions_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(actions_data or {})
+        session_state = dict(data.get("session_state") or {})
+        results = self._assistant_compact_action_results(data.get("results"))
+        payload = {
             "protocol_version": "assistant.v1",
             "action": self._clean_text(data.get("action")) or "execute_actions",
             "ok": bool(data.get("ok")),
@@ -4168,6 +8365,156 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
             "action_templates": data.get("action_templates") or [],
         }
+        error_summary = self._assistant_error_summary(
+            error_code=self._clean_text(data.get("error_code")),
+            recommended_action=self._clean_text(data.get("recommended_action")),
+            message_head=self._assistant_result_message_head(data.get("message") or data.get("message_head")),
+            next_actions=payload.get("next_actions"),
+            action_templates=payload.get("action_templates"),
+            keyword=self._clean_text(session_state.get("keyword")),
+            hash_value=self._clean_text(session_state.get("hash")),
+            target=self._clean_text(data.get("target")),
+        )
+        if error_summary:
+            payload["error_summary"] = error_summary
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        if isinstance(data.get("diagnosis_summary"), dict):
+            payload["diagnosis_summary"] = data.get("diagnosis_summary")
+        if isinstance(data.get("followup_summary"), dict):
+            payload["followup_summary"] = data.get("followup_summary")
+        command_summary = self._assistant_compact_command_summary(payload)
+        if command_summary:
+            payload.update(command_summary)
+        return payload
+
+    @staticmethod
+    def _assistant_compact_command_summary(payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        data = dict(payload or {})
+        score_summary = data.get("score_summary") if isinstance(data.get("score_summary"), dict) else {}
+        candidates = [
+            ("error_summary", data.get("error_summary") if isinstance(data.get("error_summary"), dict) else {}),
+            ("followup_summary", data.get("followup_summary") if isinstance(data.get("followup_summary"), dict) else {}),
+            ("score_summary", score_summary.get("decision") if isinstance(score_summary.get("decision"), dict) else {}),
+        ]
+        for source, summary in candidates:
+            if not isinstance(summary, dict) or not summary:
+                continue
+            compact_commands = [
+                AgentResourceOfficer._clean_text(item)
+                for item in (summary.get("compact_commands") or summary.get("recommended_commands") or [])
+                if AgentResourceOfficer._clean_text(item)
+            ]
+            preferred_command = AgentResourceOfficer._clean_text(summary.get("preferred_command"))
+            fallback_command = AgentResourceOfficer._clean_text(summary.get("fallback_command"))
+            if preferred_command or compact_commands:
+                return {
+                    "command_source": source,
+                    "command_policy": AgentResourceOfficer._clean_text(summary.get("command_policy")) or ("confirm_then_resume" if bool(summary.get("preferred_requires_confirmation")) else "safe_read_only"),
+                    "preferred_requires_confirmation": bool(summary.get("preferred_requires_confirmation")),
+                    "fallback_requires_confirmation": bool(summary.get("fallback_requires_confirmation")),
+                    "can_auto_run_preferred": bool(summary.get("can_auto_run_preferred")) if "can_auto_run_preferred" in summary else not bool(summary.get("preferred_requires_confirmation")),
+                    "preferred_command": preferred_command or (compact_commands[0] if compact_commands else ""),
+                    "fallback_command": fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""),
+                    "compact_commands": compact_commands[:2],
+                }
+        return {}
+
+    def _assistant_plan_execute_compact_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        response = dict(result or {})
+        data = dict(response.get("data") or {})
+        session_state = dict(data.get("session_state") or {})
+        results = self._assistant_compact_action_results(data.get("results"))
+        success_count = len([item for item in results if item.get("success")])
+        last_result = results[-1] if results else {}
+        followup = self._assistant_plan_execute_followup(
+            workflow=self._clean_text(data.get("workflow")),
+            session=self._clean_text(data.get("session") or session_state.get("session")) or "default",
+            session_id=self._clean_text(data.get("session_id") or session_state.get("session_id")),
+            session_state=session_state,
+            ok=bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
+            plan_id=self._clean_text(data.get("plan_id")),
+        )
+        payload = {
+            "protocol_version": "assistant.v1",
+            "action": "execute_plan",
+            "ok": bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
+            "compact": True,
+            "write_effect": data.get("write_effect") or "write",
+            "error_code": self._clean_text(data.get("error_code")) or ("" if response.get("success") else "assistant_error"),
+            "session": self._clean_text(data.get("session") or session_state.get("session")) or "default",
+            "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
+            "message_head": self._assistant_result_message_head(response.get("message")),
+            "plan_id": self._clean_text(data.get("plan_id")),
+            "workflow": self._clean_text(data.get("workflow")),
+            "plan_auto_selected": bool(data.get("plan_auto_selected")),
+            "plan_created_at": data.get("plan_created_at"),
+            "plan_created_at_text": data.get("plan_created_at_text"),
+            "plan_executed_at": data.get("plan_executed_at"),
+            "plan_executed_at_text": data.get("plan_executed_at_text"),
+            "executed_count": data.get("executed_count") or len(results),
+            "requested_count": data.get("requested_count") or len(results),
+            "stopped_on_error": bool(data.get("stopped_on_error")),
+            "halted_at": data.get("halted_at") or 0,
+            "results": results,
+            "result_summary": {
+                "success_count": success_count,
+                "failure_count": max(len(results) - success_count, 0),
+                "last_action": self._clean_text(last_result.get("action")),
+                "last_message_head": self._clean_text(last_result.get("message_head")),
+            },
+            "recommended_action": self._clean_text(data.get("recommended_action")) or self._clean_text(followup.get("recommended_action")),
+            "follow_up_hint": self._clean_text(data.get("follow_up_hint")) or self._clean_text(followup.get("follow_up_hint")),
+            "next_actions": self._assistant_compact_next_actions(
+                followup.get("next_actions"),
+                data.get("next_actions") or session_state.get("suggested_actions") or [],
+            ),
+            "action_templates": self._assistant_compact_action_templates(
+                templates=[
+                    *(followup.get("action_templates") or []),
+                    *(data.get("action_templates") or []),
+                ],
+                limit=6,
+            ),
+        }
+        error_summary = self._assistant_error_summary(
+            error_code=payload.get("error_code"),
+            recommended_action=payload.get("recommended_action"),
+            message_head=payload.get("message_head"),
+            next_actions=payload.get("next_actions"),
+            action_templates=payload.get("action_templates"),
+            keyword=self._clean_text(session_state.get("keyword")),
+            hash_value=self._clean_text(session_state.get("hash")),
+            target=self._clean_text(data.get("target")),
+        )
+        if error_summary:
+            payload["error_summary"] = error_summary
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        if isinstance(data.get("diagnosis_summary"), dict):
+            payload["diagnosis_summary"] = data.get("diagnosis_summary")
+        if isinstance(data.get("followup_summary"), dict):
+            payload["followup_summary"] = data.get("followup_summary")
+        if isinstance(data.get("recovery"), dict):
+            payload["recovery"] = data.get("recovery")
+        command_summary = self._assistant_compact_command_summary(payload)
+        if command_summary:
+            payload.update(command_summary)
+        return {
+            "success": bool(response.get("success")),
+            "message": response.get("message") or "",
+            "data": payload,
+        }
 
     def _assistant_single_action_compact_response(self, name: str, result: Dict[str, Any]) -> Dict[str, Any]:
         response = dict(result or {})
@@ -4178,6 +8525,8 @@ class AgentResourceOfficer(_PluginBase):
             "action": self._clean_text(data.get("action")) or self._clean_text(name) or "execute_action",
             "ok": bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
             "compact": True,
+            "write_effect": data.get("write_effect") or self._assistant_write_effect_for_action(self._clean_text(data.get("action")) or self._clean_text(name)),
+            "error_code": self._clean_text(data.get("error_code")) or ("" if response.get("success") else "assistant_error"),
             "name": self._clean_text(name),
             "session": self._clean_text(data.get("session") or session_state.get("session")) or "default",
             "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
@@ -4187,12 +8536,44 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
             "action_templates": data.get("action_templates") or [],
         }
+        error_summary = self._assistant_error_summary(
+            error_code=payload.get("error_code"),
+            recommended_action=self._clean_text(data.get("recommended_action")),
+            message_head=payload.get("message_head"),
+            next_actions=payload.get("next_actions"),
+            action_templates=payload.get("action_templates"),
+            keyword=self._clean_text(session_state.get("keyword")),
+            hash_value=self._clean_text(session_state.get("hash")),
+            target=self._clean_text(data.get("target")),
+        )
+        if error_summary:
+            payload["error_summary"] = error_summary
         for key in ["plan_id", "workflow", "plan_auto_selected", "has_session", "has_pending"]:
+            if key in data:
+                payload[key] = data.get(key)
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        if isinstance(data.get("diagnosis_summary"), dict):
+            payload["diagnosis_summary"] = data.get("diagnosis_summary")
+        if isinstance(data.get("followup_summary"), dict):
+            payload["followup_summary"] = data.get("followup_summary")
+        for key in ["download_tasks", "download_history", "transfer_history"]:
+            if isinstance(data.get(key), dict):
+                payload[key] = data.get(key)
+        for key in ["recommended_action", "follow_up_hint", "resolved_followup_action", "smart_mode"]:
             if key in data:
                 payload[key] = data.get(key)
         pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
         if pending_p115:
             payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
+        command_summary = self._assistant_compact_command_summary(payload)
+        if command_summary:
+            payload.update(command_summary)
         return {
             "success": bool(response.get("success")),
             "message": response.get("message") or "",
@@ -4220,15 +8601,44 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
             "action_templates": data.get("action_templates") or [],
         }
-        for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource"]:
+        error_summary = self._assistant_error_summary(
+            error_code=payload.get("error_code"),
+            recommended_action=self._clean_text(data.get("recommended_action")),
+            message_head=payload.get("message_head"),
+            next_actions=payload.get("next_actions"),
+            action_templates=payload.get("action_templates"),
+            keyword=self._clean_text(session_state.get("keyword")),
+            hash_value=self._clean_text(session_state.get("hash")),
+            target=self._clean_text(data.get("target") or session_state.get("keyword")),
+        )
+        if error_summary:
+            payload["error_summary"] = error_summary
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        if isinstance(data.get("diagnosis_summary"), dict):
+            payload["diagnosis_summary"] = data.get("diagnosis_summary")
+        if isinstance(data.get("followup_summary"), dict):
+            payload["followup_summary"] = data.get("followup_summary")
+        if isinstance(data.get("scoring_policy"), dict):
+            payload["scoring_policy"] = data.get("scoring_policy")
+        for key in ["download_tasks", "download_history", "transfer_history"]:
+            if isinstance(data.get(key), dict):
+                payload[key] = data.get(key)
+        for key in ["provider", "page", "total_pages", "selected_candidate", "selected_resource", "plan_id", "workflow", "recommended_action", "follow_up_hint", "resolved_followup_action", "smart_mode"]:
             if key in data:
                 payload[key] = data.get(key)
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
         for key in ["items", "candidates", "resources"]:
             if isinstance(data.get(key), list):
                 payload[f"{key}_count"] = len(data.get(key) or [])
         pending_p115 = session_state.get("pending_p115") if isinstance(session_state.get("pending_p115"), dict) else {}
         if pending_p115:
             payload["has_pending_p115"] = bool(pending_p115.get("has_pending"))
+        command_summary = self._assistant_compact_command_summary(payload)
+        if command_summary:
+            payload.update(command_summary)
         return {
             "success": bool(response.get("success")),
             "message": response.get("message") or "",
@@ -4262,6 +8672,9 @@ class AgentResourceOfficer(_PluginBase):
             "execute_plan_body": data.get("execute_plan_body") or {"plan_id": plan_id},
             "plan_created_at": data.get("plan_created_at"),
             "plan_created_at_text": data.get("plan_created_at_text"),
+            "preference_status": data.get("preference_status") or {},
+            "needs_onboarding": bool((data.get("preference_status") or {}).get("needs_onboarding")),
+            "score_summary": data.get("score_summary") or {},
             "next_actions": ["execute_plan"] if plan_id else [],
             "action_templates": [template] if template else [],
         }
@@ -4280,7 +8693,7 @@ class AgentResourceOfficer(_PluginBase):
         )
         items = data.get("items") or []
         if not items:
-            return "当前没有活跃的 Agent云盘资源整合 会话。"
+            return "当前没有活跃的 Agent影视助手 会话。"
         lines = [
             f"当前活跃会话：{data.get('total') or 0} 个",
             "可直接用 assistant/session 查看单个会话详情，也可按 session_id 直接恢复最近计划。",
@@ -4479,7 +8892,7 @@ class AgentResourceOfficer(_PluginBase):
         return self._execute_pending_p115_share(
             session_id=session_id,
             state=state,
-            trigger="Agent云盘资源整合 115 登录后自动继续",
+            trigger="Agent影视助手 115 登录后自动继续",
         )
 
     def _format_p115_status_summary(self, *, title: str = "115 当前状态") -> str:
@@ -4528,7 +8941,7 @@ class AgentResourceOfficer(_PluginBase):
     def _format_assistant_help_text(self, session: str = "default") -> str:
         session_name = self._clean_text(session) or "default"
         lines = [
-            "Agent云盘资源整合 使用帮助",
+            "Agent影视助手 使用帮助",
             f"当前会话：{session_name}",
             "推荐优先使用原生 Tool：agent_resource_officer_smart_entry 与 agent_resource_officer_smart_pick。",
             "smart_entry 常用示例：",
@@ -4538,10 +8951,25 @@ class AgentResourceOfficer(_PluginBase):
             "4. text=检查115登录",
             "5. text=链接 https://115cdn.com/s/xxxx path=/待整理",
             "6. text=链接 https://pan.quark.cn/s/xxxx 位置=分享",
+            "7. text=MP搜索 蜘蛛侠；下载1 会先生成计划",
+            "8. text=下载任务；暂停下载 1 / 恢复下载 1 / 删除下载 1 会先生成计划",
+            "9. text=站点状态；下载器状态 用于排查 PT 搜索/下载环境",
+            "10. text=记录 片名 用于判断资源是否提交过下载并进入整理流程",
+            "11. text=状态 片名 一次查看下载任务、下载历史和入库历史",
+            "12. text=识别 片名 使用 MoviePilot 原生识别确认 TMDB/Douban/IMDB 信息",
+            "13. text=订阅列表；搜索订阅 1 / 暂停订阅 1 / 恢复订阅 1 / 删除订阅 1 会先生成计划",
+            "14. text=入库记录；入库失败 片名 用于判断下载后是否已经整理落库",
+            "15. text=执行计划 执行当前会话最近待执行计划；text=执行 plan-xxxx 精确执行指定计划",
+            "16. text=偏好 / 保存偏好 4K 杜比 HDR 中字 全集 做种>=3 影巢积分20 不自动入库 / 重置偏好",
+            "17. text=后续 / 最近 / 入库 片名 / 诊断 片名 是更省 token 的本地/PT 跟踪短命令",
+            "18. text=跟进 / 跟进 片名 是统一跟进入口：有已执行计划时自动跟执行后状态，有片名时直接看生命周期",
             "smart_pick 常用示例：",
             "1. choice=1",
             "2. action=详情",
             "3. action=下一页",
+            "MP 搜索结果里，choice=1 会先展示 PT 详情和评分理由；确认下载再发 text=下载1。",
+            "MP 搜索结果里，action=最佳 会展示当前评分最高候选，适合智能体省 token 决策。",
+            "MP 搜索结果里，text=下载最佳 会按当前最高分候选生成下载计划，不会静默下载。",
             "说明：同一个 session 会自动串起候选列表、资源列表、115 待任务与扫码续跑。",
             self._format_p115_next_actions(self._p115_status_snapshot()),
         ]
@@ -4563,6 +8991,11 @@ class AgentResourceOfficer(_PluginBase):
                 "hdhive_max_unlock_points": self._hdhive_max_unlock_points,
                 "hdhive_checkin_enabled": self._hdhive_checkin_enabled,
                 "hdhive_checkin_gambler_mode": self._hdhive_checkin_gambler_mode,
+                "pt_min_seeders": self._default_assistant_preferences().get("pt_min_seeders"),
+                "auto_ingest": self._default_assistant_preferences().get("auto_ingest_enabled"),
+                "auto_ingest_enabled": self._default_assistant_preferences().get("auto_ingest_enabled"),
+                "auto_ingest_score_threshold": self._default_assistant_preferences().get("auto_ingest_score_threshold"),
+                "confirm_score_threshold": self._default_assistant_preferences().get("confirm_score_threshold"),
             },
             "smart_entry": {
                 "supports_text": True,
@@ -4578,6 +9011,29 @@ class AgentResourceOfficer(_PluginBase):
                     "p115_resume",
                     "p115_cancel",
                     "hdhive_checkin",
+                    "hdhive_checkin_history",
+                    "mp_media_detail",
+                    "mp_download_tasks",
+                    "mp_download_history",
+                    "mp_lifecycle_status",
+                    "mp_download_control",
+                    "mp_downloaders",
+                    "mp_sites",
+                    "mp_subscribes",
+                    "mp_subscribe_control",
+                    "mp_transfer_history",
+                    "mp_download",
+                    "mp_download_best",
+                    "mp_subscribe",
+                    "mp_subscribe_search",
+                    "mp_recommendations",
+                    "execute_plan",
+                    "plans_list",
+                    "plans_clear",
+                    "scoring_policy",
+                    "preferences_get",
+                    "preferences_save",
+                    "preferences_reset",
                 ],
                 "structured_fields": [
                     "session",
@@ -4592,9 +9048,26 @@ class AgentResourceOfficer(_PluginBase):
                     "client_type",
                     "is_gambler",
                     "action",
+                    "plan_id",
+                    "status",
+                    "hash",
+                    "name",
+                    "site_name",
+                    "subscribe_id",
+                    "subscribe_name",
+                    "downloader",
+                    "download_control",
+                    "subscribe_control",
+                    "delete_files",
+                    "page",
                     "compact",
                 ],
             },
+            "assistant_preferences": {
+                "fields": ["session", "session_id", "user_key", "preferences", "reset", "compact"],
+                "description": "智能体片源偏好画像：云盘与 PT 分源评分都会读取这里；无偏好时建议先完成一次偏好询问。",
+            },
+            "scoring_policy": self._assistant_scoring_policy_public_data(),
             "smart_pick": {
                 "fields": ["session", "session_id", "choice", "action", "path", "compact"],
                 "actions": ["detail", "next_page"],
@@ -4632,11 +9105,24 @@ class AgentResourceOfficer(_PluginBase):
                     "url",
                     "access_code",
                     "client_type",
+                    "source",
+                    "status",
+                    "hash",
+                    "target",
+                    "name",
+                    "site_name",
+                    "subscribe_id",
+                    "subscribe_name",
+                    "control",
+                    "subscribe_control",
+                    "downloader",
+                    "delete_files",
                     "kind",
                     "has_pending_p115",
                     "stale_only",
                     "all_sessions",
                     "limit",
+                    "page",
                     "plan_id",
                     "prefer_unexecuted",
                     "compact",
@@ -4726,6 +9212,7 @@ class AgentResourceOfficer(_PluginBase):
                 "assistant/action",
                 "assistant/actions",
                 "assistant/workflow",
+                "assistant/preferences",
                 "assistant/plan/execute",
                 "assistant/plans",
                 "assistant/plans/clear",
@@ -4766,6 +9253,7 @@ class AgentResourceOfficer(_PluginBase):
                 "agent_resource_officer_plans_clear",
                 "agent_resource_officer_recover",
                 "agent_resource_officer_run_workflow",
+                "agent_resource_officer_preferences",
                 "agent_resource_officer_help",
                 "agent_resource_officer_smart_entry",
                 "agent_resource_officer_smart_pick",
@@ -4796,6 +9284,7 @@ class AgentResourceOfficer(_PluginBase):
             "assistant/history",
             "assistant/actions",
             "assistant/workflow",
+            "assistant/preferences",
             "assistant/plan/execute",
             "assistant/plans",
         ]
@@ -4811,6 +9300,7 @@ class AgentResourceOfficer(_PluginBase):
             "smart_pick_actions": (data.get("smart_pick") or {}).get("actions") or [],
             "workflows": workflows,
             "request_templates": bool(data.get("assistant_request_templates")),
+            "scoring_policy": data.get("scoring_policy") or {},
             "recommended_start": [
                 "assistant/pulse",
                 "assistant/startup",
@@ -4829,7 +9319,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_capabilities_public_data()
         defaults = data.get("defaults") or {}
         lines = [
-            "Agent云盘资源整合 能力说明",
+            "Agent影视助手 能力说明",
             f"版本：{data.get('version')}",
             "推荐上层调用顺序：",
             "1. 先看 capabilities 或 assistant/startup",
@@ -4843,13 +9333,17 @@ class AgentResourceOfficer(_PluginBase):
             f"- 夸克：{defaults.get('quark_path')}",
             f"- 115 客户端：{defaults.get('p115_client_type')}",
             f"影巢资源入口：{'开启' if defaults.get('hdhive_resource_enabled') else '关闭'}；单资源积分上限：{defaults.get('hdhive_max_unlock_points')} 分（0 表示不限制）",
+            "默认评分策略：",
+            f"- PT 最低做种数：{defaults.get('pt_min_seeders')}",
+            f"- 建议确认分数线：{defaults.get('confirm_score_threshold')}",
+            f"- 自动入库：{'开启' if defaults.get('auto_ingest_enabled') else '关闭'}；自动入库分数线：{defaults.get('auto_ingest_score_threshold')}",
             "启动聚合包：assistant/startup，一次返回 pulse、自检、核心工具、端点和恢复建议，适合外部智能体开场调用",
             "轻量启动探针：assistant/pulse，返回版本、关键服务状态与最佳恢复建议，适合外部智能体每次开场调用",
             "轻量工具清单：assistant/toolbox，返回推荐工具、端点、工作流和命令示例，适合外部智能体初始化系统提示",
             "轻量协议自检：assistant/selfcheck，返回 compact 模板、布尔解析和低 token 入口健康状态",
             "启动探针：assistant/readiness，可直接判断外部智能体是否可以开始调用；compact=true 可减少嵌套回执",
             "执行历史：assistant/history，可查看最近 action/workflow 的成功状态和摘要；compact=true 可减少嵌套回执",
-            "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action",
+            "smart_entry 结构化字段：session / session_id / path / mode / keyword / url / access_code / media_type / year / client_type / action / plan_id",
             "smart_entry 结构化模式：mp / pansou / hdhive",
             "smart_entry 动作：assistant_help / p115_qrcode_start / p115_qrcode_check / p115_status / p115_help / p115_pending / p115_resume / p115_cancel",
             "smart_entry 与 smart_pick 支持 compact=true，可减少搜索与选择链路嵌套回执",
@@ -4859,6 +9353,7 @@ class AgentResourceOfficer(_PluginBase):
             "批量动作入口：assistant/actions，可一次执行多步 action_body；compact=true 可减少嵌套回执",
             "预设工作流入口：assistant/workflow，可用 pansou_search / pansou_transfer / hdhive_candidates / hdhive_unlock / share_transfer / p115_status 等短参数场景；compact=true 可减少嵌套回执",
             "计划执行入口：assistant/plan/execute，可执行 dry_run 返回的 plan_id；compact=true 可减少嵌套回执",
+            "自然语言计划确认：smart_entry 支持“执行计划”和“执行 plan-xxxx”，用于确认已生成的下载、订阅或控制计划",
             "计划管理入口：assistant/plans 与 assistant/plans/clear，可查询或清理 dry_run 保存的计划；compact=true 可减少嵌套回执",
             "单入口恢复：assistant/recover，可自动选择最值得恢复的会话或计划；execute=true 时直接执行推荐动作；compact=true 可减少回执字段",
             "统一回执字段：protocol_version / action / ok / session / session_id / session_state / next_actions / action_templates",
@@ -5031,7 +9526,7 @@ class AgentResourceOfficer(_PluginBase):
         hdhive = services.get("hdhive") or {}
         quark = services.get("quark") or {}
         lines = [
-            "Agent云盘资源整合 启动就绪",
+            "Agent影视助手 启动就绪",
             f"版本：{data.get('version')}",
             f"插件：{'已启用' if data.get('enabled') else '未启用'}",
             f"外部智能体：{'可以启动' if data.get('can_start') else '暂不可启动'}",
@@ -5101,7 +9596,7 @@ class AgentResourceOfficer(_PluginBase):
         services = data.get("services") or {}
         recovery = data.get("recovery") or {}
         lines = [
-            "Agent云盘资源整合 轻量启动状态",
+            "Agent影视助手 轻量启动状态",
             f"版本：{data.get('version')}",
             f"插件：{'已启用' if data.get('enabled') else '未启用'}",
             f"115：{'可用' if services.get('p115_ready') else '不可用'}",
@@ -5213,7 +9708,7 @@ class AgentResourceOfficer(_PluginBase):
         before = payload.get("before") or {}
         after = payload.get("after") or before
         lines = [
-            "Agent云盘资源整合 低风险维护",
+            "Agent影视助手 低风险维护",
             f"版本：{payload.get('version')}",
             f"执行：{'是' if payload.get('execute_requested') else '否'}",
             "维护前：过期会话 {stale_sessions}；已执行计划 {saved_plans_executed}；待执行计划 {saved_plans_pending}".format(**before),
@@ -5319,7 +9814,7 @@ class AgentResourceOfficer(_PluginBase):
         checks = (data.get("selfcheck") or {}).get("checks") or {}
         failed = [key for key, value in checks.items() if not value]
         lines = [
-            "Agent云盘资源整合 启动聚合包",
+            "Agent影视助手 启动聚合包",
             f"版本：{data.get('version')}",
             f"可启动：{'是' if data.get('ok') else '否'}",
             f"115：{'可用' if services.get('p115_ready') else '不可用'}；影巢：{'已配' if services.get('hdhive_configured') else '未配'}；夸克：{'已配' if services.get('quark_configured') else '未配'}",
@@ -5412,6 +9907,22 @@ class AgentResourceOfficer(_PluginBase):
                 "resume_pending_115",
                 "execute_latest_plan",
                 "execute_session_latest_plan",
+                "query_mp_download_tasks",
+                "query_mp_download_history",
+                "query_mp_lifecycle_status",
+                "query_mp_ingest_status",
+                "query_execution_followup",
+                "query_mp_media_detail",
+                "query_mp_search_result_detail",
+                "query_mp_best_result_detail",
+                "pick_mp_best_download",
+                "query_mp_downloaders",
+                "query_mp_sites",
+                "query_mp_subscribes",
+                "query_mp_transfer_history",
+                "query_mp_ingest_failures",
+                "query_mp_recent_activity",
+                "query_mp_local_diagnose",
                 "clear_stale_sessions",
                 "clear_executed_plans",
             ],
@@ -5424,6 +9935,7 @@ class AgentResourceOfficer(_PluginBase):
                 "选择 1",
                 "详情",
                 "下一页",
+                "识别 蜘蛛侠",
                 "115登录",
             ],
             "request_templates": self._assistant_request_templates_public_data(limit=100),
@@ -5481,6 +9993,51 @@ class AgentResourceOfficer(_PluginBase):
                 "tool_args": {"execute": True, "limit": max_limit},
                 "body": {"execute": True, "limit": max_limit},
             },
+            "preferences_get": {
+                "description": "读取智能体片源偏好画像；未初始化时应先询问用户偏好。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "GET",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/preferences",
+                "tool": "agent_resource_officer_preferences",
+                "tool_args": {"session": "assistant", "compact": True},
+                "query": {"session": "assistant", "compact": True},
+            },
+            "preferences_save": {
+                "description": "保存智能体片源偏好画像；影响云盘与 PT 评分、自动化建议和安全阈值。",
+                "side_effect": "state",
+                "requires_confirmation": True,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/preferences",
+                "tool": "agent_resource_officer_preferences",
+                "tool_args": {
+                    "session": "assistant",
+                    "preferences": self._default_assistant_preferences(),
+                    "compact": True,
+                },
+                "body": {
+                    "session": "assistant",
+                    "preferences": self._default_assistant_preferences(),
+                    "compact": True,
+                },
+            },
+            "scoring_policy": {
+                "description": "读取插件内置云盘/PT 评分策略、硬门槛和 score_summary 使用约定；只读，可缓存。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "medium_lived",
+                "cache_ttl_seconds": 3600,
+                "method": "GET",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/capabilities",
+                "tool": "agent_resource_officer_capabilities",
+                "tool_args": {"compact": True},
+                "query": {"compact": True},
+                "response_field": "scoring_policy",
+            },
             "workflow_dry_run": {
                 "description": "生成并保存工作流计划，不实际执行；适合先让用户确认。",
                 "side_effect": "plan_write",
@@ -5493,7 +10050,7 @@ class AgentResourceOfficer(_PluginBase):
                 "tool_args": {
                     "name": "hdhive_candidates",
                     "keyword": "蜘蛛侠",
-                    "media_type": "movie",
+                    "media_type": "auto",
                     "session": "assistant",
                     "dry_run": True,
                     "compact": True,
@@ -5501,11 +10058,287 @@ class AgentResourceOfficer(_PluginBase):
                 "body": {
                     "workflow": "hdhive_candidates",
                     "keyword": "蜘蛛侠",
-                    "media_type": "movie",
+                    "media_type": "auto",
                     "session": "assistant",
                     "dry_run": True,
                     "compact": True,
                 },
+            },
+            "mp_search": {
+                "description": "执行 MP 原生搜索，返回 PT 候选与 PT 评分摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "session_cache",
+                "cache_ttl_seconds": 600,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_search", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+            },
+            "mp_media_detail": {
+                "description": "使用 MoviePilot 原生识别确认片名、年份、类型和 TMDB/Douban/IMDB ID；适合搜索前消歧。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 300,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_media_detail", "keyword": "蜘蛛侠", "media_type": "auto", "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_media_detail", "keyword": "蜘蛛侠", "media_type": "auto", "session": "assistant", "compact": True},
+            },
+            "mp_search_detail": {
+                "description": "执行 MP 原生搜索并查看指定编号的 PT 详情和评分理由；只读，不下载。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "session_cache",
+                "cache_ttl_seconds": 600,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search_detail", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_search_detail", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "compact": True},
+            },
+            "mp_search_best": {
+                "description": "执行 MP 原生搜索并展示当前评分最高的 PT 候选详情；只读，不下载。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "session_cache",
+                "cache_ttl_seconds": 600,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search_best", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_search_best", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+            },
+            "mp_best_download_plan": {
+                "description": "在已有 MP 搜索会话中按当前最高分候选生成下载计划；不会直接下载。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                "tool": "agent_resource_officer_execute_action",
+                "tool_args": {"name": "pick_mp_best_download", "session": "assistant", "compact": True},
+                "body": {"name": "pick_mp_best_download", "session": "assistant", "compact": True},
+            },
+            "mp_search_download_plan": {
+                "description": "MP 原生搜索并选择编号下载；写入动作默认只生成 plan_id，确认后执行。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
+                "body": {"workflow": "mp_search_download", "keyword": "蜘蛛侠", "choice": 1, "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_download_tasks": {
+                "description": "查询 MP 下载任务状态，可按下载中、等待、已暂停等状态过滤；只返回摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_download_tasks", "status": "downloading", "limit": 10, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_download_tasks", "status": "downloading", "limit": 10, "session": "assistant", "compact": True},
+            },
+            "mp_download_control_plan": {
+                "description": "暂停、恢复或删除 MP 下载任务；默认只生成 plan_id，确认后执行。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_download_control", "control": "pause", "target": "1", "session": "assistant", "dry_run": True, "compact": True},
+                "body": {"workflow": "mp_download_control", "control": "pause", "target": "1", "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_download_history": {
+                "description": "查询 MP 下载历史，并按 hash 关联整理/入库状态；只返回摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_download_history", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_download_history", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
+            },
+            "mp_lifecycle_status": {
+                "description": "一次查询 MP 下载任务、下载历史和整理/入库历史，适合追踪资源当前卡在哪一步。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_lifecycle_status", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_lifecycle_status", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
+            },
+            "mp_ingest_status": {
+                "description": "按片名或 hash 输出下载到入库的当前阶段，并附带结构化 diagnosis_summary。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_ingest_status", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_ingest_status", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
+            },
+            "mp_downloaders": {
+                "description": "查询 MP 下载器配置摘要，不返回密码、Cookie 或 Token。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_downloaders", "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_downloaders", "session": "assistant", "compact": True},
+            },
+            "mp_sites": {
+                "description": "查询 MP PT 站点启用状态、优先级和 Cookie 是否存在，不返回 Cookie 明文。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_sites", "status": "active", "limit": 30, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_sites", "status": "active", "limit": 30, "session": "assistant", "compact": True},
+            },
+            "mp_subscribe_plan": {
+                "description": "按关键词创建 MP 订阅；默认只生成 plan_id，确认后执行。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_subscribe", "keyword": "蜘蛛侠", "session": "assistant", "dry_run": True, "compact": True},
+                "body": {"workflow": "mp_subscribe", "keyword": "蜘蛛侠", "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_subscribe_search_plan": {
+                "description": "创建 MP 订阅并立即触发搜索；默认只生成 plan_id，确认后执行。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_subscribe_and_search", "keyword": "蜘蛛侠", "session": "assistant", "dry_run": True, "compact": True},
+                "body": {"workflow": "mp_subscribe_and_search", "keyword": "蜘蛛侠", "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_subscribes": {
+                "description": "查询 MP 订阅列表，可按状态、类型和关键词过滤；只返回摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_subscribes", "status": "all", "limit": 20, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_subscribes", "status": "all", "limit": 20, "session": "assistant", "compact": True},
+            },
+            "mp_subscribe_control_plan": {
+                "description": "搜索、暂停、恢复或删除 MP 订阅；默认只生成 plan_id，确认后执行。",
+                "side_effect": "plan_write",
+                "requires_confirmation": False,
+                "cache_scope": "no_cache",
+                "cache_ttl_seconds": 0,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_subscribe_control", "control": "search", "target": "1", "session": "assistant", "dry_run": True, "compact": True},
+                "body": {"workflow": "mp_subscribe_control", "control": "search", "target": "1", "session": "assistant", "dry_run": True, "compact": True},
+            },
+            "mp_transfer_history": {
+                "description": "查询 MP 最近整理/入库历史，判断下载后是否已经落库；只返回摘要。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_transfer_history", "keyword": "蜘蛛侠", "status": "all", "limit": 10, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_transfer_history", "keyword": "蜘蛛侠", "status": "all", "limit": 10, "session": "assistant", "compact": True},
+            },
+            "mp_ingest_failures": {
+                "description": "聚合最近整理/入库失败记录，并返回失败态 diagnosis_summary。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_ingest_failures", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_ingest_failures", "keyword": "蜘蛛侠", "limit": 10, "session": "assistant", "compact": True},
+            },
+            "mp_recent_activity": {
+                "description": "查看最近下载和最近入库活动，适合先发现目标再进入单资源追踪。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 120,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_recent_activity", "limit": 10, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_recent_activity", "limit": 10, "session": "assistant", "compact": True},
+            },
+            "mp_local_diagnose": {
+                "description": "面向“为什么没入库/卡在哪”的一站式只读诊断入口。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_local_diagnose", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_local_diagnose", "keyword": "蜘蛛侠", "limit": 5, "session": "assistant", "compact": True},
+            },
+            "mp_recommend": {
+                "description": "读取 MP 原生热门推荐，例如 TMDB、豆瓣或 Bangumi。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 300,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_recommend", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_recommend", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
+            },
+            "mp_recommend_search": {
+                "description": "读取 MP 原生推荐并按编号继续搜索；mode 可选 mp、hdhive、pansou。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "session_cache",
+                "cache_ttl_seconds": 300,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "mp_recommend_search", "source": "tmdb_trending", "choice": 1, "mode": "mp", "limit": 20, "session": "assistant", "compact": True},
+                "body": {"workflow": "mp_recommend_search", "source": "tmdb_trending", "choice": 1, "mode": "mp", "limit": 20, "session": "assistant", "compact": True},
             },
             "saved_plan_execute": {
                 "description": "执行已保存的 dry_run 工作流计划，可按 session 自动选择未执行计划。",
@@ -5526,6 +10359,38 @@ class AgentResourceOfficer(_PluginBase):
                     "prefer_unexecuted": True,
                     "compact": True,
                 },
+            },
+            "execution_followup": {
+                "description": "按最近已执行计划自动追踪下载、订阅或入库后续状态，由插件决定先查哪个只读动作。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                "tool": "agent_resource_officer_execute_action",
+                "tool_args": {
+                    "name": "query_execution_followup",
+                    "session": "assistant",
+                    "compact": True,
+                },
+                "body": {
+                    "name": "query_execution_followup",
+                    "session": "assistant",
+                    "compact": True,
+                },
+            },
+            "smart_followup": {
+                "description": "统一跟进入口：有片名时查生命周期；有已执行计划时查执行后状态；否则查最近活动。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "smart_followup", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
+                "body": {"workflow": "smart_followup", "keyword": "蜘蛛侠", "session": "assistant", "compact": True},
             },
             "action_execute": {
                 "description": "按动作名执行单个 action template，适合无映射继续执行。",
@@ -5612,10 +10477,54 @@ class AgentResourceOfficer(_PluginBase):
         recipe_templates_map = {
             "safe_bootstrap": ["startup_probe", "selfcheck_probe", "maintain_preview"],
             "plan_then_confirm": ["workflow_dry_run", "saved_plan_execute"],
+            "post_execute_followup": ["smart_followup", "execution_followup", "mp_download_history", "mp_lifecycle_status", "mp_subscribes", "mp_transfer_history"],
             "continue_existing_session": ["pick_continue"],
             "maintenance_cycle": ["maintain_preview", "maintain_execute"],
             "external_agent_quickstart": ["startup_probe", "route_text", "pick_continue"],
             "workbuddy_quickstart": ["startup_probe", "route_text", "pick_continue"],
+            "preferences_onboarding": ["preferences_get", "scoring_policy", "preferences_save"],
+            "mp_pt_mainline": [
+                "mp_media_detail",
+                "mp_search",
+                "mp_search_detail",
+                "mp_search_best",
+                "mp_search_download_plan",
+                "mp_best_download_plan",
+                "mp_download_tasks",
+                "mp_download_control_plan",
+                "mp_download_history",
+                "mp_lifecycle_status",
+                "mp_ingest_status",
+                "mp_downloaders",
+                "mp_sites",
+                "mp_subscribe_plan",
+                "mp_subscribe_search_plan",
+                "mp_subscribes",
+                "mp_subscribe_control_plan",
+                "mp_transfer_history",
+                "mp_ingest_failures",
+                "mp_recent_activity",
+                "mp_local_diagnose",
+                "saved_plan_execute",
+            ],
+            "mp_recommendation": [
+                "mp_recommend",
+                "mp_recommend_search",
+                "mp_search",
+                "mp_search_best",
+                "mp_search_download_plan",
+                "saved_plan_execute",
+            ],
+            "local_ingest": [
+                "smart_followup",
+                "mp_lifecycle_status",
+                "mp_ingest_status",
+                "mp_download_history",
+                "mp_transfer_history",
+                "mp_ingest_failures",
+                "mp_recent_activity",
+                "mp_local_diagnose",
+            ],
         }
         recipe_aliases = {
             "bootstrap": "safe_bootstrap",
@@ -5626,6 +10535,17 @@ class AgentResourceOfficer(_PluginBase):
             "dry_run": "plan_then_confirm",
             "confirm": "plan_then_confirm",
             "计划": "plan_then_confirm",
+            "followup": "post_execute_followup",
+            "follow": "post_execute_followup",
+            "post_execute": "post_execute_followup",
+            "post-execute": "post_execute_followup",
+            "after_execute": "post_execute_followup",
+            "after-execute": "post_execute_followup",
+            "执行后": "post_execute_followup",
+            "执行后追踪": "post_execute_followup",
+            "后续追踪": "post_execute_followup",
+            "跟进": "post_execute_followup",
+            "进展": "post_execute_followup",
             "continue": "continue_existing_session",
             "pick": "continue_existing_session",
             "resume": "continue_existing_session",
@@ -5644,6 +10564,38 @@ class AgentResourceOfficer(_PluginBase):
             "work_buddy": "external_agent_quickstart",
             "workbody": "external_agent_quickstart",
             "work_body": "external_agent_quickstart",
+            "preferences": "preferences_onboarding",
+            "preference": "preferences_onboarding",
+            "prefs": "preferences_onboarding",
+            "pref": "preferences_onboarding",
+            "片源偏好": "preferences_onboarding",
+            "偏好画像": "preferences_onboarding",
+            "评分偏好": "preferences_onboarding",
+            "mp": "mp_pt_mainline",
+            "pt": "mp_pt_mainline",
+            "mp_native": "mp_pt_mainline",
+            "mp-native": "mp_pt_mainline",
+            "mp_pt": "mp_pt_mainline",
+            "mp-pt": "mp_pt_mainline",
+            "pt_mainline": "mp_pt_mainline",
+            "pt-mainline": "mp_pt_mainline",
+            "原生mp": "mp_pt_mainline",
+            "mp原生": "mp_pt_mainline",
+            "原生搜索": "mp_pt_mainline",
+            "pt下载": "mp_pt_mainline",
+            "下载订阅": "mp_pt_mainline",
+            "local_ingest": "local_ingest",
+            "local-ingest": "local_ingest",
+            "ingest": "local_ingest",
+            "local": "local_ingest",
+            "本地入库": "local_ingest",
+            "入库诊断": "local_ingest",
+            "recommend": "mp_recommendation",
+            "recommendation": "mp_recommendation",
+            "mp_recommend": "mp_recommendation",
+            "mp-recommend": "mp_recommendation",
+            "推荐": "mp_recommendation",
+            "热门": "mp_recommendation",
         }
         requested_recipe = self._clean_text(recipe)
         selected_recipe = recipe_aliases.get(requested_recipe, requested_recipe)
@@ -5688,6 +10640,218 @@ class AgentResourceOfficer(_PluginBase):
             "url_template": "{base_url}{endpoint}?apikey={MP_API_TOKEN}",
             "description": "调用插件 HTTP 接口时推荐使用 ?apikey=你的MP_API_TOKEN；MP Tool 调用不需要此参数。",
         }
+        external_agent_execution_policy_contract = {
+            "auto_continue": "直接执行 auto_run_command。",
+            "auto_continue_then_wait_confirmation": "先执行 auto_run_command，再停止并向用户展示 confirm_command。",
+            "wait_user_confirmation": "不要自动执行；先向用户展示 confirm_command 或 display_command。",
+            "show_only": "只展示 display_command，不要自动继续。",
+            "stop": "当前没有适合自动继续的命令，不要继续执行。",
+        }
+        external_agent_execution_loop_contract = [
+            {
+                "step": "startup",
+                "template": "startup_probe",
+                "when": "新会话开始时先读取启动聚合包。",
+            },
+            {
+                "step": "decide",
+                "template": "startup_probe",
+                "when": "结合恢复信息和推荐 recipe，确定先继续会话还是开始新流程。",
+            },
+            {
+                "step": "route",
+                "template": "route_text",
+                "when": "处理用户的自然语言资源指令。",
+            },
+            {
+                "step": "policy",
+                "template": "",
+                "when": "读取 recommended_agent_behavior、auto_run_command、confirm_command 决定自动继续、确认或停止。",
+            },
+            {
+                "step": "followup",
+                "template": "execution_followup",
+                "when": "执行计划后继续追踪下载、入库或失败诊断。",
+            },
+        ]
+        entry_patterns = {
+            "external_agent": {
+                "label": "外部智能体",
+                "client_role": "客户端调度层",
+                "start_with": "startup",
+                "decide_with": "decide --summary-only",
+                "route_with": "route --summary-only",
+                "followup_with": "followup --summary-only",
+                "read_fields": [
+                    "recommended_agent_behavior",
+                    "auto_run_command",
+                    "confirm_command",
+                    "display_command",
+                    "preferred_command",
+                    "compact_commands",
+                ],
+                "notes": "适用于 WorkBuddy、Hermes、OpenClaw（小龙虾）等外部智能体；优先使用 Skill/helper。",
+            },
+            "mp_builtin_agent": {
+                "label": "MP 内置智能体",
+                "client_role": "客户端调度层",
+                "start_with": "assistant/request_templates",
+                "decide_with": "agent_resource_officer_request_templates",
+                "route_with": "agent_resource_officer_smart_entry",
+                "followup_with": "agent_resource_officer_execution_followup",
+                "read_fields": [
+                    "recommended_recipe_detail",
+                    "recommended_agent_behavior",
+                    "preferred_command",
+                    "compact_commands",
+                ],
+                "notes": "优先走 Agent Tool / request_templates，不在模型侧直拼底层资源 API。",
+            },
+            "feishu_channel": {
+                "label": "飞书入口",
+                "client_role": "客户端消息入口",
+                "start_with": "feishu message -> route",
+                "decide_with": "插件内置命令解析",
+                "route_with": "route/pick/followup",
+                "followup_with": "followup / smart_followup",
+                "read_fields": [
+                    "recommended_agent_behavior",
+                    "preferred_command",
+                    "fallback_command",
+                    "compact_commands",
+                ],
+                "notes": "飞书只负责把消息送进同一套 assistant 协议；确认策略与外部智能体保持一致。",
+            },
+        }
+        orchestration_contract = {
+            "service_role": "Agent影视助手 / AgentResourceOfficer 负责服务端能力执行。",
+            "client_role": "外部智能体、MP 内置智能体、飞书入口负责客户端调度与展示。",
+            "recommended_first_call": "startup",
+            "recommended_decision_call": "decide --summary-only",
+            "recommended_route_call": "route --summary-only",
+            "recommended_followup_call": "followup --summary-only",
+            "recommended_read_fields": [
+                "recommended_agent_behavior",
+                "auto_run_command",
+                "confirm_command",
+                "display_command",
+                "preferred_command",
+                "compact_commands",
+            ],
+            "confirmation_rule": "写入动作默认确认制；只有明确标记可自动继续的只读步骤才自动续跑。",
+        }
+        entry_playbooks = {
+            "external_agent": {
+                "label": "外部智能体最小执行流",
+                "transport": "skill_helper_or_http",
+                "steps": [
+                    {
+                        "step": "startup",
+                        "helper_command": "python3 scripts/aro_request.py startup",
+                        "http_call": {
+                            "method": "GET",
+                            "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
+                            "url_template": "{base_url}/api/v1/plugin/AgentResourceOfficer/assistant/startup?apikey={MP_API_TOKEN}",
+                        },
+                        "purpose": "读取启动状态、恢复建议和推荐 recipe。",
+                        "read_fields": ["recommended_request_templates", "recovery", "services"],
+                    },
+                    {
+                        "step": "decide",
+                        "helper_command": "python3 scripts/aro_request.py decide --summary-only",
+                        "http_call": {
+                            "method": "GET",
+                            "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/startup",
+                            "url_template": "{base_url}/api/v1/plugin/AgentResourceOfficer/assistant/startup?apikey={MP_API_TOKEN}",
+                        },
+                        "purpose": "决定继续会话、初始化偏好还是直接进入 route。",
+                        "read_fields": ["recommended_agent_behavior", "auto_run_command", "confirm_command"],
+                    },
+                    {
+                        "step": "route",
+                        "helper_command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>' --summary-only",
+                        "http_call": {
+                            "method": "POST",
+                            "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                            "url_template": "{base_url}/api/v1/plugin/AgentResourceOfficer/assistant/route?apikey={MP_API_TOKEN}",
+                        },
+                        "purpose": "执行自然语言主入口。",
+                        "read_fields": [
+                            "recommended_agent_behavior",
+                            "auto_run_command",
+                            "confirm_command",
+                            "preferred_command",
+                            "compact_commands",
+                        ],
+                    },
+                    {
+                        "step": "followup",
+                        "helper_command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>' --summary-only",
+                        "http_call": {
+                            "method": "POST",
+                            "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                            "url_template": "{base_url}/api/v1/plugin/AgentResourceOfficer/assistant/action?apikey={MP_API_TOKEN}",
+                        },
+                        "purpose": "执行计划后继续追踪下载、入库或失败诊断。",
+                        "read_fields": ["recommended_agent_behavior", "auto_run_command", "followup_summary"],
+                    },
+                ],
+                "auto_rule": "优先读取 recommended_agent_behavior；只读步骤可自动续跑，写入步骤默认确认。",
+            },
+            "mp_builtin_agent": {
+                "label": "MP 内置智能体最小执行流",
+                "transport": "moviepilot_agent_tool",
+                "steps": [
+                    {
+                        "step": "request_templates",
+                        "tool": "agent_resource_officer_request_templates",
+                        "tool_args": {"recipe": "external_agent", "compact": True},
+                        "purpose": "读取最小流程、确认策略和推荐入口。",
+                        "read_fields": ["orchestration_contract", "entry_patterns", "recommended_recipe_detail"],
+                    },
+                    {
+                        "step": "route",
+                        "tool": "agent_resource_officer_smart_entry",
+                        "tool_args": {"text": "<用户原始指令>"},
+                        "purpose": "处理搜索、链接、登录状态等主入口。",
+                        "read_fields": ["recommended_agent_behavior", "preferred_command", "compact_commands"],
+                    },
+                    {
+                        "step": "followup",
+                        "tool": "agent_resource_officer_execution_followup",
+                        "tool_args": {},
+                        "purpose": "执行计划后继续查看下载、入库和失败状态。",
+                        "read_fields": ["followup_summary", "preferred_command", "compact_commands"],
+                    },
+                ],
+                "auto_rule": "依然遵守服务端 compact 协议；不要在模型侧拼底层资源站点 API。",
+            },
+            "feishu_channel": {
+                "label": "飞书入口最小执行流",
+                "transport": "feishu_channel",
+                "steps": [
+                    {
+                        "step": "message_in",
+                        "channel": "feishu",
+                        "purpose": "用户消息进入内置 Channel。",
+                        "read_fields": ["session", "text", "reply_target"],
+                    },
+                    {
+                        "step": "route",
+                        "internal": "route / pick / followup",
+                        "purpose": "复用同一套 assistant 协议，不维护单独状态机。",
+                        "read_fields": ["recommended_agent_behavior", "preferred_command", "compact_commands"],
+                    },
+                    {
+                        "step": "reply",
+                        "channel": "feishu",
+                        "purpose": "按确认策略回消息、展示编号或提示下一步。",
+                        "read_fields": ["display_command", "confirm_command", "message"],
+                    },
+                ],
+                "auto_rule": "飞书只负责消息承载；写入动作依然由插件服务端统一确认。",
+            },
+        }
         recommended_sequence = [
             {
                 "step": "bootstrap",
@@ -5715,9 +10879,29 @@ class AgentResourceOfficer(_PluginBase):
                 "when": "已确认 dry_run 计划后执行。",
             },
             {
+                "step": "post_execute_followup",
+                "template": "execution_followup",
+                "when": "计划执行成功后，自动决定先查下载历史、生命周期、订阅或入库历史。",
+            },
+            {
                 "step": "continue_session",
                 "template": "pick_continue",
                 "when": "盘搜、影巢候选或资源列表需要按编号继续时使用。",
+            },
+            {
+                "step": "preferences_onboarding",
+                "template": "preferences_get",
+                "when": "外部智能体首次接入时，先读取偏好和评分策略，再保存用户片源偏好。",
+            },
+            {
+                "step": "mp_pt_mainline",
+                "template": "mp_search",
+                "when": "需要 MP 原生 PT 搜索、评分、下载计划、订阅或任务追踪时使用。",
+            },
+            {
+                "step": "mp_recommendation",
+                "template": "mp_recommend",
+                "when": "需要 TMDB、豆瓣、Bangumi 等 MP 原生推荐，并继续搜索时使用。",
             },
         ]
         recipes = [
@@ -5730,6 +10914,11 @@ class AgentResourceOfficer(_PluginBase):
                 "name": "plan_then_confirm",
                 "description": "先生成计划，等待用户确认后再执行保存计划。",
                 "templates": recipe_templates_map["plan_then_confirm"],
+            },
+            {
+                "name": "post_execute_followup",
+                "description": "执行计划后的统一只读跟踪：由插件自动选择最合适的后续查询动作。",
+                "templates": recipe_templates_map["post_execute_followup"],
             },
             {
                 "name": "continue_existing_session",
@@ -5750,6 +10939,21 @@ class AgentResourceOfficer(_PluginBase):
                 "name": "workbuddy_quickstart",
                 "description": "兼容别名：等同于 external_agent_quickstart。",
                 "templates": recipe_templates_map["workbuddy_quickstart"],
+            },
+            {
+                "name": "preferences_onboarding",
+                "description": "首次接入时先读取偏好、评分策略，再保存用户的片源偏好画像。",
+                "templates": recipe_templates_map["preferences_onboarding"],
+            },
+            {
+                "name": "mp_pt_mainline",
+                "description": "MP 原生 PT 主线：识别、搜索、评分、下载计划、任务、订阅、站点和入库追踪。",
+                "templates": recipe_templates_map["mp_pt_mainline"],
+            },
+            {
+                "name": "mp_recommendation",
+                "description": "MP 原生推荐主线：读取热门推荐，再按编号进入 MP、影巢或盘搜搜索。",
+                "templates": recipe_templates_map["mp_recommendation"],
             },
         ]
         recipe_summaries: List[Dict[str, Any]] = []
@@ -5787,6 +10991,9 @@ class AgentResourceOfficer(_PluginBase):
         elif "pick_continue" in selected_set:
             recommended_recipe = "continue_existing_session"
             recommended_recipe_reason = "当前模板集合包含 pick_continue，说明更像继续既有会话。"
+        elif {"preferences_get", "preferences_save", "scoring_policy"} & selected_set:
+            recommended_recipe = "preferences_onboarding"
+            recommended_recipe_reason = "当前模板集合包含偏好或评分策略模板，优先推荐偏好初始化流程。"
         elif {"maintain_preview", "maintain_execute"} & selected_set:
             recommended_recipe = "maintenance_cycle"
             recommended_recipe_reason = "当前模板集合包含维护模板，优先推荐维护流程。"
@@ -5854,6 +11061,12 @@ class AgentResourceOfficer(_PluginBase):
             } if first_template_data else {},
             "calls": recommended_recipe_calls,
         }
+        if recommended_recipe == "external_agent_quickstart":
+            recommended_recipe_detail["execution_policy_contract"] = external_agent_execution_policy_contract
+            recommended_recipe_detail["execution_loop_contract"] = external_agent_execution_loop_contract
+            recommended_recipe_detail["entry_patterns"] = entry_patterns
+            recommended_recipe_detail["orchestration_contract"] = orchestration_contract
+            recommended_recipe_detail["entry_playbooks"] = entry_playbooks
         confirmation_templates = recommended_recipe_detail.get("confirmation_required_templates") or []
         recommended_recipe_detail["first_confirmation_template"] = confirmation_templates[0] if confirmation_templates else ""
         recommended_recipe_detail["confirmation_message"] = (
@@ -5891,13 +11104,18 @@ class AgentResourceOfficer(_PluginBase):
             "recommended_recipe": recommended_recipe,
             "recommended_recipe_reason": recommended_recipe_reason,
             "recommended_recipe_detail": recommended_recipe_detail,
+            "external_agent_execution_policy_contract": external_agent_execution_policy_contract,
+            "external_agent_execution_loop_contract": external_agent_execution_loop_contract,
+            "entry_patterns": entry_patterns,
+            "orchestration_contract": orchestration_contract,
+            "entry_playbooks": entry_playbooks,
         }
 
     def _format_assistant_request_templates_text(self, data: Optional[Dict[str, Any]] = None) -> str:
         payload = data or self._assistant_request_templates_response_data()
         templates = payload.get("request_templates") or {}
         lines = [
-            "Agent云盘资源整合 请求模板",
+            "Agent影视助手 请求模板",
             f"版本：{payload.get('version')}",
         ]
         detail = payload.get("recommended_recipe_detail") or {}
@@ -5914,6 +11132,53 @@ class AgentResourceOfficer(_PluginBase):
             )
         if detail.get("confirmation_message"):
             lines.append(f"确认提示：{detail.get('confirmation_message')}")
+        if detail.get("execution_policy_contract"):
+            lines.append("外部智能体执行分支：" + " / ".join(str(key) for key in (detail.get("execution_policy_contract") or {}).keys()))
+        if detail.get("execution_loop_contract"):
+            lines.append(
+                "外部智能体最小循环："
+                + " -> ".join(self._clean_text(item.get("step")) for item in (detail.get("execution_loop_contract") or []) if self._clean_text(item.get("step")))
+            )
+        orchestration_contract = payload.get("orchestration_contract") or detail.get("orchestration_contract") or {}
+        if orchestration_contract:
+            lines.append(
+                "最小执行流：{startup} -> {decide} -> {route} -> policy -> {followup}".format(
+                    startup=self._clean_text(orchestration_contract.get("recommended_first_call")) or "startup",
+                    decide=self._clean_text(orchestration_contract.get("recommended_decision_call")) or "decide --summary-only",
+                    route=self._clean_text(orchestration_contract.get("recommended_route_call")) or "route --summary-only",
+                    followup=self._clean_text(orchestration_contract.get("recommended_followup_call")) or "followup --summary-only",
+                )
+            )
+            read_fields = [
+                self._clean_text(item)
+                for item in (orchestration_contract.get("recommended_read_fields") or [])
+                if self._clean_text(item)
+            ]
+            if read_fields:
+                lines.append("优先读取字段：" + " / ".join(read_fields))
+        entry_patterns = payload.get("entry_patterns") or detail.get("entry_patterns") or {}
+        for key in ["external_agent", "mp_builtin_agent", "feishu_channel"]:
+            item = entry_patterns.get(key) or {}
+            if not item:
+                continue
+            lines.append(
+                "{label}：{start} -> {route}".format(
+                    label=self._clean_text(item.get("label")) or key,
+                    start=self._clean_text(item.get("start_with")) or "",
+                    route=self._clean_text(item.get("route_with")) or "",
+                )
+            )
+        entry_playbooks = payload.get("entry_playbooks") or detail.get("entry_playbooks") or {}
+        external_playbook = (entry_playbooks.get("external_agent") or {}).get("steps") or []
+        if external_playbook:
+            lines.append(
+                "外部智能体脚手架："
+                + " -> ".join(
+                    self._clean_text(item.get("step"))
+                    for item in external_playbook
+                    if self._clean_text(item.get("step"))
+                )
+            )
         for name in [
             "startup_probe",
             "selfcheck_probe",
@@ -5935,7 +11200,7 @@ class AgentResourceOfficer(_PluginBase):
         data = self._assistant_toolbox_public_data()
         workflows = data.get("workflows") or []
         lines = [
-            "Agent云盘资源整合 轻量工具清单",
+            "Agent影视助手 轻量工具清单",
             f"版本：{data.get('version')}",
             "推荐启动顺序：" + " -> ".join(str(item) for item in (data.get("startup_order") or [])[:5]),
             "常用工作流：" + " / ".join(str(item.get("name")) for item in workflows if item.get("name")),
@@ -6003,6 +11268,11 @@ class AgentResourceOfficer(_PluginBase):
         recipe_filtered_request_templates = self._assistant_request_templates_response_data(
             limit=5,
             recipe="plan",
+            include_templates=False,
+        )
+        external_recipe_request_templates = self._assistant_request_templates_response_data(
+            limit=5,
+            recipe="external_agent",
             include_templates=False,
         )
         policy_only_request_templates = self._assistant_request_templates_response_data(
@@ -6169,6 +11439,26 @@ class AgentResourceOfficer(_PluginBase):
             and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("confirmation_required") or [])
             and "maintain_execute" in ((policy_only_request_templates.get("execution_policy") or {}).get("non_cacheable_templates") or [])
         )
+        external_recipe_detail = external_recipe_request_templates.get("recommended_recipe_detail") or {}
+        request_templates_external_agent_contract_ok = (
+            external_recipe_request_templates.get("selected_recipe") == "external_agent_quickstart"
+            and external_recipe_request_templates.get("recommended_recipe") == "external_agent_quickstart"
+            and bool((external_recipe_request_templates.get("external_agent_execution_policy_contract") or {}).get("auto_continue"))
+            and len(external_recipe_request_templates.get("external_agent_execution_loop_contract") or []) >= 5
+            and ((external_recipe_request_templates.get("orchestration_contract") or {}).get("recommended_first_call")) == "startup"
+            and bool(((external_recipe_request_templates.get("entry_patterns") or {}).get("mp_builtin_agent") or {}).get("route_with"))
+            and len((((external_recipe_request_templates.get("entry_playbooks") or {}).get("external_agent") or {}).get("steps") or [])) >= 4
+            and bool((external_recipe_detail.get("execution_policy_contract") or {}).get("auto_continue"))
+            and len(external_recipe_detail.get("execution_loop_contract") or []) >= 5
+            and ((external_recipe_detail.get("orchestration_contract") or {}).get("recommended_route_call")) == "route --summary-only"
+            and bool(((external_recipe_detail.get("entry_patterns") or {}).get("feishu_channel") or {}).get("route_with"))
+            and bool(((((external_recipe_detail.get("entry_playbooks") or {}).get("mp_builtin_agent") or {}).get("steps") or [{}])[0]).get("tool"))
+            and any(
+                self._clean_text(item.get("step")) == "policy"
+                for item in (external_recipe_detail.get("execution_loop_contract") or [])
+                if isinstance(item, dict)
+            )
+        )
         start_new_recovery = self._assistant_recovery_public_data(
             session_state={"has_session": False},
             action_templates=[{"name": "start_pansou_search", "tool": "agent_resource_officer_smart_entry"}],
@@ -6177,6 +11467,62 @@ class AgentResourceOfficer(_PluginBase):
             start_new_recovery.get("mode") == "start_new"
             and start_new_recovery.get("can_resume") is False
             and start_new_recovery.get("recommended_action") == "start_pansou_search"
+        )
+        executed_plan_recovery = self._assistant_recovery_public_data(
+            session_state={
+                "has_session": True,
+                "session": "selfcheck",
+                "session_id": "assistant::selfcheck",
+                "saved_plan": {
+                    "has_pending": False,
+                    "has_plan": True,
+                    "latest": {
+                        "plan_id": "plan-selfcheck-executed",
+                        "executed": True,
+                    },
+                },
+            },
+        )
+        executed_plan_recovery_ok = (
+            executed_plan_recovery.get("mode") == "followup_executed_plan"
+            and executed_plan_recovery.get("can_resume") is True
+            and executed_plan_recovery.get("recommended_action") == "query_execution_followup"
+        )
+        execute_plan_followup_samples = {
+            workflow: self._assistant_plan_execute_followup(
+                workflow=workflow,
+                session="selfcheck",
+                session_id="selfcheck-session",
+                session_state={
+                    "keyword": keyword,
+                    "session": "selfcheck",
+                    "session_id": "selfcheck-session",
+                },
+                ok=True,
+                plan_id=f"plan-selfcheck-{workflow}",
+            )
+            for workflow, keyword in [
+                ("mp_best_download", "蜘蛛侠"),
+                ("mp_subscribe", "钢铁侠"),
+                ("hdhive_unlock_selected", "复仇者联盟"),
+            ]
+        }
+        execute_plan_followups_ok = (
+            [item.get("name") for item in (execute_plan_followup_samples.get("mp_best_download") or {}).get("action_templates") or []]
+            == ["query_execution_followup", "query_mp_ingest_status", "query_mp_download_history", "query_mp_lifecycle_status", "query_mp_local_diagnose"]
+            and (execute_plan_followup_samples.get("mp_best_download") or {}).get("recommended_action") == "query_execution_followup"
+            and bool(self._clean_text((execute_plan_followup_samples.get("mp_best_download") or {}).get("follow_up_hint")))
+            and bool(self._clean_text(((execute_plan_followup_samples.get("mp_best_download") or {}).get("followup_summary") or {}).get("label")))
+            and [item.get("name") for item in (execute_plan_followup_samples.get("mp_subscribe") or {}).get("action_templates") or []]
+            == ["query_execution_followup", "query_mp_subscribes", "query_mp_ingest_status", "start_mp_media_search"]
+            and (execute_plan_followup_samples.get("mp_subscribe") or {}).get("recommended_action") == "query_execution_followup"
+            and bool(self._clean_text((execute_plan_followup_samples.get("mp_subscribe") or {}).get("follow_up_hint")))
+            and bool(self._clean_text(((execute_plan_followup_samples.get("mp_subscribe") or {}).get("followup_summary") or {}).get("label")))
+            and [item.get("name") for item in (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("action_templates") or []]
+            == ["query_execution_followup", "query_mp_transfer_history", "query_mp_local_diagnose"]
+            and (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_execution_followup"
+            and bool(self._clean_text((execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("follow_up_hint")))
+            and bool(self._clean_text(((execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("followup_summary") or {}).get("label")))
         )
         checks = {
             "compact_templates": compact_templates_ok,
@@ -6196,8 +11542,11 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_recipe_filter": request_templates_recipe_filter_ok,
             "request_templates_recommended_recipe_detail": request_templates_recommended_recipe_detail_ok,
             "request_templates_policy_only": request_templates_policy_only_ok,
+            "request_templates_external_agent_contract": request_templates_external_agent_contract_ok,
             "startup_request_templates": startup_request_templates_ok,
             "start_new_recovery_not_resumable": start_new_recovery_ok,
+            "executed_plan_recovery": executed_plan_recovery_ok,
+            "execute_plan_followups": execute_plan_followups_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
@@ -6232,6 +11581,19 @@ class AgentResourceOfficer(_PluginBase):
                     }
                     for name in ["maintain_execute", "workflow_dry_run", "saved_plan_execute"]
                 },
+                "execute_plan_followups": {
+                    workflow: {
+                        "next_actions": (sample or {}).get("next_actions") or [],
+                        "recommended_action": self._clean_text((sample or {}).get("recommended_action")),
+                        "follow_up_hint": self._clean_text((sample or {}).get("follow_up_hint")),
+                        "template_names": [
+                            self._clean_text(item.get("name"))
+                            for item in ((sample or {}).get("action_templates") or [])
+                            if isinstance(item, dict) and self._clean_text(item.get("name"))
+                        ],
+                    }
+                    for workflow, sample in execute_plan_followup_samples.items()
+                },
             },
             "next_actions": ["assistant_startup", "assistant_maintain", "assistant_pulse", "assistant_toolbox", "assistant_readiness"],
             "recommended_endpoints": {
@@ -6248,7 +11610,7 @@ class AgentResourceOfficer(_PluginBase):
         checks = data.get("checks") or {}
         failed = [key for key, value in checks.items() if not value]
         lines = [
-            "Agent云盘资源整合 协议自检",
+            "Agent影视助手 协议自检",
             f"版本：{data.get('version')}",
             f"结果：{'通过' if data.get('ok') else '失败'}",
         ]
@@ -6273,7 +11635,10 @@ class AgentResourceOfficer(_PluginBase):
         payload["session"] = session_name
         payload["session_id"] = session_state.get("session_id") or self._assistant_session_id(session_name)
         payload["session_state"] = session_state
+        payload["preference_status"] = payload.get("preference_status") or self._assistant_preferences_status_brief(session=session_name)
         payload["next_actions"] = payload.get("next_actions") or session_state.get("suggested_actions") or []
+        if payload["preference_status"].get("needs_onboarding") and "preferences.init" not in payload["next_actions"]:
+            payload["next_actions"] = ["preferences.init", *list(payload["next_actions"] or [])]
         payload["action_templates"] = payload.get("action_templates") or session_state.get("action_templates") or []
         payload["recovery"] = payload.get("recovery") or session_state.get("recovery") or self._assistant_recovery_public_data(session_state=session_state)
         return payload
@@ -6291,6 +11656,16 @@ class AgentResourceOfficer(_PluginBase):
             "p115_qrcode_start",
             "p115_qrcode_check",
             "hdhive_checkin",
+            "mp_download",
+            "mp_download_control",
+            "mp_subscribe",
+            "mp_subscribe_control",
+            "mp_subscribe_search",
+            "pick_mp_download",
+            "start_mp_subscribe",
+            "start_mp_subscribe_search",
+            "preferences_save",
+            "preferences_reset",
             "execute_actions",
             "execute_plan",
             "maintain",
@@ -6333,6 +11708,15 @@ class AgentResourceOfficer(_PluginBase):
         action = self._clean_text(body.get("action"))
         if action:
             merged["action"] = action
+        plan_id = self._clean_text(body.get("plan_id") or body.get("plan"))
+        if plan_id:
+            merged["plan_id"] = plan_id
+        download_control = self._clean_text(body.get("download_control") or body.get("control") or body.get("operation"))
+        if download_control:
+            merged["download_control"] = download_control
+        subscribe_control = self._clean_text(body.get("subscribe_control") or body.get("control") or body.get("operation"))
+        if subscribe_control:
+            merged["subscribe_control"] = subscribe_control
         return merged
 
     @staticmethod
@@ -6342,6 +11726,7 @@ class AgentResourceOfficer(_PluginBase):
         share_url = AgentResourceOfficer._extract_first_url(raw)
         remain = raw.replace(share_url, " ").strip() if share_url else raw
         mode, query = AgentResourceOfficer._normalize_search_prefix(remain)
+        plan_match = re.search(r"\bplan-[a-zA-Z0-9]+\b", raw)
         options: Dict[str, str] = {
             "text": raw,
             "url": share_url,
@@ -6353,8 +11738,19 @@ class AgentResourceOfficer(_PluginBase):
             "year": "",
             "action": "",
             "client_type": "",
+            "status": "",
+            "hash": "",
+            "plan_id": plan_match.group(0) if plan_match else "",
         }
-        if compact in {
+        if options.get("plan_id") and compact.startswith(("执行plan-", "确认plan-", "executeplan-")):
+            options["action"] = "execute_plan"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif options.get("plan_id") and compact.startswith(("取消plan-", "清理plan-", "删除plan-", "clearplan-", "cancelplan-")):
+            options["action"] = "plans_clear"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
             "帮助",
             "使用帮助",
             "命令帮助",
@@ -6364,6 +11760,73 @@ class AgentResourceOfficer(_PluginBase):
             "插件帮助",
         }:
             options["action"] = "assistant_help"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "执行计划",
+            "执行最新计划",
+            "确认计划",
+            "确认执行计划",
+            "执行plan",
+            "执行最新plan",
+            "executeplan",
+            "executelatestplan",
+        }:
+            options["action"] = "execute_plan"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "计划列表",
+            "查看计划",
+            "待执行计划",
+            "保存计划",
+            "plans",
+            "listplans",
+        }:
+            options["action"] = "plans_list"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "偏好",
+            "片源偏好",
+            "查看偏好",
+            "偏好设置",
+            "智能体偏好",
+            "preferences",
+            "getpreferences",
+        }:
+            options["action"] = "preferences_get"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "重置偏好",
+            "清除偏好",
+            "重设偏好",
+            "恢复默认偏好",
+            "resetpreferences",
+        }:
+            options["action"] = "preferences_reset"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "评分策略",
+            "评分规则",
+            "自动化规则",
+            "scoringpolicy",
+            "scoringrules",
+        }:
+            options["action"] = "scoring_policy"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "取消计划",
+            "清理计划",
+            "删除计划",
+            "cancelplan",
+            "clearplan",
+            "deleteplan",
+        }:
+            options["action"] = "plans_clear"
             options["mode"] = ""
             options["keyword"] = ""
         elif compact in {
@@ -6482,6 +11945,410 @@ class AgentResourceOfficer(_PluginBase):
             options["mode"] = ""
             options["keyword"] = ""
             options["is_gambler"] = "true"
+        elif compact in {
+            "后续",
+            "执行后追踪",
+            "继续追踪",
+            "followup",
+            "postexecute",
+        }:
+            options["action"] = "execution_followup"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "跟进",
+            "继续跟进",
+            "查看进展",
+            "进展",
+            "smartfollowup",
+        }:
+            options["action"] = "smart_followup"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "下载任务",
+            "下载状态",
+            "正在下载",
+            "下载列表",
+            "查看下载",
+            "下载进度",
+            "downloadtasks",
+            "downloadstatus",
+        }:
+            options["action"] = "mp_download_tasks"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "下载最佳",
+            "下载推荐",
+            "下载最好",
+            "下载最佳片源",
+            "下载推荐片源",
+            "downloadbest",
+        }:
+            options["action"] = "mp_download_best"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "下载历史",
+            "下载记录",
+            "记录",
+            "历史下载",
+            "downloadhistory",
+        }:
+            options["action"] = "mp_download_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "最近下载",
+            "recentdownloads",
+        }:
+            options["action"] = "mp_recent_activity"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["download_only"] = "true"
+        elif compact in {
+            "最近",
+            "最近动态",
+            "动态",
+            "recentactivity",
+        }:
+            options["action"] = "mp_recent_activity"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "追踪",
+            "资源追踪",
+            "下载追踪",
+            "媒体状态",
+            "落库状态",
+            "状态",
+            "进度",
+            "lifecyclestatus",
+        }:
+            options["action"] = "mp_lifecycle_status"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "入库状态",
+            "本地入库",
+            "入库",
+            "ingeststatus",
+        }:
+            options["action"] = "mp_ingest_status"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "识别",
+            "媒体识别",
+            "媒体详情",
+            "mp识别",
+            "mp媒体识别",
+            "mpmediadetail",
+        }:
+            options["action"] = "mp_media_detail"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "下载器",
+            "下载器状态",
+            "下载器列表",
+            "查看下载器",
+            "downloaders",
+        }:
+            options["action"] = "mp_downloaders"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "站点",
+            "站点状态",
+            "站点列表",
+            "pt站点",
+            "pt站点状态",
+            "sites",
+        }:
+            options["action"] = "mp_sites"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "订阅列表",
+            "订阅状态",
+            "查看订阅",
+            "mp订阅",
+            "subscribes",
+        }:
+            options["action"] = "mp_subscribes"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "入库历史",
+            "整理历史",
+            "转移历史",
+            "入库记录",
+            "最近整理",
+            "transferhistory",
+        }:
+            options["action"] = "mp_transfer_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+        elif compact in {
+            "最近入库",
+            "recentingest",
+        }:
+            options["action"] = "mp_recent_activity"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["transfer_only"] = "true"
+        elif compact in {
+            "入库失败",
+            "整理失败",
+            "失败入库",
+            "失败整理",
+            "transferfailed",
+        }:
+            options["action"] = "mp_ingest_failures"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["status"] = "failed"
+        elif compact in {
+            "入库成功",
+            "整理成功",
+            "成功入库",
+            "成功整理",
+            "transfersuccess",
+        }:
+            options["action"] = "mp_transfer_history"
+            options["mode"] = ""
+            options["keyword"] = ""
+            options["status"] = "success"
+        elif compact in {
+            "本地诊断",
+            "诊断",
+            "失败原因",
+            "localdiagnose",
+        }:
+            options["action"] = "mp_local_diagnose"
+            options["mode"] = ""
+            options["keyword"] = ""
+        else:
+            for prefix, action in [
+                ("执行计划", "execute_plan"),
+                ("执行", "execute_plan"),
+                ("确认计划", "execute_plan"),
+                ("确认", "execute_plan"),
+                ("查看计划", "plans_list"),
+                ("计划列表", "plans_list"),
+                ("取消计划", "plans_clear"),
+                ("清理计划", "plans_clear"),
+                ("删除计划", "plans_clear"),
+                ("保存偏好", "preferences_save"),
+                ("设置偏好", "preferences_save"),
+                ("更新偏好", "preferences_save"),
+                ("偏好设置", "preferences_save"),
+                ("偏好", "preferences_save"),
+                ("查看偏好", "preferences_get"),
+                ("片源偏好", "preferences_get"),
+                ("重置偏好", "preferences_reset"),
+                ("清除偏好", "preferences_reset"),
+                ("评分策略", "scoring_policy"),
+                ("评分规则", "scoring_policy"),
+                ("自动化规则", "scoring_policy"),
+            ]:
+                if raw.startswith(prefix + " ") or raw.startswith(prefix + "：") or raw.startswith(prefix + ":"):
+                    remain_text = raw[len(prefix):].lstrip(" ：:").strip()
+                    if action in {"plans_list", "preferences_get", "preferences_reset"} or options.get("plan_id") or remain_text:
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = ""
+                        if remain_text and not options.get("plan_id"):
+                            match = re.search(r"\bplan-[a-zA-Z0-9]+\b", remain_text)
+                            if match:
+                                options["plan_id"] = match.group(0)
+                        break
+            for prefix, control in [
+                ("暂停下载", "pause"),
+                ("停止下载", "pause"),
+                ("恢复下载", "resume"),
+                ("继续下载", "resume"),
+                ("开始下载", "resume"),
+                ("删除下载", "delete"),
+                ("移除下载", "delete"),
+            ]:
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, [prefix])
+                if prefix_match:
+                    target_text = prefix_match[1]
+                    if target_text:
+                        options["action"] = "mp_download_control"
+                        options["mode"] = ""
+                        options["keyword"] = target_text
+                        options["download_control"] = control
+                    break
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["下载任务", "下载状态", "下载列表", "查看下载", "下载进度"])
+                if prefix_match:
+                    options["action"] = "mp_download_tasks"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["继续跟进", "查看进展", "跟进", "进展"])
+                if prefix_match:
+                    options["action"] = "smart_followup"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["下载历史", "下载记录", "记录", "最近下载", "历史下载"])
+                if prefix_match:
+                    options["action"] = "mp_download_history"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["资源追踪", "下载追踪", "媒体状态", "落库状态", "状态", "进度", "追踪"])
+                if prefix_match:
+                    options["action"] = "mp_lifecycle_status"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["入库状态", "本地入库"])
+                if prefix_match:
+                    options["action"] = "mp_ingest_status"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["MP识别", "mp识别", "媒体识别", "媒体详情", "详情媒体", "识别"])
+                if prefix_match:
+                    options["action"] = "mp_media_detail"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["站点状态", "站点列表", "PT站点", "pt站点", "站点"])
+                if prefix_match:
+                    options["action"] = "mp_sites"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                for prefix, control in [
+                    ("搜索订阅", "search"),
+                    ("刷新订阅", "search"),
+                    ("暂停订阅", "pause"),
+                    ("恢复订阅", "resume"),
+                    ("删除订阅", "delete"),
+                    ("移除订阅", "delete"),
+                ]:
+                    prefix_match = AgentResourceOfficer._match_command_prefix(raw, [prefix])
+                    if prefix_match:
+                        target_text = prefix_match[1]
+                        if target_text:
+                            options["action"] = "mp_subscribe_control"
+                            options["mode"] = ""
+                            options["keyword"] = target_text
+                            options["subscribe_control"] = control
+                        break
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["订阅列表", "订阅状态", "查看订阅", "MP订阅", "mp订阅"])
+                if prefix_match:
+                    options["action"] = "mp_subscribes"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                for prefix, status_name in [
+                    ("入库失败", "failed"),
+                    ("整理失败", "failed"),
+                    ("失败入库", "failed"),
+                    ("失败整理", "failed"),
+                    ("入库成功", "success"),
+                    ("整理成功", "success"),
+                    ("成功入库", "success"),
+                    ("成功整理", "success"),
+                    ("入库历史", "all"),
+                    ("入库记录", "all"),
+                    ("整理历史", "all"),
+                    ("转移历史", "all"),
+                    ("最近入库", "all"),
+                    ("最近整理", "all"),
+                ]:
+                    prefix_match = AgentResourceOfficer._match_command_prefix(raw, [prefix])
+                    if prefix_match:
+                        options["action"] = "mp_ingest_failures" if status_name == "failed" else "mp_transfer_history"
+                        options["mode"] = ""
+                        options["keyword"] = prefix_match[1]
+                        options["status"] = status_name
+                        break
+            if not options.get("action") and raw.startswith("入库"):
+                blocked_prefixes = ("入库失败", "入库成功", "入库历史", "入库记录", "入库状态")
+                if not any(raw.startswith(prefix) for prefix in blocked_prefixes):
+                    remain_text = raw[len("入库"):].lstrip(" ：:").strip()
+                    options["action"] = "mp_ingest_status"
+                    options["mode"] = ""
+                    options["keyword"] = remain_text
+            if not options.get("action"):
+                prefix_match = AgentResourceOfficer._match_command_prefix(raw, ["为什么没入库", "本地诊断", "诊断", "失败原因"])
+                if prefix_match:
+                    options["action"] = "mp_local_diagnose"
+                    options["mode"] = ""
+                    options["keyword"] = prefix_match[1]
+            if not options.get("action"):
+                for prefix, action in [
+                    ("下载资源", "mp_download"),
+                    ("下载", "mp_download"),
+                    ("订阅并搜索", "mp_subscribe_search"),
+                    ("订阅搜索", "mp_subscribe_search"),
+                    ("订阅媒体", "mp_subscribe"),
+                    ("订阅", "mp_subscribe"),
+                    ("热门推荐", "mp_recommendations"),
+                    ("推荐", "mp_recommendations"),
+                ]:
+                    if raw == prefix:
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = ""
+                        break
+                    if raw.startswith(prefix + " "):
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = raw[len(prefix):].strip()
+                        break
+                    if raw.startswith(prefix):
+                        remain_text = raw[len(prefix):].strip()
+                        if not remain_text:
+                            continue
+                        if action == "mp_download":
+                            download_match = re.search(r"\d+", remain_text)
+                            if not download_match:
+                                continue
+                            options["action"] = action
+                            options["mode"] = ""
+                            options["keyword"] = download_match.group(0)
+                            break
+                        options["action"] = action
+                        options["mode"] = ""
+                        options["keyword"] = remain_text
+                        break
+            if not options.get("action") and any(
+                marker in compact
+                for marker in [
+                    "热门影视",
+                    "热门电影",
+                    "热门电视剧",
+                    "热门剧集",
+                    "最近热门",
+                    "有什么热门",
+                    "看看热门",
+                    "影视推荐",
+                    "电影推荐",
+                    "剧集推荐",
+                    "电视剧推荐",
+                    "豆瓣热门",
+                    "豆瓣top250",
+                    "正在热映",
+                    "今日番剧",
+                    "每日放送",
+                    "bangumi",
+                    "tmdb热门",
+                ]
+            ):
+                options["action"] = "mp_recommendations"
+                options["mode"] = ""
+                options["keyword"] = raw
         for token in remain.split():
             item = token.strip()
             if not item:
@@ -6504,6 +12371,9 @@ class AgentResourceOfficer(_PluginBase):
                     continue
                 if key in {"client_type", "client", "客户端"} and value:
                     options["client_type"] = P115TransferService.normalize_qrcode_client_type(value)
+                    continue
+                if key in {"hash", "download_hash", "任务hash"} and value:
+                    options["hash"] = value.strip()
                     continue
             if item.startswith("/") and not options["path"]:
                 options["path"] = AgentResourceOfficer._resolve_pan_path_value(item)
@@ -6616,12 +12486,24 @@ class AgentResourceOfficer(_PluginBase):
                 lines.append(f"   {' · '.join(detail_parts)}")
             if cached.get("password"):
                 lines.append(f"   提取码：{cached['password']}")
+            score_label = self._format_score_label(cached)
+            if score_label:
+                lines.append(f"   评分：{score_label}")
+                score = cached.get("score") if isinstance(cached.get("score"), dict) else {}
+                hard_risks = score.get("hard_risk_reasons") or []
+                risks = score.get("risk_reasons") or []
+                risks = [risk for risk in risks if risk not in hard_risks]
+                if hard_risks:
+                    lines.append("   硬风险：" + "；".join(str(item) for item in hard_risks[:2]))
+                elif risks:
+                    lines.append("   提醒：" + "；".join(str(item) for item in risks[:2]))
             lines.append(f"   {cached['url']}")
         next_quark_hint = count_115 + 1 if count_quark else 1
-        lines.append("下一步：回复“选择 1”即可直接转存支持的 115 / 夸克结果。")
+        lines.append("下一步：建议先回复“计划选择 1”生成待确认计划；确认后再回复“执行计划”。")
         if count_quark:
-            lines.append(f"夸克结果从 {next_quark_hint} 开始编号；例如“选择 {next_quark_hint}”可直接处理第 1 条夸克结果。")
-        lines.append(f"如需改目录，可发“选择 1 path=/目录”或“选择 {next_quark_hint} path=/目录”。")
+            lines.append(f"夸克结果从 {next_quark_hint} 开始编号；例如“计划选择 {next_quark_hint}”会为第 1 条夸克结果生成计划。")
+        lines.append(f"如需改目录，可发“计划选择 1 path=/目录”或“计划选择 {next_quark_hint} path=/目录”。")
+        lines.append("只有明确要立即转存时，才直接回复“选择 编号”。")
         return "\n".join(lines)
 
     @classmethod
@@ -6833,8 +12715,7 @@ class AgentResourceOfficer(_PluginBase):
                 return text
         return ""
 
-    @staticmethod
-    def _format_resource_lines(resources: List[Dict[str, Any]], candidate: Optional[Dict[str, Any]] = None) -> str:
+    def _format_resource_lines(self, resources: List[Dict[str, Any]], candidate: Optional[Dict[str, Any]] = None) -> str:
         lines = []
         if candidate:
             candidate_title = str(candidate.get("title") or "未命名")
@@ -6868,12 +12749,26 @@ class AgentResourceOfficer(_PluginBase):
                 meta.append(source)
             lines.append(f"{idx}. [{provider}] {item_title}")
             lines.append(f"   {' | '.join(meta)}")
+            score_label = AgentResourceOfficer._format_score_label(item)
+            score = item.get("score") if isinstance(item.get("score"), dict) else {}
+            if score_label:
+                lines.append(f"   评分：{score_label}")
+                hard_risks = score.get("hard_risk_reasons") or []
+                risks = score.get("risk_reasons") or []
+                risks = [risk for risk in risks if risk not in hard_risks]
+                if hard_risks:
+                    lines.append("   硬风险：" + "；".join(str(risk) for risk in hard_risks[:2]))
+                elif risks:
+                    lines.append("   提醒：" + "；".join(str(risk) for risk in risks[:2]))
             if episode:
                 lines.append(f"   集数：{episode}")
             if subtitle:
                 lines.append(f"   字幕：{subtitle}")
             if remark:
                 lines.append(f"   详情：{remark}")
+        summary = self._score_summary(resources, limit=5)
+        lines.extend(self._format_score_summary_decision_lines(summary))
+        lines.append("说明：云盘写入默认建议先走“计划选择 编号”，确认后再“执行计划”。")
         return "\n".join(lines)
 
     @staticmethod
@@ -6928,7 +12823,7 @@ class AgentResourceOfficer(_PluginBase):
                 share_url,
                 access_code=access_code,
                 target_path=target_path or self._quark_default_path,
-                trigger="Agent云盘资源整合 影巢解锁后自动路由",
+                trigger="Agent影视助手 影巢解锁后自动路由",
             )
             route_result["route"].update(
                 {
@@ -6949,7 +12844,7 @@ class AgentResourceOfficer(_PluginBase):
                 url=share_url,
                 access_code=access_code,
                 path=target_path or self._p115_default_path,
-                trigger="Agent云盘资源整合 影巢解锁后自动路由",
+                trigger="Agent影视助手 影巢解锁后自动路由",
             )
             route_result["route"].update(
                 {
@@ -7006,7 +12901,7 @@ class AgentResourceOfficer(_PluginBase):
         )
 
     def feishu_assistant_pick(self, arg: str, session: str) -> Dict[str, Any]:
-        index, target_path, action = self._parse_feishu_pick_arg(arg)
+        index, target_path, action, mode = self._parse_feishu_pick_arg(arg)
         return self._run_coroutine_sync(
             self.api_assistant_pick(
                 _JsonRequestShim(
@@ -7015,6 +12910,7 @@ class AgentResourceOfficer(_PluginBase):
                         "session": self._clean_text(session) or "feishu",
                         "index": index,
                         "action": action,
+                        "mode": mode,
                         "path": target_path,
                         "compact": False,
                     },
@@ -7023,33 +12919,18 @@ class AgentResourceOfficer(_PluginBase):
         )
 
     @classmethod
-    def _parse_feishu_pick_arg(cls, arg: str) -> Tuple[int, str, str]:
-        text = cls._clean_text(arg)
-        action = cls._normalize_pick_action(text)
-        index = 0
-        path = ""
-        if action:
-            return 0, "", action
-        match = re.search(r"\d+", text)
-        if match:
-            index = cls._safe_int(match.group(0), 0)
-        for token in text.split():
-            if "=" not in token:
-                continue
-            key, value = token.split("=", 1)
-            if key.strip().lower() in {"path", "dir", "目录", "位置"}:
-                path = cls._resolve_pan_path_value(value)
-        return index, path, action
+    def _parse_feishu_pick_arg(cls, arg: str) -> Tuple[int, str, str, str]:
+        return cls._parse_pick_text(arg)
 
     async def tool_hdhive_search_session(
         self,
         keyword: str,
-        media_type: str = "movie",
+        media_type: str = "auto",
         year: str = "",
         target_path: str = "",
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         allowed, disabled = self._ensure_hdhive_resource_enabled()
         if not allowed:
             return str(disabled.get("message") or "影巢资源入口已关闭")
@@ -7057,7 +12938,7 @@ class AgentResourceOfficer(_PluginBase):
         service = self._ensure_hdhive_service()
         search_ok, result, search_message = await service.resolve_candidates_by_keyword(
             keyword=self._clean_text(keyword),
-            media_type=self._clean_text(media_type or "movie").lower(),
+            media_type=self._clean_text(media_type or "auto").lower(),
             year=self._clean_text(year),
             candidate_limit=max(30, self._hdhive_candidate_page_size),
         )
@@ -7072,7 +12953,7 @@ class AgentResourceOfficer(_PluginBase):
                 "kind": "hdhive",
                 "stage": "candidate",
                 "keyword": self._clean_text(keyword),
-                "media_type": self._clean_text(media_type or "movie").lower(),
+                "media_type": self._clean_text(media_type or "auto").lower(),
                 "year": self._clean_text(year),
                 "target_path": self._clean_text(target_path),
                 "candidates": candidates,
@@ -7088,7 +12969,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_hdhive_pick_session(self, session_id: str, index: int, target_path: str = "", action: str = "") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         allowed, disabled = self._ensure_hdhive_resource_enabled()
         if not allowed:
             return str(disabled.get("message") or "影巢资源入口已关闭")
@@ -7127,7 +13008,15 @@ class AgentResourceOfficer(_PluginBase):
             )
             if not resource_ok:
                 return f"影巢资源查询失败：{resource_message}"
-            preview = self._group_resource_preview(resource_result.get("data") or [], per_group=6)
+            preferences = self._normalize_assistant_preferences(
+                (self._assistant_preferences or {}).get(self._normalize_preference_key(session=self._clean_text(session.get("keyword")) or "default"))
+            )
+            preview = self._attach_cloud_scores(
+                self._group_resource_preview(resource_result.get("data") or [], per_group=6),
+                preferences=preferences,
+                source_type="hdhive",
+                target_path=target_path or session.get("target_path") or "",
+            )
             self._save_session(
                 self._clean_text(session_id),
                 {
@@ -7167,7 +13056,7 @@ class AgentResourceOfficer(_PluginBase):
                 share_url,
                 access_code=self._clean_text(access_code),
                 target_path=self._clean_text(target_path) or self._quark_default_path,
-                trigger="Agent云盘资源整合 Agent Tool",
+                trigger="Agent影视助手 Agent Tool",
             )
             if not ok:
                 return f"夸克转存失败：{message}"
@@ -7178,7 +13067,7 @@ class AgentResourceOfficer(_PluginBase):
                 url=share_url,
                 access_code=self._clean_text(access_code),
                 path=self._clean_text(target_path) or self._p115_default_path,
-                trigger="Agent云盘资源整合 Agent Tool",
+                trigger="Agent影视助手 Agent Tool",
             )
             if not ok:
                 return self._format_p115_transfer_failure(
@@ -7206,7 +13095,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_route(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -7235,11 +13124,12 @@ class AgentResourceOfficer(_PluginBase):
         session_id: str = "",
         index: int = 0,
         action: str = "",
+        mode: str = "",
         target_path: str = "",
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_pick(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -7248,6 +13138,7 @@ class AgentResourceOfficer(_PluginBase):
                     "session_id": self._clean_text(session_id),
                     "choice": index,
                     "action": self._clean_text(action),
+                    "mode": self._clean_text(mode),
                     "path": self._clean_text(target_path),
                     "compact": bool(compact),
                 },
@@ -7257,17 +13148,17 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_help(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
         return self._format_assistant_help_text(session=session_name)
 
     async def tool_assistant_capabilities(self, compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_capabilities_compact_data(self._assistant_capabilities_public_data())
             return (
-                f"Agent云盘资源整合：{data.get('version')}；"
+                f"Agent影视助手：{data.get('version')}；"
                 f"工作流 {len(data.get('workflows') or [])} 个；"
                 f"Tool {len(data.get('agent_tools') or [])} 个"
             )
@@ -7275,7 +13166,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_readiness(self, compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_readiness_compact_data(self._assistant_readiness_public_data())
             services = data.get("services") or {}
@@ -7290,7 +13181,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_feishu_health(self, compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         channel = self._ensure_feishu_channel()
         data = {
             "plugin_version": self.plugin_version,
@@ -7311,23 +13202,23 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_pulse(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_pulse_text()
 
     async def tool_assistant_startup(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_startup_text()
 
     async def tool_assistant_maintain(self, execute: bool = False, limit: int = 100) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         data = self._assistant_maintain_public_data(execute=execute, limit=limit)
         return self._format_assistant_maintain_text(data)
 
     async def tool_assistant_toolbox(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_toolbox_text()
 
     async def tool_assistant_request_templates(
@@ -7338,7 +13229,7 @@ class AgentResourceOfficer(_PluginBase):
         include_templates: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         data = self._assistant_request_templates_response_data(
             limit=limit,
             names=names,
@@ -7349,7 +13240,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_selfcheck(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_assistant_selfcheck_text()
 
     async def tool_assistant_history(
@@ -7360,7 +13251,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_history_compact_data(
                 self._assistant_history_public_data(session=session, session_id=session_id, limit=limit)
@@ -7382,6 +13273,7 @@ class AgentResourceOfficer(_PluginBase):
         share_url: str = "",
         access_code: str = "",
         client_type: str = "",
+        source: str = "",
         kind: str = "",
         has_pending_p115: Optional[bool] = None,
         stale_only: bool = False,
@@ -7392,7 +13284,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_action(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -7408,6 +13300,7 @@ class AgentResourceOfficer(_PluginBase):
                     "url": self._clean_text(share_url),
                     "access_code": self._clean_text(access_code),
                     "client_type": self._clean_text(client_type),
+                    "source": self._clean_text(source),
                     "kind": self._clean_text(kind),
                     "has_pending_p115": has_pending_p115,
                     "stale_only": bool(stale_only),
@@ -7431,7 +13324,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_actions(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -7462,38 +13355,68 @@ class AgentResourceOfficer(_PluginBase):
         media_type: str = "",
         year: str = "",
         client_type: str = "",
-        dry_run: bool = False,
+        source: str = "",
+        limit: int = 20,
+        dry_run: Optional[bool] = None,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
+        payload = {
+            "name": self._clean_text(name),
+            "session": self._clean_text(session) or "default",
+            "session_id": self._clean_text(session_id),
+            "keyword": self._clean_text(keyword),
+            "choice": choice,
+            "candidate_choice": candidate_choice,
+            "resource_choice": resource_choice,
+            "path": self._clean_text(target_path),
+            "url": self._clean_text(share_url),
+            "access_code": self._clean_text(access_code),
+            "media_type": self._clean_text(media_type),
+            "year": self._clean_text(year),
+            "client_type": self._clean_text(client_type),
+            "source": self._clean_text(source),
+            "limit": self._safe_int(limit, 20),
+            "stop_on_error": bool(stop_on_error),
+            "include_raw_results": bool(include_raw_results),
+            "compact": bool(compact),
+        }
+        if dry_run is not None:
+            payload["dry_run"] = bool(dry_run)
         result = await self.api_assistant_workflow(
+            _JsonRequestShim(_RequestContextShim(), payload)
+        )
+        return str(result.get("message") or "工作流执行完成")
+
+    async def tool_assistant_preferences(
+        self,
+        session: str = "default",
+        session_id: str = "",
+        user_key: str = "",
+        preferences: Optional[Dict[str, Any]] = None,
+        reset: bool = False,
+        compact: bool = True,
+    ) -> str:
+        if not self._enabled:
+            return "Agent影视助手 插件未启用"
+        method = "DELETE" if reset else "POST" if preferences else "GET"
+        result = await self.api_assistant_preferences(
             _JsonRequestShim(
                 _RequestContextShim(),
                 {
-                    "name": self._clean_text(name),
                     "session": self._clean_text(session) or "default",
                     "session_id": self._clean_text(session_id),
-                    "keyword": self._clean_text(keyword),
-                    "choice": choice,
-                    "candidate_choice": candidate_choice,
-                    "resource_choice": resource_choice,
-                    "path": self._clean_text(target_path),
-                    "url": self._clean_text(share_url),
-                    "access_code": self._clean_text(access_code),
-                    "media_type": self._clean_text(media_type),
-                    "year": self._clean_text(year),
-                    "client_type": self._clean_text(client_type),
-                    "dry_run": bool(dry_run),
-                    "stop_on_error": bool(stop_on_error),
-                    "include_raw_results": bool(include_raw_results),
+                    "user_key": self._clean_text(user_key),
+                    "preferences": preferences or {},
                     "compact": bool(compact),
                 },
+                method=method,
             )
         )
-        return str(result.get("message") or "工作流执行完成")
+        return str(result.get("message") or "偏好画像处理完成")
 
     async def tool_assistant_execute_plan(
         self,
@@ -7506,7 +13429,7 @@ class AgentResourceOfficer(_PluginBase):
         compact: bool = True,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_plan_execute(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -7533,7 +13456,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_plans_compact_data(
                 self._assistant_plans_public_data(
@@ -7564,7 +13487,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 100,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = self._clear_workflow_plans(
             plan_id=plan_id,
             session=session,
@@ -7587,7 +13510,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_recover(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -7607,7 +13530,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_session_state(self, session: str = "default", session_id: str = "", compact: bool = True) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_name, _ = self._normalize_assistant_session_ref(session=session, session_id=session_id)
         if compact:
             state = self._assistant_session_compact_data(self._assistant_session_public_data(session=session_name))
@@ -7630,7 +13553,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 20,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         if compact:
             data = self._assistant_sessions_compact_data(
                 self._assistant_sessions_public_data(kind=kind, has_pending_p115=has_pending_p115, limit=limit)
@@ -7644,7 +13567,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_assistant_session_clear(self, session: str = "default", session_id: str = "") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_name, cache_key = self._normalize_assistant_session_ref(session=session, session_id=session_id)
         existing = self._load_session(cache_key)
         if not existing:
@@ -7664,7 +13587,7 @@ class AgentResourceOfficer(_PluginBase):
         limit: int = 100,
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         result = await self.api_assistant_sessions_clear(
             _JsonRequestShim(
                 _RequestContextShim(),
@@ -7683,7 +13606,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_p115_qrcode_start(self, client_type: str = "alipaymini") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         final_client_type = P115TransferService.normalize_qrcode_client_type(client_type or self._p115_client_type)
         qr_ok, data, qr_message = self._ensure_p115_service().create_qrcode_login(client_type=final_client_type)
         if not qr_ok:
@@ -7706,7 +13629,7 @@ class AgentResourceOfficer(_PluginBase):
         client_type: str = "alipaymini",
     ) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         qr_ok, data, qr_message = self._ensure_p115_service().check_qrcode_login(
             uid=self._clean_text(uid),
             time_value=self._clean_text(time_value),
@@ -7738,19 +13661,19 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_p115_status(self) -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         return self._format_p115_status_summary()
 
     async def tool_p115_pending(self, session: str = "default") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_id = self._session_key_for_tool(session)
         summary = self._pending_p115_summary(self._load_session(session_id))
         return summary or "当前没有待继续的 115 任务。"
 
     async def tool_p115_resume(self, session: str = "default") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_id = self._session_key_for_tool(session)
         state = self._load_session(session_id) or {}
         if not self._pending_p115_summary(state):
@@ -7760,7 +13683,7 @@ class AgentResourceOfficer(_PluginBase):
         resume_ok, resume_message, _ = self._execute_pending_p115_share(
             session_id=session_id,
             state=state,
-            trigger="Agent云盘资源整合 Agent Tool 手动继续 115 任务",
+            trigger="Agent影视助手 Agent Tool 手动继续 115 任务",
         )
         lines = ["已手动继续 115 任务", resume_message]
         if not resume_ok:
@@ -7769,7 +13692,7 @@ class AgentResourceOfficer(_PluginBase):
 
     async def tool_p115_cancel(self, session: str = "default") -> str:
         if not self._enabled:
-            return "Agent云盘资源整合 插件未启用"
+            return "Agent影视助手 插件未启用"
         session_id = self._session_key_for_tool(session)
         summary = self._pending_p115_summary(self._load_session(session_id))
         if not summary:
@@ -7868,7 +13791,7 @@ class AgentResourceOfficer(_PluginBase):
         url = self._clean_text(body.get("url") or body.get("share_url"))
         access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        trigger = self._clean_text(body.get("trigger") or "Agent云盘资源整合 API")
+        trigger = self._clean_text(body.get("trigger") or "Agent影视助手 API")
 
         service = self._ensure_p115_service()
         transfer_ok, result, transfer_message = service.transfer_share(
@@ -7946,7 +13869,7 @@ class AgentResourceOfficer(_PluginBase):
         resume_ok, resume_message, resume_data = self._execute_pending_p115_share(
             session_id=session_id,
             state=state,
-            trigger="Agent云盘资源整合 API 手动继续 115 任务",
+            trigger="Agent影视助手 API 手动继续 115 任务",
         )
         message_text = "已手动继续 115 任务"
         if resume_message:
@@ -8024,7 +13947,7 @@ class AgentResourceOfficer(_PluginBase):
         share_url = self._clean_text(body.get("url") or body.get("share_url") or body.get("share_text"))
         access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
-        trigger = self._clean_text(body.get("trigger") or "Agent云盘资源整合 自动路由")
+        trigger = self._clean_text(body.get("trigger") or "Agent影视助手 自动路由")
 
         if self._is_quark_url(share_url):
             quark_service = self._ensure_quark_service()
@@ -8087,6 +14010,62 @@ class AgentResourceOfficer(_PluginBase):
             "data": {"provider": "unknown", "url": share_url},
         }
 
+    async def api_assistant_preferences(self, request: Request):
+        body: Dict[str, Any] = {}
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        ok, message = self._check_api_access(request, body)
+        if not ok:
+            return {"success": False, "message": message}
+        if not self._enabled:
+            return {"success": False, "message": "插件未启用"}
+
+        session = self._clean_text(body.get("session") or request.query_params.get("session") or "default")
+        user_key = self._clean_text(body.get("user_key") or request.query_params.get("user_key"))
+        if request.method.upper() == "DELETE" or self._parse_bool_value(body.get("reset"), False):
+            preferences_data = self._reset_assistant_preferences(session=session, user_key=user_key)
+            return {
+                "success": True,
+                "message": "智能体片源偏好已重置，下一次启动会重新进入偏好询问。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "preferences_reset",
+                    "ok": True,
+                    "preferences": preferences_data,
+                    "write_effect": "state",
+                }),
+            }
+        if request.method.upper() == "POST":
+            preferences = body.get("preferences") if isinstance(body.get("preferences"), dict) else {
+                key: value
+                for key, value in body.items()
+                if key not in {"apikey", "session", "session_id", "user_key", "compact", "reset"}
+            }
+            preferences_data = self._save_assistant_preferences(session=session, user_key=user_key, preferences=preferences)
+            return {
+                "success": True,
+                "message": "智能体片源偏好已保存。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "preferences_save",
+                    "ok": True,
+                    "preferences": preferences_data,
+                    "write_effect": "state",
+                }),
+            }
+
+        preferences_data = self._assistant_preferences_public_data(session=session, user_key=user_key)
+        message_text = "智能体片源偏好未初始化，请先询问用户偏好。" if preferences_data.get("needs_onboarding") else "智能体片源偏好已初始化。"
+        return {
+            "success": True,
+            "message": message_text,
+            "data": self._assistant_response_data(session=session, data={
+                "action": "preferences",
+                "ok": True,
+                "preferences": preferences_data,
+            }),
+        }
+
     async def api_assistant_route(self, request: Request):
         body = await request.json()
         ok, message = self._check_api_access(request, body)
@@ -8113,6 +14092,24 @@ class AgentResourceOfficer(_PluginBase):
 
         def finish(result: Dict[str, Any]) -> Dict[str, Any]:
             return self._assistant_interaction_compact_response(result) if compact else result
+
+        def immediate(result: Dict[str, Any]) -> Dict[str, Any]:
+            return result
+
+        pick_index, pick_path, pick_action, pick_mode = self._parse_pick_text(text)
+        if pick_index > 0 or pick_action:
+            pick_result = await self.api_assistant_pick(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "index": pick_index,
+                    "action": pick_action,
+                    "mode": pick_mode,
+                    "path": target_path or pick_path,
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            )
+            return pick_result
 
         route_action = self._normalize_pick_action(text)
         if route_action:
@@ -8141,6 +14138,7 @@ class AgentResourceOfficer(_PluginBase):
             })
 
         assistant_action = self._clean_text(parsed.get("action"))
+        keyword = self._clean_text(parsed.get("keyword"))
         if assistant_action == "assistant_help":
             summary = self._format_assistant_help_text(session=session)
             return finish({
@@ -8152,9 +14150,117 @@ class AgentResourceOfficer(_PluginBase):
                     "status_summary": summary,
                 }),
             })
+        if assistant_action == "execute_plan":
+            return finish(await self.api_assistant_plan_execute(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "session_id": cache_key,
+                    "plan_id": self._clean_text(parsed.get("plan_id")),
+                    "prefer_unexecuted": True,
+                    "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
+                    "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            ))
+        if assistant_action == "plans_list":
+            include_actions = self._parse_bool_value(body.get("include_actions"), False)
+            executed = self._parse_optional_bool(body.get("executed"))
+            limit = self._safe_int(body.get("limit"), 10)
+            plans_data = self._assistant_plans_public_data(
+                session=session,
+                session_id=cache_key,
+                executed=executed,
+                include_actions=include_actions,
+                limit=limit,
+            )
+            return finish({
+                "success": True,
+                "message": self._format_assistant_plans_text(
+                    session=session,
+                    session_id=cache_key,
+                    executed=executed,
+                    include_actions=include_actions,
+                    limit=limit,
+                ),
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "plans_list",
+                    "ok": True,
+                    **plans_data,
+                }),
+            })
+        if assistant_action == "plans_clear":
+            plan_id = self._clean_text(parsed.get("plan_id"))
+            if not plan_id:
+                return finish({
+                    "success": False,
+                    "message": "取消或清理计划需要指定 plan_id，例如：取消计划 plan-xxxx。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "plans_clear",
+                        "ok": False,
+                        "error_code": "missing_plan_id",
+                    }),
+                })
+            clear_result = self._clear_workflow_plans(plan_id=plan_id, limit=1)
+            return finish({
+                "success": bool(clear_result.get("ok")),
+                "message": str(clear_result.get("message") or "计划清理完成"),
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "plans_clear",
+                    "ok": bool(clear_result.get("ok")),
+                    **clear_result,
+                }),
+            })
+        if assistant_action in {"preferences_get", "preferences_save", "preferences_reset"}:
+            if assistant_action == "preferences_save":
+                preferences = body.get("preferences") if isinstance(body.get("preferences"), dict) else self._parse_assistant_preferences_text(text)
+                if not preferences:
+                    return finish({
+                        "success": False,
+                        "message": (
+                            "保存偏好缺少可识别内容。示例：保存偏好 4K 杜比 HDR 中字 全集 "
+                            "做种>=3 影巢积分20 不自动入库"
+                        ),
+                        "data": self._assistant_response_data(session=session, data={
+                            "action": "preferences_save",
+                            "ok": False,
+                            "error_code": "missing_preferences",
+                        }),
+                    })
+                payload = {
+                    "session": session,
+                    "user_key": self._clean_text(body.get("user_key")),
+                    "preferences": preferences,
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                }
+                return finish(await self.api_assistant_preferences(_JsonRequestShim(request, payload, method="POST")))
+            if assistant_action == "preferences_reset":
+                return finish(await self.api_assistant_preferences(_JsonRequestShim(request, {
+                    "session": session,
+                    "user_key": self._clean_text(body.get("user_key")),
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                }, method="DELETE")))
+            return finish(await self.api_assistant_preferences(_JsonRequestShim(request, {
+                "session": session,
+                "user_key": self._clean_text(body.get("user_key")),
+                "compact": compact,
+                "apikey": self._extract_apikey(request, body),
+            }, method="GET")))
+        if assistant_action == "scoring_policy":
+            return finish({
+                "success": True,
+                "message": "评分策略已返回。云盘与 PT 使用不同规则；自动化决策以硬风险和 score_summary 为准。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "scoring_policy",
+                    "ok": True,
+                    "scoring_policy": self._assistant_scoring_policy_public_data(),
+                }),
+            })
         if assistant_action == "hdhive_checkin":
             is_gambler = self._parse_bool_value(parsed.get("is_gambler"), self._hdhive_checkin_gambler_mode)
-            result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent云盘资源整合 智能入口")
+            result = self._run_hdhive_checkin(is_gambler=is_gambler, trigger="Agent影视助手 智能入口")
             data = result.get("data") if isinstance(result.get("data"), dict) else {}
             status = data.get("status") or ("签到成功" if result.get("success") else "签到失败")
             mode_text = "赌狗签到" if is_gambler else "普通签到"
@@ -8182,6 +14288,302 @@ class AgentResourceOfficer(_PluginBase):
                     "history": self._hdhive_checkin_history_public_data(limit=10),
                 }),
             })
+        if assistant_action == "mp_media_detail":
+            if not keyword:
+                return finish({
+                    "success": False,
+                    "message": "媒体识别失败：缺少片名。用法：识别 蜘蛛侠",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_media_detail",
+                        "ok": False,
+                        "error_code": "missing_keyword",
+                    }),
+                })
+            return finish(await self._assistant_mp_media_detail(
+                keyword=keyword,
+                session=session,
+                cache_key=cache_key,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or parsed.get("type") or "auto"),
+                year=self._clean_text(body.get("year") or parsed.get("year")),
+            ))
+        if assistant_action == "mp_downloaders":
+            return finish(await self._assistant_mp_downloaders(session=session, cache_key=cache_key))
+        if assistant_action == "mp_sites":
+            return finish(await self._assistant_mp_sites(
+                session=session,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "active"),
+                name=keyword,
+                limit=self._safe_int(body.get("limit"), 30),
+            ))
+        if assistant_action == "mp_subscribes":
+            return finish(await self._assistant_mp_subscribes(
+                session=session,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "all"),
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or parsed.get("type") or "all"),
+                name=keyword,
+                limit=self._safe_int(body.get("limit"), 20),
+            ))
+        if assistant_action == "mp_transfer_history":
+            return finish(await self._assistant_mp_transfer_history(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "all"),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
+        if assistant_action == "mp_ingest_failures":
+            return finish(await self._assistant_mp_ingest_failures(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
+        if assistant_action == "mp_subscribe_control":
+            control = self._clean_text(parsed.get("subscribe_control") or body.get("subscribe_control") or body.get("control") or body.get("operation")).lower()
+            control_aliases = {
+                "搜索": "search",
+                "刷新": "search",
+                "search": "search",
+                "run": "search",
+                "暂停": "pause",
+                "停止": "pause",
+                "pause": "pause",
+                "stop": "pause",
+                "恢复": "resume",
+                "继续": "resume",
+                "resume": "resume",
+                "start": "resume",
+                "删除": "delete",
+                "移除": "delete",
+                "delete": "delete",
+                "remove": "delete",
+            }
+            control = control_aliases.get(control, control)
+            allow_raw_subscribe_id = body.get("subscribe_id") is not None
+            target = self._clean_text(keyword or body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+            if control not in {"search", "pause", "resume", "delete"} or not target:
+                return finish({
+                    "success": False,
+                    "message": "用法：先发“订阅列表”，再发“搜索订阅 1”“暂停订阅 1”“恢复订阅 1”或“删除订阅 1”。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_subscribe_control",
+                        "ok": False,
+                        "error_code": "invalid_subscribe_control_args",
+                    }),
+                })
+            if not self._resolve_mp_subscribe_target(target=target, cache_key=cache_key, allow_raw_id=allow_raw_subscribe_id):
+                return finish({
+                    "success": False,
+                    "message": "未找到可操作的订阅。请先发送“订阅列表”获取列表，再按编号操作；也可以直接传订阅 ID。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_subscribe_control",
+                        "ok": False,
+                        "error_code": "subscribe_target_not_found",
+                        "target": target,
+                    }),
+                })
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                return finish(immediate(self._assistant_mp_subscribe_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session,
+                    cache_key=cache_key,
+                    allow_raw_id=allow_raw_subscribe_id,
+                )))
+            return finish(await self._assistant_mp_subscribe_control(
+                session=session,
+                cache_key=cache_key,
+                control=control,
+                target=target,
+                allow_raw_id=allow_raw_subscribe_id,
+            ))
+        if assistant_action == "mp_download_tasks":
+            return finish(await self._assistant_mp_download_tasks(
+                session=session,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or parsed.get("status") or "downloading"),
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                downloader=self._clean_text(body.get("downloader")),
+                limit=self._safe_int(body.get("limit"), 10),
+            ))
+        if assistant_action == "mp_download_history":
+            return finish(await self._assistant_mp_download_history(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value") or parsed.get("hash")),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
+        if assistant_action == "mp_lifecycle_status":
+            return finish(await self._assistant_mp_lifecycle_status(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value") or parsed.get("hash")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if assistant_action == "mp_ingest_status":
+            return finish(await self._assistant_mp_ingest_status(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value") or parsed.get("hash")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if assistant_action == "mp_recent_activity":
+            return finish(await self._assistant_mp_recent_activity(
+                session=session,
+                cache_key=cache_key,
+                limit=self._safe_int(body.get("limit"), 10),
+                download_only=self._parse_bool_value(body.get("download_only") or parsed.get("download_only"), False),
+                transfer_only=self._parse_bool_value(body.get("transfer_only") or parsed.get("transfer_only"), False),
+            ))
+        if assistant_action == "smart_followup":
+            return finish(await self._assistant_smart_followup(
+                request,
+                session=session,
+                session_id=cache_key,
+                keyword=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value") or parsed.get("hash")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if assistant_action == "execution_followup":
+            return finish(await self._assistant_execution_followup(
+                request,
+                session=session,
+                session_id=cache_key,
+                plan_id=self._clean_text(body.get("plan_id") or parsed.get("plan_id")),
+            ))
+        if assistant_action == "mp_local_diagnose":
+            return finish(await self._assistant_mp_local_diagnose(
+                session=session,
+                cache_key=cache_key,
+                title=keyword,
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value") or parsed.get("hash")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if assistant_action == "mp_download_control":
+            control = self._clean_text(parsed.get("download_control") or body.get("download_control") or body.get("control") or body.get("operation")).lower()
+            control_aliases = {
+                "暂停": "pause",
+                "停止": "pause",
+                "pause": "pause",
+                "stop": "pause",
+                "恢复": "resume",
+                "继续": "resume",
+                "开始": "resume",
+                "resume": "resume",
+                "start": "resume",
+                "删除": "delete",
+                "移除": "delete",
+                "delete": "delete",
+                "remove": "delete",
+            }
+            control = control_aliases.get(control, control)
+            target = self._clean_text(keyword or body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+            if control not in {"pause", "resume", "delete"} or not target:
+                return finish({
+                    "success": False,
+                    "message": "用法：先发“下载任务”，再发“暂停下载 1”“恢复下载 1”或“删除下载 1”。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_download_control",
+                        "ok": False,
+                        "error_code": "invalid_download_control_args",
+                    }),
+                })
+            if not self._resolve_mp_download_task_target(target=target, cache_key=cache_key):
+                return finish({
+                    "success": False,
+                    "message": "未找到可操作的下载任务。请先发送“下载任务”获取列表，再按编号操作；也可以直接传 40 位任务 hash。",
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_download_control",
+                        "ok": False,
+                        "error_code": "download_task_target_not_found",
+                        "target": target,
+                    }),
+                })
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                return finish(immediate(self._assistant_mp_download_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session,
+                    cache_key=cache_key,
+                    downloader=self._clean_text(body.get("downloader")),
+                    delete_files=self._parse_bool_value(body.get("delete_files"), False),
+                )))
+            return finish(await self._assistant_mp_download_control(
+                session=session,
+                cache_key=cache_key,
+                control=control,
+                target=target,
+                downloader=self._clean_text(body.get("downloader")),
+                delete_files=self._parse_bool_value(body.get("delete_files"), False),
+            ))
+        if assistant_action == "mp_download_best":
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            return finish(await self._assistant_mp_best_download_plan(
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            ))
+        if assistant_action == "mp_download":
+            choice = self._safe_int(parsed.get("keyword") or body.get("choice") or body.get("index"), 0)
+            if choice <= 0:
+                return finish({
+                    "success": False,
+                    "message": "用法：下载资源 1",
+                        "data": self._assistant_response_data(session=session, data={"action": "mp_download", "ok": False}),
+                })
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                return finish(immediate(self._assistant_mp_download_plan_response(
+                    choice=choice,
+                    session=session,
+                    cache_key=cache_key,
+                    preferences=preferences,
+                )))
+            return finish(await self._assistant_mp_download(
+                choice=choice,
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            ))
+        if assistant_action in {"mp_subscribe", "mp_subscribe_search"}:
+            if not keyword:
+                return finish({
+                    "success": False,
+                    "message": "用法：订阅媒体 片名 或 订阅并搜索 片名",
+                    "data": self._assistant_response_data(session=session, data={"action": assistant_action, "ok": False}),
+                })
+            if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
+                return finish(immediate(self._assistant_mp_subscribe_plan_response(
+                    keyword=keyword,
+                    session=session,
+                    cache_key=cache_key,
+                    immediate_search=assistant_action == "mp_subscribe_search",
+                )))
+            return finish(await self._assistant_mp_subscribe(
+                keyword=keyword,
+                session=session,
+                immediate_search=assistant_action == "mp_subscribe_search",
+            ))
+        if assistant_action == "mp_recommendations":
+            source, inferred_media_type = self._normalize_mp_recommend_request(
+                body.get("source") or parsed.get("keyword") or text or "tmdb_trending"
+            )
+            return finish(await self._assistant_mp_recommendations(
+                source=source,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or parsed.get("type") or inferred_media_type or "all"),
+                limit=self._safe_int(body.get("limit"), 20),
+                session=session,
+                cache_key=cache_key,
+            ))
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()
             pending_summary = self._pending_p115_summary(state)
@@ -8414,7 +14816,7 @@ class AgentResourceOfficer(_PluginBase):
                     "url": parsed["url"],
                     "access_code": parsed.get("access_code") or "",
                     "path": target_path,
-                    "trigger": "Agent云盘资源整合 智能入口",
+                    "trigger": "Agent影视助手 智能入口",
                     "apikey": self._extract_apikey(request, body),
                 })
             )
@@ -8451,8 +14853,7 @@ class AgentResourceOfficer(_PluginBase):
             })
 
         mode = parsed.get("mode") or "hdhive"
-        keyword = self._clean_text(parsed.get("keyword"))
-        media_type = self._clean_text(parsed.get("type") or "movie").lower() or "movie"
+        media_type = self._clean_text(parsed.get("type") or "auto").lower() or "auto"
         year = self._clean_text(parsed.get("year"))
 
         if mode == "mp":
@@ -8465,22 +14866,13 @@ class AgentResourceOfficer(_PluginBase):
                         "ok": False,
                     }),
                 })
-            message_text = self._ensure_feishu_channel()._execute_media_search(keyword, cache_key)
-            failed_prefixes = (
-                "MP 原生搜索失败",
-                "未识别到媒体信息",
-                "搜索资源失败",
-            )
-            route_ok = not any(message_text.startswith(prefix) for prefix in failed_prefixes)
-            return finish({
-                "success": route_ok,
-                "message": message_text,
-                "data": self._assistant_response_data(session=session, data={
-                    "action": "media_search",
-                    "ok": route_ok,
-                    "keyword": keyword,
-                }),
-            })
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            return finish(await self._assistant_mp_media_search(
+                keyword=keyword,
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            ))
 
         if mode == "pansou":
             search_ok, payload, search_message = self._call_pansou_search(keyword)
@@ -8495,6 +14887,13 @@ class AgentResourceOfficer(_PluginBase):
                 items.append({**item, "index": len(items) + 1})
             if not items:
                 return {"success": False, "message": f"盘搜暂无结果：{keyword}"}
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            items = self._attach_cloud_scores(
+                items,
+                preferences=preferences,
+                source_type="pansou",
+                target_path=target_path or self._hdhive_default_path,
+            )
             self._save_session(
                 cache_key,
                 {
@@ -8510,11 +14909,12 @@ class AgentResourceOfficer(_PluginBase):
                 "success": True,
                 "message": text_message,
                 "data": self._assistant_response_data(session=session, data={
-                    "action": "pansou_search",
-                    "ok": True,
-                    "items": items,
-                }),
-            })
+                "action": "pansou_search",
+                "ok": True,
+                "items": items,
+                "score_summary": self._score_summary(items, limit=5),
+            }),
+        })
 
         allowed, disabled = self._ensure_hdhive_resource_enabled()
         if not allowed:
@@ -8581,6 +14981,9 @@ class AgentResourceOfficer(_PluginBase):
             result = await awaitable
             return self._assistant_single_action_compact_response(name, result) if compact else result
 
+        async def immediate(result: Dict[str, Any]) -> Dict[str, Any]:
+            return result
+
         route_payload = {
             "session": body.get("session"),
             "session_id": body.get("session_id"),
@@ -8604,10 +15007,354 @@ class AgentResourceOfficer(_PluginBase):
             route_payload.update({
                 "mode": "hdhive",
                 "keyword": body.get("keyword"),
-                "media_type": body.get("media_type") or "movie",
+                "media_type": body.get("media_type") or "auto",
                 "year": body.get("year"),
             })
             return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
+        if name == "start_mp_media_search":
+            route_payload.update({
+                "mode": "mp",
+                "keyword": body.get("keyword"),
+            })
+            return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
+        if name == "query_mp_media_detail":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_media_detail(
+                keyword=self._clean_text(body.get("keyword") or body.get("title")),
+                session=session_name,
+                cache_key=cache_key,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or "auto"),
+                year=self._clean_text(body.get("year")),
+            ))
+        if name == "query_mp_search_result_detail":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            return await finish(self._assistant_mp_result_detail(
+                choice=self._safe_int(body.get("choice") or body.get("index"), 0),
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
+        if name == "query_mp_best_result_detail":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            return await finish(self._assistant_mp_best_result_detail(
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
+        if name == "pick_mp_best_download":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            return await finish(self._assistant_mp_best_download_plan(
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
+        if name == "pick_mp_download":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            choice = self._safe_int(body.get("choice") or body.get("index"), 0)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_download_plan_response(
+                    choice=choice,
+                    session=session_name,
+                    cache_key=cache_key,
+                    preferences=prefs,
+                )))
+            return await finish(self._assistant_mp_download(
+                choice=choice,
+                session=session_name,
+                cache_key=cache_key,
+                preferences=prefs,
+            ))
+        if name == "query_mp_download_tasks":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_download_tasks(
+                session=session_name,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or "downloading"),
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                downloader=self._clean_text(body.get("downloader")),
+                limit=self._safe_int(body.get("limit"), 10),
+            ))
+        if name == "query_mp_download_history":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_download_history(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
+        if name == "query_mp_lifecycle_status":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_lifecycle_status(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if name == "query_mp_ingest_status":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_ingest_status(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if name == "query_mp_downloaders":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_downloaders(session=session_name, cache_key=cache_key))
+        if name == "query_mp_sites":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_sites(
+                session=session_name,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or "active"),
+                name=self._clean_text(body.get("site_name") or body.get("keyword") or body.get("title")),
+                limit=self._safe_int(body.get("limit"), 30),
+            ))
+        if name == "query_mp_subscribes":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_subscribes(
+                session=session_name,
+                cache_key=cache_key,
+                status=self._clean_text(body.get("status") or "all"),
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or "all"),
+                name=self._clean_text(body.get("subscribe_name") or body.get("keyword") or body.get("title")),
+                limit=self._safe_int(body.get("limit"), 20),
+            ))
+        if name == "query_mp_ingest_failures":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_ingest_failures(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
+        if name == "query_mp_transfer_history":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_transfer_history(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                status=self._clean_text(body.get("status") or "all"),
+                limit=self._safe_int(body.get("limit"), 10),
+                page=self._safe_int(body.get("page"), 1),
+            ))
+        if name == "query_mp_recent_activity":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_recent_activity(
+                session=session_name,
+                cache_key=cache_key,
+                limit=self._safe_int(body.get("limit"), 10),
+                download_only=self._parse_bool_value(body.get("download_only"), False),
+                transfer_only=self._parse_bool_value(body.get("transfer_only"), False),
+            ))
+        if name == "query_mp_local_diagnose":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_mp_local_diagnose(
+                session=session_name,
+                cache_key=cache_key,
+                title=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if name == "query_execution_followup":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_execution_followup(
+                request,
+                session=session_name,
+                session_id=cache_key,
+                plan_id=self._clean_text(body.get("plan_id")),
+            ))
+        if name == "query_smart_followup":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            return await finish(self._assistant_smart_followup(
+                request,
+                session=session_name,
+                session_id=cache_key,
+                keyword=self._clean_text(body.get("title") or body.get("keyword")),
+                hash_value=self._clean_text(body.get("hash") or body.get("hash_value")),
+                limit=self._safe_int(body.get("limit"), 5),
+            ))
+        if name == "mp_subscribe_control":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            control = self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+            allow_raw_subscribe_id = body.get("subscribe_id") is not None
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_subscribe_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session_name,
+                    cache_key=cache_key,
+                    allow_raw_id=allow_raw_subscribe_id,
+                )))
+            return await finish(self._assistant_mp_subscribe_control(
+                session=session_name,
+                cache_key=cache_key,
+                control=control,
+                target=target,
+                allow_raw_id=allow_raw_subscribe_id,
+            ))
+        if name == "mp_download_control":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            control = self._clean_text(body.get("control") or body.get("download_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+            downloader = self._clean_text(body.get("downloader"))
+            delete_files = self._parse_bool_value(body.get("delete_files"), False)
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_download_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session_name,
+                    cache_key=cache_key,
+                    downloader=downloader,
+                    delete_files=delete_files,
+                )))
+            return await finish(self._assistant_mp_download_control(
+                session=session_name,
+                cache_key=cache_key,
+                control=control,
+                target=target,
+                downloader=downloader,
+                delete_files=delete_files,
+            ))
+        if name in {"start_mp_subscribe", "start_mp_subscribe_search"}:
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            keyword = self._clean_text(body.get("keyword") or body.get("title"))
+            if not keyword:
+                state = self._load_session(cache_key) or {}
+                keyword = self._clean_text(state.get("keyword"))
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_subscribe_plan_response(
+                    keyword=keyword,
+                    session=session_name,
+                    cache_key=cache_key,
+                    immediate_search=name == "start_mp_subscribe_search",
+                )))
+            return await finish(self._assistant_mp_subscribe(
+                keyword=keyword,
+                session=session_name,
+                immediate_search=name == "start_mp_subscribe_search",
+            ))
+        if name == "start_mp_recommendations":
+            recommend_session, recommend_cache_key = self._normalize_assistant_session_ref(
+                session=self._clean_text(body.get("session")) or "default",
+                session_id=body.get("session_id"),
+            )
+            source_name, inferred_media_type = self._normalize_mp_recommend_request(
+                body.get("source") or "tmdb_trending"
+            )
+            return await finish(self._assistant_mp_recommendations(
+                source=source_name,
+                media_type=self._clean_text(body.get("media_type") or body.get("type") or inferred_media_type) or "all",
+                limit=self._safe_int(body.get("limit"), 20),
+                session=recommend_session,
+                cache_key=recommend_cache_key,
+            ))
+        if name == "pick_recommend_search":
+            pick_payload.update({
+                "choice": body.get("choice") or body.get("index"),
+                "mode": body.get("mode") or body.get("search_mode") or "mp",
+            })
+            return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
+        if name in {"preferences_get", "preferences_save", "preferences_reset"}:
+            method = "GET" if name == "preferences_get" else "DELETE" if name == "preferences_reset" else "POST"
+            payload = {
+                "session": body.get("session"),
+                "session_id": body.get("session_id"),
+                "user_key": body.get("user_key"),
+                "preferences": body.get("preferences") or {},
+                "compact": body.get("compact", True),
+                "apikey": self._extract_apikey(request, body),
+            }
+            return await finish(self.api_assistant_preferences(_JsonRequestShim(request, payload, method=method)))
+        if name in {"scoring_policy", "query_scoring_policy"}:
+            session_name = self._clean_text(body.get("session")) or "default"
+            return await finish({
+                "success": True,
+                "message": "评分策略已返回。云盘与 PT 使用不同规则；自动化决策以硬风险和 score_summary 为准。",
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "scoring_policy",
+                    "ok": True,
+                    "scoring_policy": self._assistant_scoring_policy_public_data(),
+                }),
+            })
         if name == "start_115_login":
             route_payload.update({
                 "action": "p115_qrcode_start",
@@ -8620,6 +15367,64 @@ class AgentResourceOfficer(_PluginBase):
                 "access_code": body.get("access_code"),
             })
             return await finish(self.api_assistant_route(_JsonRequestShim(request, route_payload)))
+        if name == "unlock_hdhive_resource":
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
+            resource = body.get("resource") if isinstance(body.get("resource"), dict) else {}
+            slug = self._clean_text(body.get("slug") or resource.get("slug"))
+            final_path = self._resolve_pan_path_value(
+                self._clean_text(body.get("path") or body.get("target_path"))
+            ) or self._hdhive_default_path
+            if not slug:
+                return await finish(immediate({
+                    "success": False,
+                    "message": "影巢解锁动作缺少 slug",
+                    "data": self._assistant_response_data(session=session_name, data={
+                        "action": "hdhive_unlock",
+                        "ok": False,
+                        "error_code": "missing_slug",
+                    }),
+                }))
+            route_ok, route_result, route_message = await self._unlock_and_route(
+                slug,
+                target_path=final_path,
+                resource=resource,
+            )
+            if not route_ok:
+                route = dict((route_result or {}).get("route") or {})
+                share_url = self._clean_text(route.get("share_url"))
+                if self._is_115_url(share_url) or self._clean_text(route.get("provider")) == "115":
+                    self._save_pending_p115_share(
+                        cache_key,
+                        share_url=share_url,
+                        access_code=route.get("access_code") or "",
+                        target_path=route.get("target_path") or final_path,
+                        source="assistant_hdhive_plan",
+                        title=resource.get("title") or resource.get("matched_title") or "",
+                        last_error=route_message,
+                    )
+                return await finish(immediate({
+                    "success": False,
+                    "message": route_message,
+                    "data": self._assistant_response_data(session=session_name, data={
+                        "action": "hdhive_unlock",
+                        "ok": False,
+                        "selected_resource": resource,
+                        "result": route_result,
+                    }),
+                }))
+            return await finish(immediate({
+                "success": True,
+                "message": self._format_route_result(route_result),
+                "data": self._assistant_response_data(session=session_name, data={
+                    "action": "hdhive_unlock",
+                    "ok": True,
+                    "selected_resource": resource,
+                    "result": route_result,
+                }),
+            }))
         if name == "inspect_session_state":
             return await finish(self.api_assistant_session_state(_JsonRequestShim(request, {
                 "session": body.get("session"),
@@ -8638,6 +15443,12 @@ class AgentResourceOfficer(_PluginBase):
             })))
         if name in {"pick_pansou_result", "pick_hdhive_candidate", "pick_hdhive_resource"}:
             pick_payload.update({"choice": body.get("choice") or body.get("index")})
+            return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
+        if name in {"plan_pansou_result", "plan_hdhive_resource", "plan_pick_result"}:
+            pick_payload.update({
+                "choice": body.get("choice") or body.get("index"),
+                "action": "plan",
+            })
             return await finish(self.api_assistant_pick(_JsonRequestShim(request, pick_payload)))
         if name == "candidate_detail":
             pick_payload.update({"action": "detail"})
@@ -8712,7 +15523,7 @@ class AgentResourceOfficer(_PluginBase):
             or "suggested_actions" in data
         ):
             session_state = dict(data)
-        return {
+        summary = {
             "index": index,
             "name": self._clean_text(name),
             "success": bool((result or {}).get("success")),
@@ -8726,6 +15537,11 @@ class AgentResourceOfficer(_PluginBase):
             "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
             "has_pending_p115": bool(((session_state.get("pending_p115") or {}).get("has_pending"))),
         }
+        if isinstance(data.get("score_summary"), dict):
+            summary["score_summary"] = data.get("score_summary")
+        if isinstance(data.get("diagnosis_summary"), dict):
+            summary["diagnosis_summary"] = data.get("diagnosis_summary")
+        return summary
 
     async def api_assistant_actions(self, request: Request):
         body = await request.json()
@@ -8758,6 +15574,8 @@ class AgentResourceOfficer(_PluginBase):
                 payload["session"] = batch_session
             if not payload.get("session_id") and batch_session_id:
                 payload["session_id"] = batch_session_id
+            if "execute" not in payload and "execute" in body:
+                payload["execute"] = body.get("execute")
             if apikey and not payload.get("apikey") and not payload.get("api_key"):
                 payload["apikey"] = apikey
             action_name = self._clean_text(payload.get("name") or payload.get("action_name"))
@@ -8850,6 +15668,126 @@ class AgentResourceOfficer(_PluginBase):
                     "fields": ["session", "keyword", "candidate_choice", "resource_choice", "media_type", "year", "path", "compact"],
                 },
                 {
+                    "name": "mp_search",
+                    "description": "执行 MP 原生搜索，返回 PT 候选结果和评分摘要",
+                    "fields": ["session", "keyword", "compact"],
+                },
+                {
+                    "name": "mp_media_detail",
+                    "description": "使用 MoviePilot 原生识别确认媒体详情、年份、类型和 TMDB/Douban/IMDB ID",
+                    "fields": ["session", "keyword", "media_type", "year", "compact"],
+                },
+                {
+                    "name": "mp_search_detail",
+                    "description": "执行 MP 原生搜索并按编号查看 PT 详情与评分理由，只读",
+                    "fields": ["session", "keyword", "choice", "compact"],
+                },
+                {
+                    "name": "mp_search_best",
+                    "description": "执行 MP 原生搜索并查看当前评分最高的 PT 候选详情，只读",
+                    "fields": ["session", "keyword", "compact"],
+                },
+                {
+                    "name": "mp_search_download",
+                    "description": "执行 MP 原生搜索并按编号下载，默认先生成 plan_id",
+                    "fields": ["session", "keyword", "choice", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_download_tasks",
+                    "description": "查询 MP 下载任务状态，可按 status/title/hash/downloader 过滤",
+                    "fields": ["session", "status", "title", "hash", "downloader", "limit", "compact"],
+                },
+                {
+                    "name": "mp_download_history",
+                    "description": "查询 MP 下载历史，并按 hash 关联整理/入库状态，只读",
+                    "fields": ["session", "keyword", "hash", "limit", "page", "compact"],
+                },
+                {
+                    "name": "mp_lifecycle_status",
+                    "description": "聚合查询 MP 下载任务、下载历史和整理/入库历史，只读",
+                    "fields": ["session", "keyword", "hash", "limit", "compact"],
+                },
+                {
+                    "name": "mp_ingest_status",
+                    "description": "按片名或 hash 判断当前处于下载中、已下载、整理中、已入库还是失败阶段，只读",
+                    "fields": ["session", "keyword", "hash", "limit", "compact"],
+                },
+                {
+                    "name": "mp_downloaders",
+                    "description": "查询 MP 下载器配置摘要，不返回敏感字段",
+                    "fields": ["session", "compact"],
+                },
+                {
+                    "name": "mp_sites",
+                    "description": "查询 MP 站点启用状态、优先级和 Cookie 是否存在，不返回 Cookie 明文",
+                    "fields": ["session", "status", "keyword", "limit", "compact"],
+                },
+                {
+                    "name": "mp_download_control",
+                    "description": "暂停、恢复或删除 MP 下载任务，默认先生成 plan_id",
+                    "fields": ["session", "control", "target", "downloader", "delete_files", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_subscribe",
+                    "description": "按关键词创建 MP 订阅，默认先生成 plan_id",
+                    "fields": ["session", "keyword", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_subscribe_and_search",
+                    "description": "创建订阅并立即触发搜索，默认先生成 plan_id",
+                    "fields": ["session", "keyword", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_subscribes",
+                    "description": "查询 MP 订阅列表，可按 status/media_type/keyword 过滤",
+                    "fields": ["session", "status", "media_type", "keyword", "limit", "compact"],
+                },
+                {
+                    "name": "mp_subscribe_control",
+                    "description": "触发订阅搜索、暂停、恢复或删除订阅，默认先生成 plan_id",
+                    "fields": ["session", "control", "target", "compact", "dry_run"],
+                },
+                {
+                    "name": "mp_transfer_history",
+                    "description": "查询 MP 最近整理/入库历史，可按标题和成功/失败状态过滤，只读",
+                    "fields": ["session", "keyword", "status", "limit", "page", "compact"],
+                },
+                {
+                    "name": "mp_ingest_failures",
+                    "description": "聚合查看最近整理/入库失败记录，只读",
+                    "fields": ["session", "keyword", "limit", "page", "compact"],
+                },
+                {
+                    "name": "mp_recent_activity",
+                    "description": "查看最近下载和最近整理/入库活动，只读",
+                    "fields": ["session", "limit", "download_only", "transfer_only", "compact"],
+                },
+                {
+                    "name": "mp_local_diagnose",
+                    "description": "一站式诊断为什么还没入库或当前卡在什么阶段，只读",
+                    "fields": ["session", "keyword", "hash", "limit", "compact"],
+                },
+                {
+                    "name": "execution_followup",
+                    "description": "按最近已执行计划自动查询对应的下载、订阅或入库后续状态，只读",
+                    "fields": ["session", "session_id", "plan_id", "compact"],
+                },
+                {
+                    "name": "smart_followup",
+                    "description": "统一跟进入口：有片名时查生命周期；有已执行计划时查执行后状态；否则查最近活动，只读",
+                    "fields": ["session", "session_id", "keyword", "hash", "limit", "compact"],
+                },
+                {
+                    "name": "mp_recommend",
+                    "description": "读取 MP 原生推荐，例如 TMDB、豆瓣、Bangumi",
+                    "fields": ["session", "source", "media_type", "limit", "compact"],
+                },
+                {
+                    "name": "mp_recommend_search",
+                    "description": "读取 MP 推荐并按编号继续搜索；mode 可选 mp / hdhive / pansou，传 keyword 时直接 MP 搜索",
+                    "fields": ["session", "source", "keyword", "choice", "mode", "media_type", "limit", "compact"],
+                },
+                {
                     "name": "share_transfer",
                     "description": "识别 115 或夸克分享链接并直接转存",
                     "fields": ["session", "url", "access_code", "path", "compact"],
@@ -8873,8 +15811,10 @@ class AgentResourceOfficer(_PluginBase):
         session_id = self._clean_text(body.get("session_id"))
         path = self._clean_text(body.get("path") or body.get("target_path"))
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
-        media_type = self._clean_text(body.get("media_type") or "movie")
+        media_type = self._clean_text(body.get("media_type") or "auto")
         year = self._clean_text(body.get("year"))
+        source = self._clean_text(body.get("source")) or "tmdb_trending"
+        limit = self._safe_int(body.get("limit"), 20)
 
         def base(payload: Dict[str, Any]) -> Dict[str, Any]:
             current = dict(payload)
@@ -8929,6 +15869,215 @@ class AgentResourceOfficer(_PluginBase):
                 base({"name": "pick_hdhive_resource", "choice": resource_choice}),
             ], ""
 
+        if workflow_name == "mp_search":
+            if not keyword:
+                return [], "mp_search 缺少 keyword"
+            return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
+
+        if workflow_name == "mp_media_detail":
+            if not keyword:
+                return [], "mp_media_detail 缺少 keyword"
+            return [base({
+                "name": "query_mp_media_detail",
+                "keyword": keyword,
+                "media_type": media_type,
+                "year": year,
+            })], ""
+
+        if workflow_name == "mp_search_detail":
+            if not keyword:
+                return [], "mp_search_detail 缺少 keyword"
+            choice = self._safe_int(body.get("choice"), 1)
+            return [
+                base({"name": "start_mp_media_search", "keyword": keyword}),
+                base({"name": "query_mp_search_result_detail", "choice": max(1, choice)}),
+            ], ""
+
+        if workflow_name == "mp_search_best":
+            if not keyword:
+                return [], "mp_search_best 缺少 keyword"
+            return [
+                base({"name": "start_mp_media_search", "keyword": keyword}),
+                base({"name": "query_mp_best_result_detail"}),
+            ], ""
+
+        if workflow_name == "mp_search_download":
+            if not keyword:
+                return [], "mp_search_download 缺少 keyword"
+            choice = self._safe_int(body.get("choice"), 1)
+            return [
+                base({"name": "start_mp_media_search", "keyword": keyword}),
+                base({"name": "pick_mp_download", "choice": max(1, choice)}),
+            ], ""
+
+        if workflow_name == "mp_download_tasks":
+            return [base({
+                "name": "query_mp_download_tasks",
+                "status": self._clean_text(body.get("status")) or "downloading",
+                "title": self._clean_text(body.get("title") or body.get("keyword")),
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "downloader": self._clean_text(body.get("downloader")),
+                "limit": self._safe_int(body.get("limit"), 10),
+            })], ""
+
+        if workflow_name == "mp_download_history":
+            return [base({
+                "name": "query_mp_download_history",
+                "keyword": keyword,
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "limit": self._safe_int(body.get("limit"), 10),
+                "page": self._safe_int(body.get("page"), 1),
+            })], ""
+
+        if workflow_name == "mp_lifecycle_status":
+            return [base({
+                "name": "query_mp_lifecycle_status",
+                "keyword": keyword,
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "limit": self._safe_int(body.get("limit"), 5),
+            })], ""
+
+        if workflow_name == "mp_ingest_status":
+            return [base({
+                "name": "query_mp_ingest_status",
+                "keyword": keyword,
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "limit": self._safe_int(body.get("limit"), 5),
+            })], ""
+
+        if workflow_name == "mp_downloaders":
+            return [base({"name": "query_mp_downloaders"})], ""
+
+        if workflow_name == "mp_sites":
+            return [base({
+                "name": "query_mp_sites",
+                "status": self._clean_text(body.get("status")) or "active",
+                "keyword": keyword,
+                "limit": self._safe_int(body.get("limit"), 30),
+            })], ""
+
+        if workflow_name == "mp_download_control":
+            control = self._clean_text(body.get("control") or body.get("download_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+            if not control or not target:
+                return [], "mp_download_control 需要 control 和 target"
+            return [base({
+                "name": "mp_download_control",
+                "control": control,
+                "target": target,
+                "downloader": self._clean_text(body.get("downloader")),
+                "delete_files": self._parse_bool_value(body.get("delete_files"), False),
+            })], ""
+
+        if workflow_name == "mp_subscribe":
+            if not keyword:
+                return [], "mp_subscribe 缺少 keyword"
+            return [base({"name": "start_mp_subscribe", "keyword": keyword})], ""
+
+        if workflow_name == "mp_subscribe_and_search":
+            if not keyword:
+                return [], "mp_subscribe_and_search 缺少 keyword"
+            return [base({"name": "start_mp_subscribe_search", "keyword": keyword})], ""
+
+        if workflow_name == "mp_subscribes":
+            return [base({
+                "name": "query_mp_subscribes",
+                "status": self._clean_text(body.get("status")) or "all",
+                "media_type": self._clean_text(body.get("media_type") or body.get("type")) or "all",
+                "keyword": keyword,
+                "limit": self._safe_int(body.get("limit"), 20),
+            })], ""
+
+        if workflow_name == "mp_subscribe_control":
+            control = self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+            if not control or not target:
+                return [], "mp_subscribe_control 需要 control 和 target"
+            return [base({
+                "name": "mp_subscribe_control",
+                "control": control,
+                "target": target,
+            })], ""
+
+        if workflow_name == "mp_transfer_history":
+            return [base({
+                "name": "query_mp_transfer_history",
+                "keyword": keyword,
+                "status": self._clean_text(body.get("status")) or "all",
+                "limit": self._safe_int(body.get("limit"), 10),
+                "page": self._safe_int(body.get("page"), 1),
+            })], ""
+
+        if workflow_name == "mp_ingest_failures":
+            return [base({
+                "name": "query_mp_ingest_failures",
+                "keyword": keyword,
+                "limit": self._safe_int(body.get("limit"), 10),
+                "page": self._safe_int(body.get("page"), 1),
+            })], ""
+
+        if workflow_name == "mp_recent_activity":
+            return [base({
+                "name": "query_mp_recent_activity",
+                "limit": self._safe_int(body.get("limit"), 10),
+                "download_only": self._parse_bool_value(body.get("download_only"), False),
+                "transfer_only": self._parse_bool_value(body.get("transfer_only"), False),
+            })], ""
+
+        if workflow_name == "mp_local_diagnose":
+            return [base({
+                "name": "query_mp_local_diagnose",
+                "keyword": keyword,
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "limit": self._safe_int(body.get("limit"), 5),
+            })], ""
+
+        if workflow_name == "execution_followup":
+            return [base({
+                "name": "query_execution_followup",
+                "plan_id": self._clean_text(body.get("plan_id")),
+            })], ""
+
+        if workflow_name == "smart_followup":
+            return [base({
+                "name": "query_smart_followup",
+                "keyword": keyword,
+                "hash": self._clean_text(body.get("hash") or body.get("hash_value")),
+                "limit": self._safe_int(body.get("limit"), 5),
+            })], ""
+
+        if workflow_name == "mp_recommend":
+            source_name, inferred_media_type = self._normalize_mp_recommend_request(source)
+            return [
+                base({
+                    "name": "start_mp_recommendations",
+                    "source": source_name,
+                    "media_type": self._clean_text(body.get("media_type")) or inferred_media_type or "all",
+                    "limit": max(1, min(50, limit)),
+                })
+            ], ""
+
+        if workflow_name == "mp_recommend_search":
+            if keyword:
+                return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
+            source_name, inferred_media_type = self._normalize_mp_recommend_request(source)
+            actions = [
+                base({
+                    "name": "start_mp_recommendations",
+                    "source": source_name,
+                    "media_type": self._clean_text(body.get("media_type")) or inferred_media_type or "all",
+                    "limit": max(1, min(50, limit)),
+                })
+            ]
+            choice = self._safe_int(body.get("choice"), 0)
+            if choice > 0:
+                actions.append(base({
+                    "name": "pick_recommend_search",
+                    "choice": choice,
+                    "mode": self._clean_text(body.get("mode")) or "mp",
+                }))
+            return actions, ""
+
         if workflow_name == "share_transfer":
             share_url = self._clean_text(body.get("url") or body.get("share_url"))
             if not share_url:
@@ -8961,7 +16110,7 @@ class AgentResourceOfficer(_PluginBase):
                 return {"success": False, "message": message}
             return {
                 "success": True,
-                "message": "Agent云盘资源整合 预设工作流目录",
+                "message": "Agent影视助手 预设工作流目录",
                 "data": self._assistant_response_data(session="default", data={
                     "action": "workflow_catalog",
                     "ok": True,
@@ -8985,7 +16134,47 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": build_error}
 
         session = self._clean_text(body.get("session")) or "default"
-        if self._parse_bool_value(body.get("dry_run"), False):
+        write_workflows = {
+            "pansou_transfer",
+            "hdhive_unlock",
+            "share_transfer",
+            "mp_search_download",
+            "mp_download_control",
+            "mp_subscribe",
+            "mp_subscribe_control",
+            "mp_subscribe_and_search",
+        }
+        dry_run = self._parse_bool_value(
+            body.get("dry_run"),
+            self._clean_text(workflow_name).lower() in write_workflows,
+        )
+        if dry_run:
+            if workflow_name == "mp_download_control":
+                control = self._clean_text(body.get("control") or body.get("download_control") or body.get("operation"))
+                target = self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+                result = self._assistant_mp_download_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session,
+                    cache_key=self._clean_text(body.get("session_id")),
+                    downloader=self._clean_text(body.get("downloader")),
+                    delete_files=self._parse_bool_value(body.get("delete_files"), False),
+                )
+                if not result.get("success"):
+                    return result
+            if workflow_name == "mp_subscribe_control":
+                control = self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation"))
+                target = self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+                allow_raw_id = self._parse_bool_value(body.get("allow_raw_id"), False)
+                result = self._assistant_mp_subscribe_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session,
+                    cache_key=self._clean_text(body.get("session_id")),
+                    allow_raw_id=allow_raw_id,
+                )
+                if not result.get("success"):
+                    return result
             execute_body = {
                 **{key: value for key, value in body.items() if key not in {"apikey", "dry_run"}},
                 "dry_run": False,
@@ -9027,6 +16216,7 @@ class AgentResourceOfficer(_PluginBase):
                     "workflow": workflow_name,
                     "session": session,
                     "session_id": self._clean_text(body.get("session_id")),
+                    "execute": True,
                     "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
                     "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
                     "compact": compact,
@@ -9070,19 +16260,37 @@ class AgentResourceOfficer(_PluginBase):
                 executed=None,
             )
         if not plan:
-            if plan_id:
-                return {"success": False, "message": f"计划不存在或已过期：{plan_id}"}
-            return {"success": False, "message": "没有匹配到可执行计划，请先生成 dry_run 计划或改传 plan_id。"}
+            result = {
+                "success": False,
+                "message": f"计划不存在或已过期：{plan_id}" if plan_id else "没有匹配到可执行计划，请先生成 dry_run 计划或改传 plan_id。",
+                "data": self._assistant_response_data(session=session or "default", data={
+                    "action": "execute_plan",
+                    "ok": False,
+                    "plan_id": plan_id,
+                    "error_code": "plan_not_found",
+                }),
+            }
+            return self._assistant_plan_execute_compact_response(result) if compact else result
         plan_id = self._clean_text(plan.get("plan_id"))
 
         actions = plan.get("actions") or []
         if not isinstance(actions, list) or not actions:
-            return {"success": False, "message": f"计划没有可执行动作：{plan_id}"}
+            result = {
+                "success": False,
+                "message": f"计划没有可执行动作：{plan_id}",
+                "data": self._assistant_response_data(session=session or "default", data={
+                    "action": "execute_plan",
+                    "ok": False,
+                    "plan_id": plan_id,
+                    "error_code": "plan_has_no_actions",
+                }),
+            }
+            return self._assistant_plan_execute_compact_response(result) if compact else result
 
         workflow_name = self._clean_text(plan.get("workflow")) or "saved_plan"
         session = self._clean_text(plan.get("session")) or "default"
         session_id = self._clean_text(plan.get("session_id"))
-        result = await self.api_assistant_actions(
+        action_result = await self.api_assistant_actions(
             _JsonRequestShim(
                 request,
                 {
@@ -9090,9 +16298,10 @@ class AgentResourceOfficer(_PluginBase):
                     "workflow": workflow_name,
                     "session": session,
                     "session_id": session_id,
+                    "execute": True,
                     "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
                     "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
-                    "compact": compact,
+                    "compact": False,
                     "apikey": self._extract_apikey(request, body),
                 },
             )
@@ -9103,13 +16312,13 @@ class AgentResourceOfficer(_PluginBase):
             "executed": True,
             "executed_at": executed_at,
             "executed_at_text": self._format_unix_time(executed_at),
-            "last_success": bool(result.get("success")),
-            "last_message": self._assistant_result_message_head(result.get("message")),
+            "last_success": bool(action_result.get("success")),
+            "last_message": self._assistant_result_message_head(action_result.get("message")),
         })
         self._workflow_plans[plan_id] = plan
         self._persist_workflow_plans()
 
-        data = dict(result.get("data") or {})
+        data = dict(action_result.get("data") or {})
         data.update({
             "action": "execute_plan",
             "plan_id": plan_id,
@@ -9120,13 +16329,45 @@ class AgentResourceOfficer(_PluginBase):
             "plan_executed_at": executed_at,
             "plan_executed_at_text": plan.get("executed_at_text"),
         })
+        followup = self._assistant_plan_execute_followup(
+            workflow=workflow_name,
+            session=session,
+            session_id=session_id,
+            session_state=data.get("session_state") if isinstance(data.get("session_state"), dict) else {},
+            ok=bool(action_result.get("success")),
+            plan_id=plan_id,
+        )
+        data["recommended_action"] = self._clean_text(data.get("recommended_action")) or self._clean_text(followup.get("recommended_action"))
+        data["follow_up_hint"] = self._clean_text(data.get("follow_up_hint")) or self._clean_text(followup.get("follow_up_hint"))
+        data["followup_summary"] = followup.get("followup_summary") or {}
+        data["next_actions"] = self._assistant_compact_next_actions(
+            followup.get("next_actions"),
+            data.get("next_actions") or [],
+        )
+        data["action_templates"] = self._assistant_compact_action_templates(
+            templates=[
+                *(followup.get("action_templates") or []),
+                *(data.get("action_templates") or []),
+            ],
+            limit=6,
+        )
         if not compact:
             data["workflow_actions"] = actions
-        return {
-            "success": bool(result.get("success")),
-            "message": f"计划 {plan_id} 执行完成\n{result.get('message') or ''}".strip(),
+        message_lines = [
+            f"计划 {plan_id} 执行完成",
+            self._clean_text(action_result.get("message")),
+        ]
+        if data.get("recommended_action"):
+            message_lines.append(f"推荐动作：{data.get('recommended_action')}")
+        if data.get("follow_up_hint"):
+            message_lines.append(f"下一步：{data.get('follow_up_hint')}")
+        message_lines.extend(self._format_followup_summary_lines(data.get("followup_summary")))
+        result = {
+            "success": bool(action_result.get("success")),
+            "message": "\n".join(line for line in message_lines if line).strip(),
             "data": data,
         }
+        return self._assistant_plan_execute_compact_response(result) if compact else result
 
     async def api_assistant_pick(self, request: Request):
         body = await request.json()
@@ -9169,6 +16410,91 @@ class AgentResourceOfficer(_PluginBase):
         kind = str(state.get("kind") or "").strip()
         if kind == "assistant_pansou":
             items = state.get("items") or []
+            if action == "best":
+                best = self._best_scored_source_item(items)
+                if not best:
+                    return finish({
+                        "success": False,
+                        "message": "当前盘搜结果没有可评分条目，请直接回复编号选择。",
+                        "data": self._assistant_response_data(session=session, data={
+                            "action": "pansou_best_detail",
+                            "ok": False,
+                            "error_code": "best_item_not_found",
+                        }),
+                    })
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(best, title="盘搜当前最佳候选"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "pansou_best_detail",
+                        "ok": True,
+                        "item": best,
+                        "score_summary": self._score_summary([best], limit=1),
+                    }),
+                })
+            if action == "detail":
+                if index <= 0:
+                    return {"success": False, "message": "盘搜详情需要编号，例如：选择 1 详情。"}
+                if index > len(items):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
+                selected = dict(items[index - 1])
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(selected, title="盘搜资源详情"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "pansou_result_detail",
+                        "ok": True,
+                        "choice": index,
+                        "item": selected,
+                        "score_summary": self._score_summary([selected], limit=1),
+                    }),
+                })
+            if action == "plan":
+                if index <= 0:
+                    return {"success": False, "message": "盘搜计划需要编号，例如：计划选择 1。"}
+                if index > len(items):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
+                selected = dict(items[index - 1])
+                share_url = self._clean_text(selected.get("url"))
+                if not share_url:
+                    return {"success": False, "message": "选中的盘搜结果缺少分享链接，无法生成计划。"}
+                access_code = self._clean_text(selected.get("password"))
+                final_path = target_path or (
+                    self._p115_default_path if self._is_115_url(share_url) else self._quark_default_path
+                )
+                actions = [{
+                    "name": "route_share",
+                    "session": session,
+                    "session_id": cache_key,
+                    "url": share_url,
+                    "access_code": access_code,
+                    "path": final_path,
+                }]
+                return finish(self._save_assistant_pick_plan_response(
+                    workflow="pansou_transfer_selected",
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": "pansou_transfer_selected",
+                        "session": session,
+                        "session_id": cache_key,
+                        "choice": index,
+                        "path": final_path,
+                    },
+                    message="盘搜转存计划已生成",
+                    score_items=[selected],
+                    extra_data={
+                        "choice": index,
+                        "provider": "115" if self._is_115_url(share_url) else "quark" if self._is_quark_url(share_url) else selected.get("channel"),
+                        "target_path": final_path,
+                        "selected_item": selected,
+                    },
+                ))
+            if action:
+                return {"success": False, "message": "盘搜结果当前只支持：选择 编号、计划选择 编号、选择 编号 详情、最佳片源。"}
+            if index <= 0:
+                return {"success": False, "message": "请选择有效序号，例如：选择 1"}
             if index > len(items):
                 return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
             selected = dict(items[index - 1])
@@ -9182,7 +16508,7 @@ class AgentResourceOfficer(_PluginBase):
                     "url": share_url,
                     "access_code": access_code,
                     "path": final_path,
-                    "trigger": "Agent云盘资源整合 智能入口盘搜选择",
+                    "trigger": "Agent影视助手 智能入口盘搜选择",
                     "apikey": self._extract_apikey(request, body),
                 })
             )
@@ -9226,6 +16552,75 @@ class AgentResourceOfficer(_PluginBase):
                 "message": text_message,
                 "data": self._assistant_response_data(session=session, data={"action": "share_route", "ok": True}),
             })
+
+        if kind == "assistant_mp_recommend":
+            items = state.get("items") or []
+            if index > len(items):
+                return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
+            selected = dict(items[index - 1])
+            title = self._clean_text(selected.get("title"))
+            if not title:
+                return {"success": False, "message": "选中的推荐条目缺少标题，无法继续搜索。"}
+            next_mode = self._clean_text(
+                body.get("mode")
+                or body.get("search_mode")
+                or body.get("target")
+                or "mp"
+            ).lower()
+            mode_aliases = {
+                "原生": "mp",
+                "mp搜索": "mp",
+                "影巢": "hdhive",
+                "yc": "hdhive",
+                "盘搜": "pansou",
+                "ps": "pansou",
+            }
+            next_mode = mode_aliases.get(next_mode, next_mode)
+            if next_mode not in {"mp", "hdhive", "pansou"}:
+                return {"success": False, "message": "推荐选择只支持 mode=mp、mode=hdhive 或 mode=pansou。"}
+            selected_media_type = self._clean_text(selected.get("type") or state.get("media_type") or "auto").lower()
+            media_type_aliases = {
+                "电影": "movie",
+                "movie": "movie",
+                "movies": "movie",
+                "电视剧": "tv",
+                "剧集": "tv",
+                "番剧": "tv",
+                "tv": "tv",
+                "series": "tv",
+                "all": "auto",
+                "全部": "auto",
+            }
+            selected_media_type = media_type_aliases.get(selected_media_type, "auto")
+            return finish(await self.api_assistant_route(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "session_id": cache_key,
+                    "mode": next_mode,
+                    "keyword": title,
+                    "media_type": selected_media_type,
+                    "path": target_path,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            ))
+
+        if kind == "assistant_mp":
+            if action == "best":
+                preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+                return finish(await self._assistant_mp_best_result_detail(
+                    session=session,
+                    cache_key=cache_key,
+                    preferences=preferences,
+                ))
+            if action == "detail" and index <= 0:
+                return {"success": False, "message": "MP 搜索结果详情需要编号，例如：选择 1。"}
+            preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+            return finish(await self._assistant_mp_result_detail(
+                choice=index,
+                session=session,
+                cache_key=cache_key,
+                preferences=preferences,
+            ))
 
         if kind == "assistant_hdhive":
             allowed, disabled = self._ensure_hdhive_resource_enabled()
@@ -9279,6 +16674,14 @@ class AgentResourceOfficer(_PluginBase):
                             "total_pages": total_pages,
                         }),
                     })
+                if action == "best":
+                    return {"success": False, "message": "影巢候选影片阶段没有评分，不能用“最佳片源”；请先回复编号选择影片，进入资源列表后再用“最佳片源”。"}
+                if action == "plan":
+                    return {"success": False, "message": "影巢候选影片阶段不能生成资源计划；请先回复编号选择影片，进入资源列表后再发：计划选择 1。"}
+                if action:
+                    return {"success": False, "message": "影巢候选阶段只支持：选择 编号、详情/审查、下一页。"}
+                if index <= 0:
+                    return {"success": False, "message": "请选择有效影片编号，例如：选择 1"}
                 if index > len(candidates):
                     return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(candidates)} 之间的数字。"}
                 candidate = dict(candidates[index - 1])
@@ -9288,7 +16691,13 @@ class AgentResourceOfficer(_PluginBase):
                 )
                 if not resource_ok:
                     return {"success": False, "message": f"影巢资源查询失败：{resource_message}", "data": resource_result}
-                preview = self._group_resource_preview(resource_result.get("data") or [], per_group=6)
+                preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
+                preview = self._attach_cloud_scores(
+                    self._group_resource_preview(resource_result.get("data") or [], per_group=6),
+                    preferences=preferences,
+                    source_type="hdhive",
+                    target_path=final_path,
+                )
                 self._save_session(
                     cache_key,
                     {
@@ -9307,9 +16716,90 @@ class AgentResourceOfficer(_PluginBase):
                         "ok": True,
                         "selected_candidate": candidate,
                         "resources": preview,
+                        "score_summary": self._score_summary(preview, limit=5),
                     }),
                 })
             resources = state.get("resources") or []
+            if action == "best":
+                best = self._best_scored_source_item(resources)
+                if not best:
+                    return finish({
+                        "success": False,
+                        "message": "当前影巢资源没有可评分条目，请直接回复编号选择。",
+                        "data": self._assistant_response_data(session=session, data={
+                            "action": "hdhive_best_resource_detail",
+                            "ok": False,
+                            "error_code": "best_item_not_found",
+                        }),
+                    })
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(best, title="影巢当前最佳资源"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "hdhive_best_resource_detail",
+                        "ok": True,
+                        "item": best,
+                        "score_summary": self._score_summary([best], limit=1),
+                    }),
+                })
+            if action == "detail":
+                if index <= 0:
+                    return {"success": False, "message": "影巢资源详情需要编号，例如：选择 1 详情。"}
+                if index > len(resources):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(resources)} 之间的数字。"}
+                resource = dict(resources[index - 1])
+                return finish({
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(resource, title="影巢资源详情"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "hdhive_resource_detail",
+                        "ok": True,
+                        "choice": index,
+                        "item": resource,
+                        "score_summary": self._score_summary([resource], limit=1),
+                    }),
+                })
+            if action == "plan":
+                if index <= 0:
+                    return {"success": False, "message": "影巢资源计划需要编号，例如：计划选择 1。"}
+                if index > len(resources):
+                    return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(resources)} 之间的数字。"}
+                resource = dict(resources[index - 1])
+                slug = self._clean_text(resource.get("slug"))
+                if not slug:
+                    return {"success": False, "message": "选中的影巢资源缺少 slug，无法生成计划。"}
+                actions = [{
+                    "name": "unlock_hdhive_resource",
+                    "session": session,
+                    "session_id": cache_key,
+                    "slug": slug,
+                    "path": final_path,
+                    "resource": resource,
+                }]
+                return finish(self._save_assistant_pick_plan_response(
+                    workflow="hdhive_unlock_selected",
+                    session=session,
+                    session_id=cache_key,
+                    actions=actions,
+                    execute_body={
+                        "workflow": "hdhive_unlock_selected",
+                        "session": session,
+                        "session_id": cache_key,
+                        "choice": index,
+                        "path": final_path,
+                    },
+                    message="影巢解锁/转存计划已生成",
+                    score_items=[resource],
+                    extra_data={
+                        "choice": index,
+                        "target_path": final_path,
+                        "selected_resource": resource,
+                    },
+                ))
+            if action:
+                return {"success": False, "message": "影巢资源阶段只支持：选择 编号、计划选择 编号、选择 编号 详情、最佳片源。"}
+            if index <= 0:
+                return {"success": False, "message": "请选择有效资源编号，例如：选择 1"}
             if index > len(resources):
                 return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(resources)} 之间的数字。"}
             resource = dict(resources[index - 1])
@@ -9891,7 +17381,7 @@ class AgentResourceOfficer(_PluginBase):
             return disabled
 
         keyword = self._clean_text(body.get("keyword") or body.get("title"))
-        media_type = self._clean_text(body.get("media_type") or body.get("type") or "movie").lower()
+        media_type = self._clean_text(body.get("media_type") or body.get("type") or "auto").lower()
         year = self._clean_text(body.get("year"))
         target_path = self._clean_text(body.get("path") or body.get("target_path"))
         service = self._ensure_hdhive_service()
