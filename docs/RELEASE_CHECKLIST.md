@@ -167,6 +167,7 @@ bash scripts/verify-release-download.sh <tag>
 ```bash
 git fetch --prune origin
 git branch -r
+python3 scripts/audit-remote-branches.py
 ```
 
 注意：
