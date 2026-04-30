@@ -709,6 +709,14 @@ def main() -> int:
                 json.dumps(lifecycle_recover_data.get("recovery") or {}, ensure_ascii=False),
             )
 
+            smart_followup_keyword = route(base_url, api_key, sessions[4], f"跟进{args.keyword}")
+            smart_followup_keyword_data = assert_route_action("route_smart_followup_keyword", smart_followup_keyword, "smart_followup")
+            assert_ok(
+                "route_smart_followup_keyword_resolved_lifecycle",
+                smart_followup_keyword_data.get("resolved_followup_action") == "mp_lifecycle_status",
+                json.dumps(smart_followup_keyword_data, ensure_ascii=False)[:240],
+            )
+
             ingest_status = route(base_url, api_key, sessions[4], f"入库{args.keyword}")
             ingest_status_data = assert_route_action("route_ingest_status_compact", ingest_status, "mp_ingest_status")
             assert_ok(
@@ -749,6 +757,14 @@ def main() -> int:
                 "route_local_diagnose_has_diagnosis",
                 isinstance(local_diagnose_data.get("diagnosis_summary"), dict),
                 json.dumps(local_diagnose_data.get("diagnosis_summary") or {}, ensure_ascii=False)[:240],
+            )
+
+            smart_followup_idle = route(base_url, api_key, sessions[4], "跟进")
+            smart_followup_idle_data = assert_route_action("route_smart_followup_idle", smart_followup_idle, "smart_followup")
+            assert_ok(
+                "route_smart_followup_idle_recent_activity",
+                smart_followup_idle_data.get("resolved_followup_action") == "mp_recent_activity",
+                json.dumps(smart_followup_idle_data, ensure_ascii=False)[:240],
             )
 
             movie_recommend = route(base_url, api_key, sessions[5], "热门电影")

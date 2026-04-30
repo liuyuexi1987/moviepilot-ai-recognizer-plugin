@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.58`
+- `AgentResourceOfficer`: `0.2.59`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.59`：新增统一 `跟进` 入口；有已执行计划时自动追执行后状态，有片名时直接查生命周期，否则退回最近活动，外部智能体只保留一个短入口也能续接。
 - `AgentResourceOfficer 0.2.58`：压缩本地/PT 高跟踪入口；新增 `后续`、`状态`、`记录`、`入库`、`诊断`、`最近` 等短命令，并让推荐命令优先吐这套更省 token 的自然语言写法。
 - `AgentResourceOfficer 0.2.57`：把写入动作后的追踪提示下沉为统一 `followup_summary`；执行计划、统一后续追踪和本地/PT 诊断现在都会返回稳定的后续标签、建议说明和推荐命令。
 - `AgentResourceOfficer 0.2.56`：把评分后的确认提示下沉为统一 `decision` 摘要；`score_summary` 现在会稳定返回决策标签、建议说明和推荐命令，飞书、外部智能体和 MP 内置入口可以共用同一套下一步提示。

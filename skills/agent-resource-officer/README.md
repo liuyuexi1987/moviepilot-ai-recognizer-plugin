@@ -280,6 +280,8 @@ python3 scripts/aro_request.py workflow --workflow mp_download_history --keyword
 python3 scripts/aro_request.py route --text "状态 蜘蛛侠"
 python3 scripts/aro_request.py workflow --workflow mp_lifecycle_status --keyword "蜘蛛侠" --limit 5
 python3 scripts/aro_request.py route --text "后续"
+python3 scripts/aro_request.py route --text "跟进"
+python3 scripts/aro_request.py route --text "跟进 蜘蛛侠"
 python3 scripts/aro_request.py route --text "入库 蜘蛛侠"
 python3 scripts/aro_request.py route --text "诊断 蜘蛛侠"
 python3 scripts/aro_request.py route --text "最近"
