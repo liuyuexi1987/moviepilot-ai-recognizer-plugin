@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.28"
+    plugin_version = "0.2.29"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -244,12 +244,15 @@ class AgentResourceOfficer(_PluginBase):
             "douban_hot",
             "douban_movie_hot",
             "douban_tv_hot",
+            "douban_showing",
             "douban_movie_showing",
             "douban_movie_top250",
             "douban_tv_animation",
             "bangumi_calendar",
         }
         if compact in allowed_sources:
+            if compact == "douban_showing":
+                return "douban_movie_showing", "movie"
             return compact, "all"
         source_aliases = {
             "trending": ("tmdb_trending", "all"),
@@ -262,10 +265,12 @@ class AgentResourceOfficer(_PluginBase):
             "豆瓣热门": ("douban_hot", "all"),
             "豆瓣电影": ("douban_movie_hot", "movie"),
             "豆瓣热门电影": ("douban_movie_hot", "movie"),
+            "豆瓣热映": ("douban_movie_showing", "movie"),
             "豆瓣电视剧": ("douban_tv_hot", "tv"),
             "豆瓣剧集": ("douban_tv_hot", "tv"),
             "豆瓣top250": ("douban_movie_top250", "movie"),
             "top250": ("douban_movie_top250", "movie"),
+            "douban_showing": ("douban_movie_showing", "movie"),
             "正在热映": ("douban_movie_showing", "movie"),
             "热映": ("douban_movie_showing", "movie"),
             "院线": ("douban_movie_showing", "movie"),
@@ -3209,6 +3214,8 @@ class AgentResourceOfficer(_PluginBase):
         prefs = self._normalize_assistant_preferences(preferences)
         text = self._score_text_blob(item)
         torrent = item.get("torrent_info") if isinstance(item.get("torrent_info"), dict) else item
+        meta = item.get("meta_info") if isinstance(item.get("meta_info"), dict) else {}
+        media = item.get("media_info") if isinstance(item.get("media_info"), dict) else {}
         score = 20
         reasons: List[str] = []
         risks: List[str] = []
@@ -3216,6 +3223,16 @@ class AgentResourceOfficer(_PluginBase):
         seeders = self._safe_int(torrent.get("seeders"), 0)
         peers = self._safe_int(torrent.get("peers"), 0)
         volume = self._clean_text(torrent.get("volume_factor") or item.get("volume_factor")).lower()
+        title = self._clean_text(torrent.get("title"))
+        site_name = self._clean_text(torrent.get("site_name"))
+        group_name = self._clean_text(meta.get("resource_team"))
+        media_title = self._clean_text(media.get("title")).lower()
+        media_year = self._clean_text(media.get("year"))
+        resolution_pref = self._clean_text(prefs.get("prefer_resolution")).lower()
+        prefer_dovi = self._parse_bool_value(prefs.get("prefer_dolby_vision"), True)
+        prefer_hdr = self._parse_bool_value(prefs.get("prefer_hdr"), True)
+        prefer_subtitle = self._parse_bool_value(prefs.get("prefer_chinese_subtitle"), True)
+        prefer_complete = self._parse_bool_value(prefs.get("prefer_complete_series"), True)
 
         if seeders <= 0:
             risks.append("做种数 0，禁止自动下载")
@@ -3236,6 +3253,12 @@ class AgentResourceOfficer(_PluginBase):
         if peers >= seeders * 5 and seeders < 5:
             score -= 8
             risks.append("下载需求高但做种偏低")
+        elif peers >= max(8, seeders):
+            score += 6
+            reasons.append(f"下载热度 {peers} +6")
+        elif peers >= 3:
+            score += 3
+            reasons.append(f"下载热度 {peers} +3")
 
         if self._score_has_any(volume, ["free", "免费", "2xfree", "2x free", "freeleech"]):
             score += 18
@@ -3252,21 +3275,79 @@ class AgentResourceOfficer(_PluginBase):
         elif "1080" in text:
             score += 12
             reasons.append("1080P +12")
-        if self._score_has_any(text, ["dolby vision", "dovi", "dv", "杜比视界"]):
+        elif "720" in text:
+            score += 4
+            reasons.append("720P +4")
+        if resolution_pref and resolution_pref in text:
+            score += 6
+            reasons.append(f"匹配偏好分辨率 {resolution_pref.upper()} +6")
+        has_dovi = self._score_has_any(text, ["dolby vision", "dovi", "dv", "杜比视界"])
+        has_hdr = self._score_has_any(text, ["hdr10", "hdr", "hlg"])
+        if has_dovi:
             score += 14
             reasons.append("杜比视界 +14")
-        elif self._score_has_any(text, ["hdr10", "hdr", "hlg"]):
+        elif prefer_dovi:
+            score -= 4
+            risks.append("未识别到杜比视界")
+        if has_hdr:
             score += 9
             reasons.append("HDR +9")
+        elif prefer_hdr:
+            score -= 2
+            risks.append("未识别到 HDR")
         if self._score_has_any(text, ["中字", "简中", "繁中", "双语", "内封", "字幕"]):
             score += 10
             reasons.append("字幕信息 +10")
+        elif prefer_subtitle:
+            score -= 5
+            risks.append("未识别到中文字幕")
         if self._score_has_any(text, ["remux", "原盘", "blu-ray", "bluray", "web-dl", "高码率"]):
             score += 8
             reasons.append("片源质量标识 +8")
-        if self._score_has_any(text, ["s01", "season", "全集", "全季", "complete"]):
+        if self._score_has_any(text, ["s01", "season", "全集", "全季", "complete", "完结", "更新至", "更至"]):
             score += 6
             reasons.append("季/全集标识 +6")
+        elif prefer_complete and self._score_has_any(text, ["s01", "s02", "e01", "第1集", "season"]):
+            score -= 4
+            risks.append("未识别到全集/完整季")
+
+        if media_title:
+            if media_title in title.lower():
+                score += 8
+                reasons.append("标题匹配媒体名 +8")
+            else:
+                score -= 4
+                risks.append("标题与识别媒体名匹配一般")
+        if media_year and media_year in title:
+            score += 4
+            reasons.append(f"年份匹配 {media_year} +4")
+        if site_name:
+            score += 2
+            reasons.append(f"站点标识 {site_name} +2")
+        if group_name:
+            score += 2
+            reasons.append(f"发布组 {group_name} +2")
+
+        size_text = self._clean_text(torrent.get("size") or item.get("size"))
+        size_value = 0.0
+        size_match = re.search(r"(\d+(?:\.\d+)?)\s*(tb|gb|mb)", size_text, flags=re.IGNORECASE)
+        if size_match:
+            size_value = float(size_match.group(1))
+            unit = size_match.group(2).lower()
+            if unit == "tb":
+                size_value *= 1024
+            elif unit == "mb":
+                size_value /= 1024
+        if size_value > 0:
+            if self._score_has_any(text, ["2160", "4k", "uhd", "remux", "原盘"]) and size_value < 8:
+                score -= 6
+                risks.append(f"体积 {size_text} 偏小，需留意是否压制过度")
+            elif self._score_has_any(text, ["1080", "web-dl", "bluray"]) and size_value >= 4:
+                score += 3
+                reasons.append(f"体积 {size_text} 较充足 +3")
+        if peers >= 30 and seeders >= min_seeders:
+            score += 4
+            reasons.append("热度稳定 +4")
 
         final_score = max(0, min(100, score))
         decision = self._score_decision(
@@ -3283,6 +3364,8 @@ class AgentResourceOfficer(_PluginBase):
             "peers": peers,
             "min_seeders": min_seeders,
             "volume_factor": volume,
+            "site_name": site_name,
+            "resource_team": group_name,
         }
 
     def _attach_cloud_scores(
@@ -3832,101 +3915,239 @@ class AgentResourceOfficer(_PluginBase):
             ),
         )
         choice = self._safe_int(best.get("index"), 0)
-        score = best.get("score") or {}
+        result = self._assistant_mp_download_plan_response(
+            choice=choice,
+            session=session,
+            cache_key=cache_key,
+            preferences=preferences,
+            workflow="mp_best_download",
+            message="最佳片源下载计划已生成",
+        )
+        if result.get("success"):
+            result["message"] = "\n".join(line for line in [
+                f"已选择当前评分最高的 PT 候选：#{choice}",
+                result.get("message") or "",
+            ] if line)
+            data = dict(result.get("data") or {})
+            data["choice"] = choice
+            data["item"] = best
+            result["data"] = data
+        return result
+
+    @staticmethod
+    def _assistant_score_warning_text(score: Dict[str, Any], *, limit: int = 3) -> str:
         risks = [str(value) for value in (score.get("risk_reasons") or []) if value]
-        if risks:
+        if not risks:
+            return ""
+        return "风险提示：" + "；".join(risks[:max(1, limit)])
+
+    def _assistant_mp_download_plan_response(
+        self,
+        *,
+        choice: int,
+        session: str,
+        cache_key: str,
+        preferences: Dict[str, Any],
+        workflow: str = "mp_download",
+        message: str = "PT 下载计划已生成",
+    ) -> Dict[str, Any]:
+        preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
+        selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
+        if not selected:
             return {
                 "success": False,
-                "message": f"已阻止最佳候选自动生成下载计划：{'；'.join(risks)}",
+                "message": "没有可继续的 MP 搜索结果，请先发送“MP搜索 片名”后再选择编号。",
                 "data": self._assistant_response_data(session=session, data={
-                    "action": "mp_best_download_plan",
+                    "action": "mp_download",
                     "ok": False,
-                    "error_code": "mp_best_result_blocked",
+                    "error_code": "mp_result_not_found",
                     "choice": choice,
-                    "item": best,
-                    "score_summary": self._score_summary([best], limit=1),
                 }),
             }
-        if self._parse_bool_value(score.get("can_auto_execute"), False):
-            result = await self._assistant_mp_download(
-                choice=choice,
-                session=session,
-                cache_key=cache_key,
-                preferences=preferences,
-            )
-            data = dict(result.get("data") or {})
-            data["action"] = "mp_best_download_auto"
-            data["best_choice"] = choice
-            data["score_summary"] = self._score_summary([best], limit=1)
-            result["data"] = data
-            prefix = "最佳片源已按偏好自动提交下载" if result.get("success") else "最佳片源自动下载失败"
-            result["message"] = f"{prefix}\n{result.get('message') or ''}".strip()
-            return result
-        actions = [{
-            "name": "pick_mp_download",
-            "session": session,
-            "session_id": cache_key,
-            "choice": choice,
-        }]
-        plan = self._save_workflow_plan(
-            workflow="mp_best_download",
+        result = self._save_assistant_pick_plan_response(
+            workflow=workflow,
             session=session,
             session_id=cache_key,
-            actions=actions,
+            actions=[{
+                "name": "pick_mp_download",
+                "session": session,
+                "session_id": cache_key,
+                "choice": choice,
+            }],
             execute_body={
-                "workflow": "mp_best_download",
+                "workflow": workflow,
                 "session": session,
                 "session_id": cache_key,
                 "choice": choice,
                 "dry_run": False,
             },
+            message=message,
+            score_items=[selected],
+            extra_data={
+                "choice": choice,
+                "selected": selected,
+            },
         )
-        title = ((best.get("torrent_info") or {}).get("title")) or "未命名资源"
-        score_value = self._safe_int(score.get("score"), 0)
-        level = self._clean_text(score.get("score_level")) or "-"
-        message = "\n".join([
-            f"最佳片源下载计划已生成：{plan.get('plan_id')}",
-            f"选择：#{choice} {title}",
-            f"评分：{score_value} / {level}",
-            "确认后再执行 plan_id；当前不会静默下载。",
-        ])
-        full_data = self._assistant_response_data(session=session, data={
-            "action": "workflow_plan",
-            "ok": True,
-            "plan_id": plan.get("plan_id"),
-            "workflow": "mp_best_download",
-            "dry_run": True,
-            "workflow_actions": actions,
-            "estimated_steps": len(actions),
-            "ready_to_execute": True,
-            "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
-            "execute_plan_body": {"plan_id": plan.get("plan_id")},
-            "choice": choice,
-            "item": best,
-            "score_summary": self._score_summary([best], limit=1),
-            "plan_created_at": plan.get("created_at"),
-            "plan_created_at_text": plan.get("created_at_text"),
-        })
-        return {"success": True, "message": message, "data": full_data}
+        score = selected.get("score") if isinstance(selected.get("score"), dict) else {}
+        warning = self._assistant_score_warning_text(score)
+        if warning:
+            result["message"] = f"{result.get('message')}\n{warning}"
+        return result
+
+    def _assistant_mp_subscribe_plan_response(
+        self,
+        *,
+        keyword: str,
+        session: str,
+        cache_key: str,
+        immediate_search: bool = False,
+    ) -> Dict[str, Any]:
+        keyword = self._clean_text(keyword)
+        if not keyword:
+            return {
+                "success": False,
+                "message": "订阅失败：缺少片名或关键词",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_search" if immediate_search else "mp_subscribe",
+                    "ok": False,
+                    "error_code": "missing_keyword",
+                }),
+            }
+        action_name = "start_mp_subscribe_search" if immediate_search else "start_mp_subscribe"
+        workflow = "mp_subscribe_and_search" if immediate_search else "mp_subscribe"
+        label = "订阅并搜索计划已生成" if immediate_search else "订阅计划已生成"
+        return self._save_assistant_pick_plan_response(
+            workflow=workflow,
+            session=session,
+            session_id=cache_key,
+            actions=[{
+                "name": action_name,
+                "session": session,
+                "session_id": cache_key,
+                "keyword": keyword,
+            }],
+            execute_body={
+                "workflow": workflow,
+                "session": session,
+                "session_id": cache_key,
+                "keyword": keyword,
+                "dry_run": False,
+            },
+            message=label,
+            extra_data={
+                "keyword": keyword,
+                "immediate_search": bool(immediate_search),
+            },
+        )
+
+    def _assistant_mp_download_control_plan_response(
+        self,
+        *,
+        control: str,
+        target: str,
+        session: str,
+        cache_key: str,
+        downloader: str = "",
+        delete_files: bool = False,
+    ) -> Dict[str, Any]:
+        control = self._clean_text(control)
+        target = self._clean_text(target)
+        if not control or not target:
+            return {
+                "success": False,
+                "message": "下载任务操作缺少 control 或 target。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download_control",
+                    "ok": False,
+                    "error_code": "invalid_download_control_args",
+                }),
+            }
+        downloader = self._clean_text(downloader)
+        return self._save_assistant_pick_plan_response(
+            workflow="mp_download_control",
+            session=session,
+            session_id=cache_key,
+            actions=[{
+                "name": "mp_download_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+                "downloader": downloader,
+                "delete_files": delete_files,
+            }],
+            execute_body={
+                "workflow": "mp_download_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+                "downloader": downloader,
+                "delete_files": delete_files,
+                "dry_run": False,
+            },
+            message="下载任务操作计划已生成",
+            extra_data={
+                "control": control,
+                "target": target,
+            },
+        )
+
+    def _assistant_mp_subscribe_control_plan_response(
+        self,
+        *,
+        control: str,
+        target: str,
+        session: str,
+        cache_key: str,
+    ) -> Dict[str, Any]:
+        control = self._clean_text(control)
+        target = self._clean_text(target)
+        if not control or not target:
+            return {
+                "success": False,
+                "message": "订阅操作缺少 control 或 target。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_subscribe_control",
+                    "ok": False,
+                    "error_code": "invalid_subscribe_control_args",
+                }),
+            }
+        return self._save_assistant_pick_plan_response(
+            workflow="mp_subscribe_control",
+            session=session,
+            session_id=cache_key,
+            actions=[{
+                "name": "mp_subscribe_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+            }],
+            execute_body={
+                "workflow": "mp_subscribe_control",
+                "session": session,
+                "session_id": cache_key,
+                "control": control,
+                "target": target,
+                "dry_run": False,
+            },
+            message="订阅操作计划已生成",
+            extra_data={
+                "control": control,
+                "target": target,
+            },
+        )
 
     async def _assistant_mp_download(self, *, choice: int, session: str, cache_key: str, preferences: Dict[str, Any]) -> Dict[str, Any]:
         preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
         selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
         score = selected.get("score") if isinstance(selected.get("score"), dict) else {}
-        if score and score.get("risk_reasons"):
-            return {
-                "success": False,
-                "message": "已阻止 PT 自动下载：" + "；".join(str(item) for item in score.get("risk_reasons") or []),
-                "data": self._assistant_response_data(session=session, data={
-                    "action": "mp_download",
-                    "ok": False,
-                    "error_code": "pt_score_risk_blocked",
-                    "selected": selected,
-                    "score": score,
-                }),
-            }
         message_text = self._ensure_feishu_channel()._execute_media_download(choice, cache_key)
         ok = not message_text.startswith("下载资源失败") and not message_text.startswith("没有可用")
+        warning = self._assistant_score_warning_text(score)
+        if warning:
+            message_text = f"{warning}\n{message_text}".strip()
         return {
             "success": ok,
             "message": message_text,
@@ -4449,7 +4670,8 @@ class AgentResourceOfficer(_PluginBase):
                 lines.append(f"注：{source_name} 当前暂无结果，已自动回退 {fallback_source}。")
             for item in items[:10]:
                 lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
-            lines.append("下一步：回复“选择 1”进入 MP 原生搜索；也可结构化传 mode=hdhive 或 mode=pansou。")
+            lines.append("下一步：回复“选择 1”进入 MP 原生搜索。")
+            lines.append("如果想转去别的源，也可以回复“选择 1 影巢”或“选择 1 盘搜”。")
             if cache_key:
                 self._save_session(cache_key, {
                     "kind": "assistant_mp_recommend",
@@ -4467,6 +4689,7 @@ class AgentResourceOfficer(_PluginBase):
                 "data": self._assistant_response_data(session=session, data={
                     "action": "mp_recommendations",
                     "ok": True,
+                    "source_type": "moviepilot_recommendation",
                     "source": fallback_source or source_name,
                     "requested_source": source_name,
                     "fallback_source": fallback_source,
@@ -5160,7 +5383,11 @@ class AgentResourceOfficer(_PluginBase):
         elif has_session and kind == "assistant_mp":
             mode = "continue_mp_search"
             reason = "当前会话停留在 MP 原生搜索结果列表"
-            template = self._assistant_find_action_template(templates, ["pick_mp_download"])
+            template = self._assistant_find_action_template(templates, [
+                "query_mp_best_result_detail",
+                "query_mp_search_result_detail",
+                "pick_mp_download",
+            ])
         elif has_session and kind == "assistant_mp_recommend":
             mode = "continue_mp_recommend"
             reason = "当前会话停留在 MP 热门推荐列表"
@@ -5796,17 +6023,24 @@ class AgentResourceOfficer(_PluginBase):
                 ),
                 self._assistant_action_template(
                     name="pick_mp_download",
-                    description="按编号选择 MP 原生搜索结果并下载；写入动作建议先 dry_run 生成计划",
+                    description="按编号为 MP 原生搜索结果生成下载计划；不会立即下载",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
                     body={**base_state, "name": "pick_mp_download", "choice": "<1-N>"},
                 ),
                 self._assistant_action_template(
                     name="start_mp_subscribe",
-                    description="按当前关键词创建 MP 订阅",
+                    description="按当前关键词生成 MP 订阅计划",
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
                     tool="agent_resource_officer_execute_action",
                     body={**base_state, "name": "start_mp_subscribe", "keyword": data.get("keyword") or "<关键词>"},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_subscribe_search",
+                    description="按当前关键词生成“订阅并搜索”计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "start_mp_subscribe_search", "keyword": data.get("keyword") or "<关键词>"},
                 ),
             ])
         elif kind == "assistant_mp_download_tasks":
@@ -10397,38 +10631,37 @@ class AgentResourceOfficer(_PluginBase):
         client_type: str = "",
         source: str = "",
         limit: int = 20,
-        dry_run: bool = False,
+        dry_run: Optional[bool] = None,
         stop_on_error: bool = True,
         include_raw_results: bool = False,
         compact: bool = True,
     ) -> str:
         if not self._enabled:
             return "Agent影视助手 插件未启用"
+        payload = {
+            "name": self._clean_text(name),
+            "session": self._clean_text(session) or "default",
+            "session_id": self._clean_text(session_id),
+            "keyword": self._clean_text(keyword),
+            "choice": choice,
+            "candidate_choice": candidate_choice,
+            "resource_choice": resource_choice,
+            "path": self._clean_text(target_path),
+            "url": self._clean_text(share_url),
+            "access_code": self._clean_text(access_code),
+            "media_type": self._clean_text(media_type),
+            "year": self._clean_text(year),
+            "client_type": self._clean_text(client_type),
+            "source": self._clean_text(source),
+            "limit": self._safe_int(limit, 20),
+            "stop_on_error": bool(stop_on_error),
+            "include_raw_results": bool(include_raw_results),
+            "compact": bool(compact),
+        }
+        if dry_run is not None:
+            payload["dry_run"] = bool(dry_run)
         result = await self.api_assistant_workflow(
-            _JsonRequestShim(
-                _RequestContextShim(),
-                {
-                    "name": self._clean_text(name),
-                    "session": self._clean_text(session) or "default",
-                    "session_id": self._clean_text(session_id),
-                    "keyword": self._clean_text(keyword),
-                    "choice": choice,
-                    "candidate_choice": candidate_choice,
-                    "resource_choice": resource_choice,
-                    "path": self._clean_text(target_path),
-                    "url": self._clean_text(share_url),
-                    "access_code": self._clean_text(access_code),
-                    "media_type": self._clean_text(media_type),
-                    "year": self._clean_text(year),
-                    "client_type": self._clean_text(client_type),
-                    "source": self._clean_text(source),
-                    "limit": self._safe_int(limit, 20),
-                    "dry_run": bool(dry_run),
-                    "stop_on_error": bool(stop_on_error),
-                    "include_raw_results": bool(include_raw_results),
-                    "compact": bool(compact),
-                },
-            )
+            _JsonRequestShim(_RequestContextShim(), payload)
         )
         return str(result.get("message") or "工作流执行完成")
 
@@ -11134,6 +11367,9 @@ class AgentResourceOfficer(_PluginBase):
         def finish(result: Dict[str, Any]) -> Dict[str, Any]:
             return self._assistant_interaction_compact_response(result) if compact else result
 
+        def immediate(result: Dict[str, Any]) -> Dict[str, Any]:
+            return result
+
         pick_index, pick_path, pick_action, pick_mode = self._parse_pick_text(text)
         if pick_index > 0 or pick_action:
             pick_result = await self.api_assistant_pick(
@@ -11405,46 +11641,12 @@ class AgentResourceOfficer(_PluginBase):
                     }),
                 })
             if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
-                actions = [{
-                    "name": "mp_subscribe_control",
-                    "session": session,
-                    "session_id": cache_key,
-                    "control": control,
-                    "target": target,
-                }]
-                plan = self._save_workflow_plan(
-                    workflow="mp_subscribe_control",
+                return finish(immediate(self._assistant_mp_subscribe_control_plan_response(
+                    control=control,
+                    target=target,
                     session=session,
-                    session_id=cache_key,
-                    actions=actions,
-                    execute_body={
-                        "workflow": "mp_subscribe_control",
-                        "session": session,
-                        "session_id": cache_key,
-                        "control": control,
-                        "target": target,
-                        "dry_run": False,
-                    },
-                )
-                full_data = self._assistant_response_data(session=session, data={
-                    "action": "workflow_plan",
-                    "ok": True,
-                    "plan_id": plan.get("plan_id"),
-                    "workflow": "mp_subscribe_control",
-                    "dry_run": True,
-                    "workflow_actions": actions,
-                    "estimated_steps": len(actions),
-                    "ready_to_execute": True,
-                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
-                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
-                    "plan_created_at": plan.get("created_at"),
-                    "plan_created_at_text": plan.get("created_at_text"),
-                })
-                return {
-                    "success": True,
-                    "message": f"订阅操作计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动修改订阅。",
-                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
-                }
+                    cache_key=cache_key,
+                )))
             return finish(await self._assistant_mp_subscribe_control(
                 session=session,
                 cache_key=cache_key,
@@ -11519,48 +11721,14 @@ class AgentResourceOfficer(_PluginBase):
                     }),
                 })
             if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
-                actions = [{
-                    "name": "mp_download_control",
-                    "session": session,
-                    "session_id": cache_key,
-                    "control": control,
-                    "target": target,
-                    "downloader": self._clean_text(body.get("downloader")),
-                    "delete_files": self._parse_bool_value(body.get("delete_files"), False),
-                }]
-                plan = self._save_workflow_plan(
-                    workflow="mp_download_control",
+                return finish(immediate(self._assistant_mp_download_control_plan_response(
+                    control=control,
+                    target=target,
                     session=session,
-                    session_id=cache_key,
-                    actions=actions,
-                    execute_body={
-                        "workflow": "mp_download_control",
-                        "session": session,
-                        "session_id": cache_key,
-                        "control": control,
-                        "target": target,
-                        "dry_run": False,
-                    },
-                )
-                full_data = self._assistant_response_data(session=session, data={
-                    "action": "workflow_plan",
-                    "ok": True,
-                    "plan_id": plan.get("plan_id"),
-                    "workflow": "mp_download_control",
-                    "dry_run": True,
-                    "workflow_actions": actions,
-                    "estimated_steps": len(actions),
-                    "ready_to_execute": True,
-                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
-                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
-                    "plan_created_at": plan.get("created_at"),
-                    "plan_created_at_text": plan.get("created_at_text"),
-                })
-                return {
-                    "success": True,
-                    "message": f"下载任务操作计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动操作下载器。",
-                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
-                }
+                    cache_key=cache_key,
+                    downloader=self._clean_text(body.get("downloader")),
+                    delete_files=self._parse_bool_value(body.get("delete_files"), False),
+                )))
             return finish(await self._assistant_mp_download_control(
                 session=session,
                 cache_key=cache_key,
@@ -11586,61 +11754,12 @@ class AgentResourceOfficer(_PluginBase):
                 })
             preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
             if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
-                preview = self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10)
-                selected = next((item for item in preview if self._safe_int(item.get("index"), 0) == choice), {})
-                score = selected.get("score") if isinstance(selected.get("score"), dict) else {}
-                if self._parse_bool_value(score.get("can_auto_execute"), False):
-                    auto_result = await self._assistant_mp_download(
-                        choice=choice,
-                        session=session,
-                        cache_key=cache_key,
-                        preferences=preferences,
-                    )
-                    data = dict(auto_result.get("data") or {})
-                    data["action"] = "mp_download_auto"
-                    data["score_summary"] = self._score_summary([selected], limit=1) if selected else {}
-                    auto_result["data"] = data
-                    prefix = "已按偏好自动提交下载" if auto_result.get("success") else "自动下载失败"
-                    auto_result["message"] = f"{prefix}\n{auto_result.get('message') or ''}".strip()
-                    return finish(auto_result)
-                actions = [{
-                    "name": "pick_mp_download",
-                    "session": session,
-                    "session_id": cache_key,
-                    "choice": choice,
-                }]
-                plan = self._save_workflow_plan(
-                    workflow="mp_download",
+                return finish(immediate(self._assistant_mp_download_plan_response(
+                    choice=choice,
                     session=session,
-                    session_id=cache_key,
-                    actions=actions,
-                    execute_body={
-                        "workflow": "mp_download",
-                        "session": session,
-                        "session_id": cache_key,
-                        "choice": choice,
-                        "dry_run": False,
-                    },
-                )
-                full_data = self._assistant_response_data(session=session, data={
-                    "action": "workflow_plan",
-                    "ok": True,
-                    "plan_id": plan.get("plan_id"),
-                    "workflow": "mp_download",
-                    "dry_run": True,
-                    "workflow_actions": actions,
-                    "estimated_steps": len(actions),
-                    "ready_to_execute": True,
-                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
-                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
-                    "plan_created_at": plan.get("created_at"),
-                    "plan_created_at_text": plan.get("created_at_text"),
-                })
-                return {
-                    "success": True,
-                    "message": f"下载计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动下载。",
-                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
-                }
+                    cache_key=cache_key,
+                    preferences=preferences,
+                )))
             return finish(await self._assistant_mp_download(
                 choice=choice,
                 session=session,
@@ -11655,46 +11774,12 @@ class AgentResourceOfficer(_PluginBase):
                     "data": self._assistant_response_data(session=session, data={"action": assistant_action, "ok": False}),
                 })
             if not self._parse_bool_value(body.get("confirmed") or body.get("execute"), False):
-                action_name = "start_mp_subscribe_search" if assistant_action == "mp_subscribe_search" else "start_mp_subscribe"
-                workflow_name = "mp_subscribe_and_search" if assistant_action == "mp_subscribe_search" else "mp_subscribe"
-                actions = [{
-                    "name": action_name,
-                    "session": session,
-                    "session_id": cache_key,
-                    "keyword": keyword,
-                }]
-                plan = self._save_workflow_plan(
-                    workflow=workflow_name,
+                return finish(immediate(self._assistant_mp_subscribe_plan_response(
+                    keyword=keyword,
                     session=session,
-                    session_id=cache_key,
-                    actions=actions,
-                    execute_body={
-                        "workflow": workflow_name,
-                        "session": session,
-                        "session_id": cache_key,
-                        "keyword": keyword,
-                        "dry_run": False,
-                    },
-                )
-                full_data = self._assistant_response_data(session=session, data={
-                    "action": "workflow_plan",
-                    "ok": True,
-                    "plan_id": plan.get("plan_id"),
-                    "workflow": workflow_name,
-                    "dry_run": True,
-                    "workflow_actions": actions,
-                    "estimated_steps": len(actions),
-                    "ready_to_execute": True,
-                    "execute_plan_endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
-                    "execute_plan_body": {"plan_id": plan.get("plan_id")},
-                    "plan_created_at": plan.get("created_at"),
-                    "plan_created_at_text": plan.get("created_at_text"),
-                })
-                return {
-                    "success": True,
-                    "message": f"订阅计划已生成：{plan.get('plan_id')}。确认后再执行，不会自动订阅。",
-                    "data": self._assistant_workflow_plan_compact_data(full_data) if compact else full_data,
-                }
+                    cache_key=cache_key,
+                    immediate_search=assistant_action == "mp_subscribe_search",
+                )))
             return finish(await self._assistant_mp_subscribe(
                 keyword=keyword,
                 session=session,
@@ -12196,8 +12281,17 @@ class AgentResourceOfficer(_PluginBase):
                 session_id=body.get("session_id"),
             )
             prefs = self._assistant_preferences_public_data(session=session_name).get("preferences") or self._default_assistant_preferences()
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            choice = self._safe_int(body.get("choice") or body.get("index"), 0)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_download_plan_response(
+                    choice=choice,
+                    session=session_name,
+                    cache_key=cache_key,
+                    preferences=prefs,
+                )))
             return await finish(self._assistant_mp_download(
-                choice=self._safe_int(body.get("choice") or body.get("index"), 0),
+                choice=choice,
                 session=session_name,
                 cache_key=cache_key,
                 preferences=prefs,
@@ -12289,37 +12383,69 @@ class AgentResourceOfficer(_PluginBase):
                 session=body.get("session") or "default",
                 session_id=body.get("session_id"),
             )
+            control = self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_subscribe_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session_name,
+                    cache_key=cache_key,
+                )))
             return await finish(self._assistant_mp_subscribe_control(
                 session=session_name,
                 cache_key=cache_key,
-                control=self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation")),
-                target=self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice")),
+                control=control,
+                target=target,
             ))
         if name == "mp_download_control":
             session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
                 session_id=body.get("session_id"),
             )
+            control = self._clean_text(body.get("control") or body.get("download_control") or body.get("operation"))
+            target = self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+            downloader = self._clean_text(body.get("downloader"))
+            delete_files = self._parse_bool_value(body.get("delete_files"), False)
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_download_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session_name,
+                    cache_key=cache_key,
+                    downloader=downloader,
+                    delete_files=delete_files,
+                )))
             return await finish(self._assistant_mp_download_control(
                 session=session_name,
                 cache_key=cache_key,
-                control=self._clean_text(body.get("control") or body.get("download_control") or body.get("operation")),
-                target=self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice")),
-                downloader=self._clean_text(body.get("downloader")),
-                delete_files=self._parse_bool_value(body.get("delete_files"), False),
+                control=control,
+                target=target,
+                downloader=downloader,
+                delete_files=delete_files,
             ))
         if name in {"start_mp_subscribe", "start_mp_subscribe_search"}:
+            session_name, cache_key = self._normalize_assistant_session_ref(
+                session=body.get("session") or "default",
+                session_id=body.get("session_id"),
+            )
             keyword = self._clean_text(body.get("keyword") or body.get("title"))
             if not keyword:
-                session_name, cache_key = self._normalize_assistant_session_ref(
-                    session=body.get("session") or "default",
-                    session_id=body.get("session_id"),
-                )
                 state = self._load_session(cache_key) or {}
                 keyword = self._clean_text(state.get("keyword"))
+            execute_requested = self._parse_bool_value(body.get("execute") or body.get("confirmed"), False)
+            if not execute_requested:
+                return await finish(immediate(self._assistant_mp_subscribe_plan_response(
+                    keyword=keyword,
+                    session=session_name,
+                    cache_key=cache_key,
+                    immediate_search=name == "start_mp_subscribe_search",
+                )))
             return await finish(self._assistant_mp_subscribe(
                 keyword=keyword,
-                session=self._clean_text(body.get("session")) or "default",
+                session=session_name,
                 immediate_search=name == "start_mp_subscribe_search",
             ))
         if name == "start_mp_recommendations":
@@ -12573,6 +12699,8 @@ class AgentResourceOfficer(_PluginBase):
                 payload["session"] = batch_session
             if not payload.get("session_id") and batch_session_id:
                 payload["session_id"] = batch_session_id
+            if "execute" not in payload and "execute" in body:
+                payload["execute"] = body.get("execute")
             if apikey and not payload.get("apikey") and not payload.get("api_key"):
                 payload["apikey"] = apikey
             action_name = self._clean_text(payload.get("name") or payload.get("action_name"))
@@ -13111,6 +13239,7 @@ class AgentResourceOfficer(_PluginBase):
                     "workflow": workflow_name,
                     "session": session,
                     "session_id": self._clean_text(body.get("session_id")),
+                    "execute": True,
                     "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
                     "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
                     "compact": compact,
@@ -13200,6 +13329,7 @@ class AgentResourceOfficer(_PluginBase):
                     "workflow": workflow_name,
                     "session": session,
                     "session_id": session_id,
+                    "execute": True,
                     "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
                     "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
                     "compact": compact,

@@ -322,7 +322,7 @@ Scoring rules are source-specific and plugin-owned. Use `scoring-policy` or `cap
 - PT resources: MoviePilot native site search/download/subscribe. Score seeders, free/promo status, volume factor, resolution, Dolby Vision/HDR, subtitles, release group/site, size, and title match.
 - PT seeders are a hard gate. Default minimum is `3`; seeders `0` means never auto-download.
 - HDHive point cost is a hard gate. Default max is `20`; unknown points cannot auto-unlock.
-- Auto ingest is off by default. Only auto-execute when `auto_ingest_enabled=true`, `score >= 90`, and there are no hard risks.
+- Auto ingest is off by default. Even when `can_auto_execute=true`, the current PT interaction policy should still prefer `plan_id` first unless an internal system path explicitly executes the saved plan.
 
 For MP native workflows:
 
@@ -357,7 +357,7 @@ python3 scripts/aro_request.py workflow --workflow mp_recommend_search --source 
 
 After an MP search session, `下载最佳` generates a saved download plan for the current highest-scoring PT candidate. It does not download immediately; after user confirmation, execute the returned `plan_id` with `plan-execute` or route the natural text `执行计划` / `执行 plan-...`.
 
-Exception: if the user has explicitly enabled `auto_ingest_enabled=true` in preferences and the selected PT candidate has `can_auto_execute=true`, `下载1` and `下载最佳` may submit the download directly. Default preferences keep auto ingest disabled, so agents should normally expect a `plan_id` first.
+Even if a PT candidate scores high, the current default interaction policy is still `plan_id` first. Treat `can_auto_execute` as a score signal for explanation only; do not assume `下载1` or `下载最佳` will bypass confirmation.
 
 For cloud-drive result sessions, `最佳片源` is read-only. It returns the highest-scoring PanSou or HDHive resource detail and must not transfer or unlock by itself. `选择 N 详情` is also read-only. Prefer `计划选择 N` for PanSou transfer or HDHive unlock when an external agent is acting for the user; it returns a saved `plan_id` and performs no write action until the plan is executed. Use direct `选择 N` only after the user explicitly confirms immediate transfer/unlock.
 
