@@ -6,10 +6,10 @@
 
 ## 当前推荐安装状态
 
-- 资源主线：`Agent影视助手 / AgentResourceOfficer 0.2.66`
+- 资源主线：`Agent影视助手 / AgentResourceOfficer 0.2.67`
 - AI 识别主线：`AIRecognizerEnhancer 0.1.11`
-- 当前 Skill helper：`agent-resource-officer 0.1.39`
-- 当前 Release：<https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.66>
+- 当前 Skill helper：`agent-resource-officer 0.1.40`
+- 当前 Release：<https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.67>
 
 如果你是新用户，优先装：
 
@@ -60,7 +60,7 @@ dist/
 
 - `AIRecoginzerForwarder-2.0.1.zip`
 - `AIRecognizerEnhancer-0.1.11.zip`
-- `AgentResourceOfficer-0.2.66.zip`
+- `AgentResourceOfficer-0.2.67.zip`
 - `FeishuCommandBridgeLong-0.5.26.zip`
 - `HDHiveDailySign-1.0.0.zip`
 - `HdhiveOpenApi-0.3.0.zip`

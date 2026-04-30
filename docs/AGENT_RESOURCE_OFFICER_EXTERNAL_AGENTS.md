@@ -10,8 +10,8 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 ## 当前接入状态
 
-- 当前插件版本：`Agent影视助手 0.2.66`
-- 当前 helper 版本：`agent-resource-officer 0.1.39`
+- 当前插件版本：`Agent影视助手 0.2.67`
+- 当前 helper 版本：`agent-resource-officer 0.1.40`
 - 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
 

@@ -4,8 +4,8 @@
 
 ## 当前适用状态
 
-- 当前插件版本：`Agent影视助手 0.2.66`
-- 当前 helper 版本：`agent-resource-officer 0.1.39`
+- 当前插件版本：`Agent影视助手 0.2.67`
+- 当前 helper 版本：`agent-resource-officer 0.1.40`
 - 当前最小变量：
   - `ARO_BASE_URL`
   - `ARO_API_KEY`

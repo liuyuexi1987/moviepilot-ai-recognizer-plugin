@@ -2,11 +2,11 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。插件是服务端执行层；Skill/helper 是客户端调度层。
 
-当前 helper 版本：`0.1.39`
+当前 helper 版本：`0.1.40`
 
 ## 当前状态
 
-- 当前插件版本：`Agent影视助手 0.2.66`
+- 当前插件版本：`Agent影视助手 0.2.67`
 - 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
 - 当前最低成本入口：

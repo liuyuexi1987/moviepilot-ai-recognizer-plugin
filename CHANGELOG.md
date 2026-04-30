@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.66`
+- `AgentResourceOfficer`: `0.2.67`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.67`：收口外部智能体入口细节；隐藏 `workbuddy_quickstart` 旧 recipe 展示名，为 `external-agent` / `commands` 增加 deprecated alias 语义，并统一首页、安装、外部接入、远程部署和 Skill 文档的当前状态区。
 - `AgentResourceOfficer 0.2.66`：为 `request_templates` 增加 `entry_playbooks`，直接给出外部智能体、MP 内置智能体、飞书入口的 helper 命令、HTTP 端点、Tool 名称和推荐读取字段，进一步减少接入方的二次编排逻辑。
 - `AgentResourceOfficer 0.2.65`：为 `request_templates` 与 helper 增加模板编排元数据，明确服务端/客户端角色、三类入口范式，以及推荐的 `startup -> decide -> route -> followup` 最小执行流。
 - `AgentResourceOfficer 0.2.64`：把外部智能体执行契约与最小执行循环下沉到 `request_templates` 返回；新接入的智能体现在可以直接从模板元数据拿到 `startup -> decide -> route -> policy -> followup` 脚手架。
