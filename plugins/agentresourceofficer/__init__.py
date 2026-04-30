@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.51"
+    plugin_version = "0.2.52"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -5448,10 +5448,15 @@ class AgentResourceOfficer(_PluginBase):
         state = dict(session_state or {})
         templates = [dict(item or {}) for item in (action_templates or state.get("action_templates") or []) if isinstance(item, dict)]
         saved_plan = dict(state.get("saved_plan") or {})
+        latest_plan = dict(saved_plan.get("latest") or {})
+        latest_plan_id = self._clean_text(latest_plan.get("plan_id") or saved_plan.get("plan_id"))
+        latest_plan_executed = bool(latest_plan.get("executed"))
         pending_p115 = dict(state.get("pending_p115") or {})
         has_session = bool(state.get("has_session"))
         kind = self._clean_text(state.get("kind"))
         stage = self._clean_text(state.get("stage"))
+        session_name = self._clean_text(state.get("session")) or self._assistant_session_name_from_id(self._clean_text(state.get("session_id")))
+        session_id = self._clean_text(state.get("session_id"))
         mode = ""
         reason = ""
         template: Optional[Dict[str, Any]] = None
@@ -5464,6 +5469,20 @@ class AgentResourceOfficer(_PluginBase):
                 "execute_plan",
                 "execute_session_latest_plan",
             ])
+        elif latest_plan_executed and latest_plan_id:
+            mode = "followup_executed_plan"
+            reason = "当前会话最近一条计划已执行，建议先做统一后续追踪"
+            template = self._assistant_action_template(
+                name="query_execution_followup",
+                description="按最近已执行计划自动追踪下载、订阅或入库后续状态",
+                endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                tool="agent_resource_officer_execute_action",
+                body={
+                    **({"session": session_name} if session_name else {}),
+                    **({"session_id": session_id} if session_id else {}),
+                    "plan_id": latest_plan_id,
+                },
+            )
         elif pending_p115.get("has_pending"):
             mode = "resume_pending_115"
             reason = "当前会话存在待继续的 115 任务"
@@ -5959,6 +5978,8 @@ class AgentResourceOfficer(_PluginBase):
         session_name = self._assistant_session_name_from_id(session_id)
         saved_plan = self._session_workflow_plan_public_data(session=session_name, session_id=session_id)
         latest = dict(saved_plan.get("latest") or {})
+        latest_plan_id = self._clean_text(latest.get("plan_id"))
+        latest_executed = bool(latest.get("executed"))
         return {
             "session": session_name,
             "session_id": self._assistant_session_id(session_name),
@@ -5973,19 +5994,19 @@ class AgentResourceOfficer(_PluginBase):
             "has_pending_plan": bool(saved_plan.get("has_pending")),
             "saved_plan": latest or None,
             "recovery": {
-                "mode": "resume_saved_plan" if saved_plan.get("has_pending") else "inspect_plan_only_session",
+                "mode": "resume_saved_plan" if saved_plan.get("has_pending") else "followup_executed_plan" if latest_executed and latest_plan_id else "inspect_plan_only_session",
                 "reason": "当前会话只有 dry_run 计划，尚未生成交互会话缓存",
-                "can_resume": bool(saved_plan.get("has_pending")),
-                "recommended_action": "execute_session_latest_plan" if saved_plan.get("has_pending") else "inspect_session",
-                "recommended_tool": "agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_session_state",
+                "can_resume": bool(saved_plan.get("has_pending") or (latest_executed and latest_plan_id)),
+                "recommended_action": "execute_session_latest_plan" if saved_plan.get("has_pending") else "query_execution_followup" if latest_executed and latest_plan_id else "inspect_session",
+                "recommended_tool": "agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_execute_action" if latest_executed and latest_plan_id else "agent_resource_officer_session_state",
                 "action_template": self._assistant_action_template(
-                    name="execute_session_latest_plan" if saved_plan.get("has_pending") else "inspect_session",
-                    description="按 session_id 执行该会话最近一条待执行计划" if saved_plan.get("has_pending") else "查看某个会话的详细状态",
-                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute" if saved_plan.get("has_pending") else "/api/v1/plugin/AgentResourceOfficer/assistant/session",
-                    tool="agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_session_state",
-                    body={"session_id": self._assistant_session_id(session_name), "prefer_unexecuted": True} if saved_plan.get("has_pending") else {"session_id": self._assistant_session_id(session_name)},
+                    name="execute_session_latest_plan" if saved_plan.get("has_pending") else "query_execution_followup" if latest_executed and latest_plan_id else "inspect_session",
+                    description="按 session_id 执行该会话最近一条待执行计划" if saved_plan.get("has_pending") else "按最近已执行计划自动追踪下载、订阅或入库后续状态" if latest_executed and latest_plan_id else "查看某个会话的详细状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute" if saved_plan.get("has_pending") else "/api/v1/plugin/AgentResourceOfficer/assistant/action" if latest_executed and latest_plan_id else "/api/v1/plugin/AgentResourceOfficer/assistant/session",
+                    tool="agent_resource_officer_execute_plan" if saved_plan.get("has_pending") else "agent_resource_officer_execute_action" if latest_executed and latest_plan_id else "agent_resource_officer_session_state",
+                    body={"session_id": self._assistant_session_id(session_name), "prefer_unexecuted": True} if saved_plan.get("has_pending") else {"session_id": self._assistant_session_id(session_name), "name": "query_execution_followup", "plan_id": latest_plan_id} if latest_executed and latest_plan_id else {"session_id": self._assistant_session_id(session_name)},
                 ),
-                "alternatives": ["execute_session_latest_plan", "inspect_session"],
+                "alternatives": ["execute_session_latest_plan", "inspect_session"] if saved_plan.get("has_pending") else ["query_execution_followup", "inspect_session"] if latest_executed and latest_plan_id else ["inspect_session"],
             },
         }
 
@@ -9850,6 +9871,26 @@ class AgentResourceOfficer(_PluginBase):
             and start_new_recovery.get("can_resume") is False
             and start_new_recovery.get("recommended_action") == "start_pansou_search"
         )
+        executed_plan_recovery = self._assistant_recovery_public_data(
+            session_state={
+                "has_session": True,
+                "session": "selfcheck",
+                "session_id": "assistant::selfcheck",
+                "saved_plan": {
+                    "has_pending": False,
+                    "has_plan": True,
+                    "latest": {
+                        "plan_id": "plan-selfcheck-executed",
+                        "executed": True,
+                    },
+                },
+            },
+        )
+        executed_plan_recovery_ok = (
+            executed_plan_recovery.get("mode") == "followup_executed_plan"
+            and executed_plan_recovery.get("can_resume") is True
+            and executed_plan_recovery.get("recommended_action") == "query_execution_followup"
+        )
         execute_plan_followup_samples = {
             workflow: self._assistant_plan_execute_followup(
                 workflow=workflow,
@@ -9903,6 +9944,7 @@ class AgentResourceOfficer(_PluginBase):
             "request_templates_policy_only": request_templates_policy_only_ok,
             "startup_request_templates": startup_request_templates_ok,
             "start_new_recovery_not_resumable": start_new_recovery_ok,
+            "executed_plan_recovery": executed_plan_recovery_ok,
             "execute_plan_followups": execute_plan_followups_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),

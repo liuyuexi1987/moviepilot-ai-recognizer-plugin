@@ -231,6 +231,11 @@ def main() -> int:
         selfcheck = request(base_url, api_key, "GET", "/api/v1/plugin/AgentResourceOfficer/assistant/selfcheck")
         selfcheck_data = data(selfcheck)
         assert_ok("selfcheck", bool(selfcheck.get("success") and selfcheck_data.get("ok")), str(selfcheck.get("message") or ""))
+        assert_ok(
+            "selfcheck_executed_plan_recovery",
+            bool(((selfcheck_data.get("checks") or {}).get("executed_plan_recovery"))),
+            json.dumps((selfcheck_data.get("checks") or {}), ensure_ascii=False)[:240],
+        )
         print(f"plugin_version={selfcheck_data.get('version') or ''}")
         execute_plan_followups = ((selfcheck_data.get("template_samples") or {}).get("execute_plan_followups") or {})
         assert_ok(
