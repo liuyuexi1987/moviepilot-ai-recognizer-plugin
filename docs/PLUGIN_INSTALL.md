@@ -30,16 +30,16 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 ## 方式 2：本地 ZIP 安装
 
-如果你是在维护仓库、准备打包或发布，而不是普通安装用户，先执行一次：
+如果你是在维护仓库、准备打包或发布，而不是普通安装用户，先执行一次仓库卫生检查：
 
 ```bash
 bash scripts/repo-hygiene.sh
 ```
 
-发布前可在仓库根目录生成所有可本地安装的 ZIP：
+如果要跑完整发版前检查，直接执行：
 
 ```bash
-bash scripts/pre-release-check.sh
+bash scripts/release-preflight.sh
 ```
 
 如果只是本地临时打包、不需要完整验收，也可以执行：
@@ -48,7 +48,7 @@ bash scripts/pre-release-check.sh
 bash scripts/package-plugin.sh --all
 ```
 
-正式发布前仍建议使用 `pre-release-check.sh`，它会额外检查元数据、Skill helper 和 ZIP 内容。
+如果只想单独跑低层发布检查，而不先做仓库卫生检查，也可以直接执行 `bash scripts/pre-release-check.sh`。正式发布前仍优先使用 `release-preflight.sh`。
 
 如果本机已经有可访问的 MoviePilot 实例，并且 `~/.config/agent-resource-officer/config` 配好了 `ARO_BASE_URL` / `ARO_API_KEY`，可以再跑一遍真实只读 smoke：
 

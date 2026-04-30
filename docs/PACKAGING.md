@@ -1,9 +1,15 @@
 # 插件和 Skill ZIP 打包说明
 
-开始打包或发布前，先执行一次：
+开始打包或发布前，先执行一次仓库卫生检查：
 
 ```bash
 bash scripts/repo-hygiene.sh
+```
+
+如果要直接跑完整发版前检查，执行：
+
+```bash
+bash scripts/release-preflight.sh
 ```
 
 ## 目标
