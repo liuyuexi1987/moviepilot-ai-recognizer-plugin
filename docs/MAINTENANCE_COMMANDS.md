@@ -150,8 +150,11 @@ bash scripts/generate-release-notes.sh <tag>
 - `repo-hygiene.sh`
 - `release-preflight.sh`
 - `pre-release-check.sh`
+- `package-plugin.sh`
+- `sync-package-v2.sh`
 - `create-draft-release.sh`
 - `update-draft-release-assets.sh`
+- `generate-release-notes.sh`
 - `verify-release-preflight-artifact.sh`
 - `verify-ci-artifact.sh`
 - `verify-release-download.sh`

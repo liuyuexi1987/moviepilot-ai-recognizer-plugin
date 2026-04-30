@@ -4,6 +4,21 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+show_help() {
+  cat <<'EOF'
+Usage:
+  bash scripts/sync-package-v2.sh
+
+Syncs package.v2.json from package.json by dropping per-plugin "v2" flags
+and keeping the current plugin metadata layout used by the repository.
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  show_help
+  exit 0
+fi
+
 python3 - <<'PY'
 import json
 from pathlib import Path
