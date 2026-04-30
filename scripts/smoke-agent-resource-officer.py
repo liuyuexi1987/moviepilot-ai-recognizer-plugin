@@ -122,6 +122,16 @@ def clear_session(base_url: str, api_key: str, session: str) -> None:
     )
 
 
+def clear_plans(base_url: str, api_key: str, session: str) -> None:
+    request(
+        base_url,
+        api_key,
+        "POST",
+        "/api/v1/plugin/AgentResourceOfficer/assistant/plans/clear",
+        body={"session": session, "limit": 100},
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test AgentResourceOfficer live assistant endpoints")
     parser.add_argument("--base-url")
@@ -212,12 +222,33 @@ def main() -> int:
 
         if args.include_search:
             mp_search = route(base_url, api_key, sessions[1], f"MP搜索 {args.keyword}")
-            assert_route_action("route_mp_search", mp_search, "mp_media_search")
+            mp_search_data = assert_route_action("route_mp_search", mp_search, "mp_media_search")
             mp_search_message = message_text(mp_search)
             assert_ok(
                 "route_mp_search_plan_hint",
                 "会先生成下载计划" in mp_search_message and "即可下载选中项" not in mp_search_message,
                 mp_search_message[:240],
+            )
+            assert_ok(
+                "route_mp_search_score_summary",
+                bool((mp_search_data.get("score_summary") or {}).get("best")),
+                json.dumps(mp_search_data.get("score_summary") or {}, ensure_ascii=False)[:240],
+            )
+
+            mp_best = route(base_url, api_key, sessions[1], "最佳片源")
+            mp_best_data = assert_route_action("route_mp_search_best", mp_best, "mp_search_best_detail")
+            assert_ok(
+                "route_mp_search_best_score_summary",
+                bool((mp_best_data.get("score_summary") or {}).get("best")),
+                json.dumps(mp_best_data.get("score_summary") or {}, ensure_ascii=False)[:240],
+            )
+
+            mp_best_download = route(base_url, api_key, sessions[1], "下载最佳")
+            mp_best_download_data = assert_route_action("route_mp_download_best_plan", mp_best_download, "workflow_plan")
+            assert_ok(
+                "route_mp_download_best_has_plan",
+                bool(mp_best_download_data.get("plan_id")) and mp_best_download_data.get("workflow") == "mp_best_download",
+                json.dumps(mp_best_download_data, ensure_ascii=False)[:240],
             )
 
             pansou = route(base_url, api_key, sessions[2], f"ps{args.pansou_keyword}")
@@ -243,6 +274,13 @@ def main() -> int:
             assert_route_action("route_recommend_movie", movie_recommend, "mp_recommendations")
             movie_message = message_text(movie_recommend)
             assert_ok("route_recommend_movie_type_filter", "| 电视剧 |" not in movie_message, movie_message[:240])
+            movie_to_pansou = route(base_url, api_key, sessions[5], "选择 1 盘搜")
+            movie_to_pansou_data = assert_route_action("route_recommend_to_pansou", movie_to_pansou, "pansou_search")
+            assert_ok(
+                "route_recommend_to_pansou_scored",
+                bool((movie_to_pansou_data.get("score_summary") or {}).get("best")),
+                json.dumps(movie_to_pansou_data.get("score_summary") or {}, ensure_ascii=False)[:240],
+            )
 
             tv_recommend = route(base_url, api_key, sessions[6], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")
@@ -250,6 +288,7 @@ def main() -> int:
             assert_ok("route_recommend_tv_type_filter", "| 电影 |" not in tv_message, tv_message[:240])
     finally:
         for session in sessions:
+            clear_plans(base_url, api_key, session)
             clear_session(base_url, api_key, session)
 
     print("agent_resource_officer_smoke_ok")
