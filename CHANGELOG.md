@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.46`
+- `AgentResourceOfficer`: `0.2.47`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.47`：在 `execute_plan` 的 compact 结果中补充 `recommended_action` 和 `follow_up_hint`，外部智能体执行计划后可直接读取建议下一步，不必再从模板列表里自己猜。
 - `AgentResourceOfficer 0.2.46`：把 `execute_plan` 的 follow-up 样本加入 `assistant/selfcheck`，并纳入 live smoke 回归，后续即使没有真实写入执行，也能防止 PT 下载、订阅与云盘转存的后续动作模板回退。
 - `AgentResourceOfficer 0.2.45`：执行 `plan_id` 成功后，会按 PT 下载、订阅或云盘转存 workflow 返回更明确的后续动作模板，方便外部智能体继续追踪状态，而不是只收到通用回执。
 - `AgentResourceOfficer 0.2.44`：统一 `assistant/plan/execute` 的 compact 回执；失败态和执行态现在都会返回稳定的 `write_effect`、`error_code`、`result_summary` 与结果列表摘要，方便外部智能体续接。

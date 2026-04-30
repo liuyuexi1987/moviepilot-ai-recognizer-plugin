@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.46"
+    plugin_version = "0.2.47"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -7029,7 +7029,7 @@ class AgentResourceOfficer(_PluginBase):
         ok: bool,
     ) -> Dict[str, Any]:
         if not ok:
-            return {"next_actions": [], "action_templates": []}
+            return {"next_actions": [], "action_templates": [], "recommended_action": "", "follow_up_hint": ""}
 
         workflow_name = self._clean_text(workflow)
         state = dict(session_state or {})
@@ -7047,9 +7047,11 @@ class AgentResourceOfficer(_PluginBase):
         keyword_value = keyword or "<关键词>"
         next_actions: List[str] = []
         templates: List[Dict[str, Any]] = []
+        follow_up_hint = ""
 
         if workflow_name in {"mp_best_download", "mp_download", "mp_search_download", "mp_download_control"}:
             next_actions = ["query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
+            follow_up_hint = "建议先查下载历史或生命周期，确认 PT 任务是否已提交并开始整理/入库。"
             templates = [
                 self._assistant_action_template(
                     name="query_mp_download_history",
@@ -7075,6 +7077,7 @@ class AgentResourceOfficer(_PluginBase):
             ]
         elif workflow_name in {"mp_subscribe", "mp_subscribe_and_search", "mp_subscribe_control"}:
             next_actions = ["query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
+            follow_up_hint = "建议先查订阅列表确认规则已生效，再视情况继续搜索或追踪生命周期。"
             templates = [
                 self._assistant_action_template(
                     name="query_mp_subscribes",
@@ -7100,6 +7103,7 @@ class AgentResourceOfficer(_PluginBase):
             ]
         elif workflow_name in {"share_transfer", "pansou_transfer_selected", "hdhive_unlock", "hdhive_unlock_selected"}:
             next_actions = ["query_mp_transfer_history", "inspect_session_state"]
+            follow_up_hint = "建议先查整理/入库历史，确认云盘资源是否已落库；如果失败，再回看当前会话状态。"
             templates = [
                 self._assistant_action_template(
                     name="query_mp_transfer_history",
@@ -7120,6 +7124,8 @@ class AgentResourceOfficer(_PluginBase):
         return {
             "next_actions": next_actions,
             "action_templates": templates,
+            "recommended_action": next_actions[0] if next_actions else "",
+            "follow_up_hint": follow_up_hint,
         }
 
     def _assistant_actions_compact_data(self, actions_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -7190,6 +7196,8 @@ class AgentResourceOfficer(_PluginBase):
                 "last_action": self._clean_text(last_result.get("action")),
                 "last_message_head": self._clean_text(last_result.get("message_head")),
             },
+            "recommended_action": self._clean_text(followup.get("recommended_action")),
+            "follow_up_hint": self._clean_text(followup.get("follow_up_hint")),
             "next_actions": self._assistant_compact_next_actions(
                 followup.get("next_actions"),
                 data.get("next_actions") or session_state.get("suggested_actions") or [],
@@ -9683,10 +9691,16 @@ class AgentResourceOfficer(_PluginBase):
         execute_plan_followups_ok = (
             [item.get("name") for item in (execute_plan_followup_samples.get("mp_best_download") or {}).get("action_templates") or []]
             == ["query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
+            and (execute_plan_followup_samples.get("mp_best_download") or {}).get("recommended_action") == "query_mp_download_history"
+            and bool(self._clean_text((execute_plan_followup_samples.get("mp_best_download") or {}).get("follow_up_hint")))
             and [item.get("name") for item in (execute_plan_followup_samples.get("mp_subscribe") or {}).get("action_templates") or []]
             == ["query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
+            and (execute_plan_followup_samples.get("mp_subscribe") or {}).get("recommended_action") == "query_mp_subscribes"
+            and bool(self._clean_text((execute_plan_followup_samples.get("mp_subscribe") or {}).get("follow_up_hint")))
             and [item.get("name") for item in (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("action_templates") or []]
             == ["query_mp_transfer_history", "inspect_session_state"]
+            and (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_mp_transfer_history"
+            and bool(self._clean_text((execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("follow_up_hint")))
         )
         checks = {
             "compact_templates": compact_templates_ok,
@@ -9746,6 +9760,8 @@ class AgentResourceOfficer(_PluginBase):
                 "execute_plan_followups": {
                     workflow: {
                         "next_actions": (sample or {}).get("next_actions") or [],
+                        "recommended_action": self._clean_text((sample or {}).get("recommended_action")),
+                        "follow_up_hint": self._clean_text((sample or {}).get("follow_up_hint")),
                         "template_names": [
                             self._clean_text(item.get("name"))
                             for item in ((sample or {}).get("action_templates") or [])

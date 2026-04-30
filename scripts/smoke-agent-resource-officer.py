@@ -229,15 +229,21 @@ def main() -> int:
                     "query_mp_lifecycle_status",
                     "query_mp_download_tasks",
                 ]
+                and (execute_plan_followups.get("mp_best_download") or {}).get("recommended_action") == "query_mp_download_history"
+                and bool((execute_plan_followups.get("mp_best_download") or {}).get("follow_up_hint"))
                 and (execute_plan_followups.get("mp_subscribe") or {}).get("template_names") == [
                     "query_mp_subscribes",
                     "query_mp_lifecycle_status",
                     "start_mp_media_search",
                 ]
+                and (execute_plan_followups.get("mp_subscribe") or {}).get("recommended_action") == "query_mp_subscribes"
+                and bool((execute_plan_followups.get("mp_subscribe") or {}).get("follow_up_hint"))
                 and (execute_plan_followups.get("hdhive_unlock_selected") or {}).get("template_names") == [
                     "query_mp_transfer_history",
                     "inspect_session_state",
                 ]
+                and (execute_plan_followups.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_mp_transfer_history"
+                and bool((execute_plan_followups.get("hdhive_unlock_selected") or {}).get("follow_up_hint"))
             ),
             json.dumps(execute_plan_followups, ensure_ascii=False),
         )
