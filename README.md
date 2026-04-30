@@ -1,6 +1,6 @@
 # MoviePilot-Plugins
 
-[![CI](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml)
+[![Release Preflight](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml/badge.svg)](https://github.com/liuyuexi1987/MoviePilot-Plugins/actions/workflows/ci.yml)
 
 这是一个面向 MoviePilot 的云盘资源整合插件仓库，重点解决 115 云盘、夸克云盘等资源从搜索、解锁、转存到固定目录的流程。资源来源主要围绕两类：`盘搜` 和 `影巢`。盘搜是独立的聚合搜索项目，需要用户自行部署 PanSou 服务并在插件里填写 API 地址；影巢通过 OpenAPI 提供影视资源搜索、解锁、签到和配额查询，填写自己的影巢 OpenAPI Key 后即可使用。当前主线不是堆很多独立小插件，而是把常用能力收拢成两类：
 
