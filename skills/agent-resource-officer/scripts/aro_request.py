@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.23"
+HELPER_VERSION = "0.1.24"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -122,6 +122,19 @@ def normalize_command_args(args):
     elif command == "plan-execute":
         if not getattr(args, "plan_id", None) and extra:
             args.plan_id = str(extra[0]).strip()
+    elif command == "workflow":
+        if getattr(args, "workflow", "hdhive_candidates") == "hdhive_candidates" and extra:
+            args.workflow = str(extra.pop(0)).strip() or args.workflow
+        if not getattr(args, "keyword", None) and extra:
+            args.keyword = " ".join(str(item).strip() for item in extra if str(item).strip()).strip()
+    elif command in {"session", "session-clear", "history"}:
+        if not getattr(args, "session", None) and extra:
+            args.session = str(extra[0]).strip()
+    elif command in {"plans", "plans-clear"}:
+        if not getattr(args, "plan_id", None) and extra:
+            first = str(extra[0]).strip()
+            if first.startswith("plan-"):
+                args.plan_id = first
 
     return args
 
@@ -564,6 +577,27 @@ def selftest_result():
         argparse.Namespace(command="plan-execute", extra=["plan-123"], plan_id=None)
     )
     check("normalize_plan_execute_positional_plan", plan_args.plan_id == "plan-123")
+
+    workflow_args = normalize_command_args(
+        argparse.Namespace(command="workflow", extra=["mp_media_detail", "蜘蛛侠"], workflow="hdhive_candidates", keyword=None)
+    )
+    check("normalize_workflow_positional_workflow", workflow_args.workflow == "mp_media_detail")
+    check("normalize_workflow_positional_keyword", workflow_args.keyword == "蜘蛛侠")
+
+    session_args = normalize_command_args(
+        argparse.Namespace(command="session", extra=["agent:demo"], session=None)
+    )
+    check("normalize_session_positional_session", session_args.session == "agent:demo")
+
+    history_args = normalize_command_args(
+        argparse.Namespace(command="history", extra=["agent:demo"], session=None)
+    )
+    check("normalize_history_positional_session", history_args.session == "agent:demo")
+
+    plans_args = normalize_command_args(
+        argparse.Namespace(command="plans", extra=["plan-123"], plan_id=None)
+    )
+    check("normalize_plans_positional_plan", plans_args.plan_id == "plan-123")
 
     compact_workflow = compact({
         "success": True,

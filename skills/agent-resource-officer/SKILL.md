@@ -83,7 +83,7 @@ python3 scripts/aro_request.py readiness
 python3 scripts/aro_request.py selfcheck
 python3 scripts/aro_request.py sessions
 python3 scripts/aro_request.py sessions --kind assistant_hdhive --limit 5
-python3 scripts/aro_request.py session-clear --session default
+python3 scripts/aro_request.py session-clear default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py templates --recipe bootstrap
 python3 scripts/aro_request.py route "盘搜搜索 大君夫人"
@@ -270,21 +270,32 @@ python3 scripts/aro_request.py pick 详情
 python3 scripts/aro_request.py pick 下一页
 ```
 
+Common diagnostic helpers also support shorter positional forms:
+
+```bash
+python3 scripts/aro_request.py workflow mp_media_detail 蜘蛛侠
+python3 scripts/aro_request.py session default
+python3 scripts/aro_request.py history agent:demo
+python3 scripts/aro_request.py plans plan-xxx
+python3 scripts/aro_request.py plans-clear plan-xxx
+```
+
 For session inspection and recovery:
 
 ```bash
 python3 scripts/aro_request.py sessions
-python3 scripts/aro_request.py session --session default
-python3 scripts/aro_request.py session-clear --session default
+python3 scripts/aro_request.py session default
+python3 scripts/aro_request.py session-clear default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py recover --execute
 python3 scripts/aro_request.py history --limit 10
+python3 scripts/aro_request.py history agent:demo
 python3 scripts/aro_request.py plans --limit 10
-python3 scripts/aro_request.py plans --plan-id plan-xxx
+python3 scripts/aro_request.py plans plan-xxx
 python3 scripts/aro_request.py plans --executed --include-actions --limit 5
 python3 scripts/aro_request.py plan-execute plan-xxx
-python3 scripts/aro_request.py plans-clear --plan-id plan-xxx
+python3 scripts/aro_request.py plans-clear plan-xxx
 ```
 
 Notes:
@@ -334,6 +345,7 @@ For MP native workflows:
 ```bash
 python3 scripts/aro_request.py workflow --workflow mp_search --keyword "蜘蛛侠"
 python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword "蜘蛛侠"
+python3 scripts/aro_request.py workflow mp_media_detail 蜘蛛侠
 python3 scripts/aro_request.py workflow --workflow mp_search_best --keyword "蜘蛛侠"
 python3 scripts/aro_request.py workflow --workflow mp_search_detail --keyword "蜘蛛侠" --choice 1
 python3 scripts/aro_request.py workflow --workflow mp_search_download --keyword "蜘蛛侠" --choice 1

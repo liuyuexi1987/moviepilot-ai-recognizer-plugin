@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.24
+
+- Added positional argument support for `workflow`, so `python3 scripts/aro_request.py workflow mp_media_detail 蜘蛛侠` works without `--workflow` and `--keyword`.
+- Added positional session support for `session`, `session-clear`, and `history`, so `python3 scripts/aro_request.py session default` and `python3 scripts/aro_request.py history agent:demo` work without `--session`.
+- Added positional `plan-xxx` support for `plans` and `plans-clear`.
+
 ## 0.1.23
 
 - Added positional argument support for `pick`, so `python3 scripts/aro_request.py pick 1` and `python3 scripts/aro_request.py pick 1 详情` work without `--choice` or `--action`.
