@@ -151,3 +151,18 @@ bash scripts/verify-release-download.sh <tag>
 ```
 
 正式发布后，`isDraft` 应为 `false`，公开下载校验必须通过。
+
+## 8. 发布后清理
+
+发布完成后，顺手清理本地过期的远端引用，并检查是否有已经不再需要的发布分支：
+
+```bash
+git fetch --prune origin
+git branch -r
+```
+
+注意：
+
+- 远端分支如果是通过 `squash merge` 合并，`git merge-base --is-ancestor` 不能直接作为删分支依据。
+- 删除前先确认该分支没有关联 PR，且不再需要保留为历史参考。
+- 如果只是本地看到“远端分支还在”，先 `fetch --prune`，不要直接假设远端没清理。
