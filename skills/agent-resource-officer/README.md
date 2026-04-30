@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.32`
+当前 helper 版本：`0.1.33`
 
 公开仓库：
 
@@ -161,7 +161,7 @@ python3 scripts/aro_request.py pick 1
 
 也就是外部智能体不只知道“下一条命令是什么”，还知道“这条命令能不能直接跑，还是该先停下来确认”。
 
-从 helper `0.1.32` 开始，`--summary-only` 还会直接给出一层更适合自动续跑的决策字段：
+从 helper `0.1.32` 开始，`--summary-only` 会直接给出一层更适合自动续跑的决策字段：
 
 - `recommended_agent_behavior`
 - `auto_run_command`
@@ -177,6 +177,14 @@ python3 scripts/aro_request.py pick 1
 - `wait_user_confirmation`：不要自动执行，先让用户确认 `confirm_command`
 - `show_only`：只展示 `display_command`
 - `stop`：当前没有适合继续自动执行的短命令
+
+从 helper `0.1.33` 开始，这套决策字段不只覆盖 `route / pick / workflow / plan-execute / followup`，也会覆盖 `decide / auto / doctor / recover` 这类老摘要入口。外部智能体可以统一只读：
+
+- `recommended_agent_behavior`
+- `auto_run_command`
+- `confirm_command`
+
+如果原摘要本身已经带业务层 `reason`，helper 会额外补 `execution_reason`，避免把原原因覆盖掉。
 
 评分由插件内置规则执行。外部智能体如需解释规则，可读取 `scoring-policy` 或 `capabilities.scoring_policy`；不要在智能体侧重新打分，也不要绕过 `hard_risk_reasons`。
 

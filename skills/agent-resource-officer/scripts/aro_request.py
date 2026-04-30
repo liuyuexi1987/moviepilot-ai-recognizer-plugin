@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.32"
+HELPER_VERSION = "0.1.33"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -412,6 +412,7 @@ def command_execution_policy(summary):
                 "display_command": preferred_command,
                 "stop_after_auto": True,
                 "reason": "首选命令是安全读步骤，可自动继续；后续备选命令涉及确认。",
+                "execution_reason": "首选命令是安全读步骤，可自动继续；后续备选命令涉及确认。",
             }
         return {
             "recommended_agent_behavior": "auto_continue",
@@ -420,6 +421,7 @@ def command_execution_policy(summary):
             "display_command": preferred_command,
             "stop_after_auto": False,
             "reason": "首选命令是安全读步骤，可直接继续。",
+            "execution_reason": "首选命令是安全读步骤，可直接继续。",
         }
 
     if preferred_command and preferred_requires_confirmation:
@@ -430,6 +432,7 @@ def command_execution_policy(summary):
             "display_command": preferred_command,
             "stop_after_auto": False,
             "reason": "首选命令本身需要用户确认，不能自动执行。",
+            "execution_reason": "首选命令本身需要用户确认，不能自动执行。",
         }
 
     if preferred_command:
@@ -440,6 +443,7 @@ def command_execution_policy(summary):
             "display_command": preferred_command,
             "stop_after_auto": False,
             "reason": "已有首选命令，但当前不建议自动执行。",
+            "execution_reason": "已有首选命令，但当前不建议自动执行。",
         }
 
     if fallback_command and fallback_requires_confirmation:
@@ -450,6 +454,7 @@ def command_execution_policy(summary):
             "display_command": fallback_command,
             "stop_after_auto": False,
             "reason": "仅存在需要确认的备选命令。",
+            "execution_reason": "仅存在需要确认的备选命令。",
         }
 
     if fallback_command:
@@ -460,6 +465,7 @@ def command_execution_policy(summary):
             "display_command": fallback_command,
             "stop_after_auto": False,
             "reason": "仅存在备选命令，建议先展示。",
+            "execution_reason": "仅存在备选命令，建议先展示。",
         }
 
     return {
@@ -469,10 +475,76 @@ def command_execution_policy(summary):
         "display_command": "",
         "stop_after_auto": False,
         "reason": "当前没有可继续执行的短命令。",
+        "execution_reason": "当前没有可继续执行的短命令。",
+    }
+
+
+def helper_summary_execution_policy(summary):
+    summary = summary if isinstance(summary, dict) else {}
+    if summary.get("preferred_command") or summary.get("fallback_command"):
+        return command_execution_policy(summary)
+
+    inspect_command = str(summary.get("inspect_helper_command") or "").strip()
+    execute_command = str(summary.get("execute_helper_command") or "").strip()
+    if "first_requires_confirmation" in summary:
+        first_requires_confirmation = bool(summary.get("first_requires_confirmation"))
+    else:
+        first_requires_confirmation = bool(summary.get("requires_confirmation"))
+    requires_confirmation = bool(summary.get("requires_confirmation"))
+
+    if execute_command and not first_requires_confirmation:
+        if requires_confirmation and inspect_command:
+            return {
+                "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+                "auto_run_command": execute_command,
+                "confirm_command": inspect_command,
+                "display_command": execute_command,
+                "stop_after_auto": True,
+                "reason": "当前步骤可直接执行，但后续链路存在确认动作。",
+                "execution_reason": "当前步骤可直接执行，但后续链路存在确认动作。",
+            }
+        return {
+            "recommended_agent_behavior": "auto_continue",
+            "auto_run_command": execute_command,
+            "confirm_command": "",
+            "display_command": execute_command,
+            "stop_after_auto": False,
+            "reason": "当前步骤可直接执行。",
+            "execution_reason": "当前步骤可直接执行。",
+        }
+
+    if inspect_command:
+        return {
+            "recommended_agent_behavior": "wait_user_confirmation" if requires_confirmation else "show_only",
+            "auto_run_command": "",
+            "confirm_command": inspect_command if requires_confirmation else "",
+            "display_command": inspect_command,
+            "stop_after_auto": False,
+            "reason": "当前应先展示检查或确认命令。",
+            "execution_reason": "当前应先展示检查或确认命令。",
+        }
+
+    return {
+        "recommended_agent_behavior": "stop",
+        "auto_run_command": "",
+        "confirm_command": "",
+        "display_command": "",
+        "stop_after_auto": False,
+        "reason": "当前没有可继续执行的 helper 命令。",
+        "execution_reason": "当前没有可继续执行的 helper 命令。",
     }
 
 
 def print_summary(summary, command_only=False, confirmed=False):
+    if isinstance(summary, dict):
+        policy = helper_summary_execution_policy(summary)
+        if "reason" in summary and policy.get("reason"):
+            policy = {
+                **policy,
+                "execution_reason": policy.get("execution_reason") or policy.get("reason") or "",
+            }
+            policy.pop("reason", None)
+        summary = {**summary, **policy}
     if command_only:
         print(summary_command(summary, confirmed=confirmed))
         return
@@ -764,6 +836,21 @@ def selftest_result():
     check("command_execution_policy_wait_confirmation", confirm_only_policy.get("recommended_agent_behavior") == "wait_user_confirmation" and confirm_only_policy.get("confirm_command") == "下载1")
     stop_policy = command_execution_policy({})
     check("command_execution_policy_stop_without_commands", stop_policy.get("recommended_agent_behavior") == "stop")
+    helper_auto_policy = helper_summary_execution_policy({
+        "first_requires_confirmation": False,
+        "requires_confirmation": True,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "execute",
+    })
+    check("helper_execution_policy_auto_then_confirm", helper_auto_policy.get("recommended_agent_behavior") == "auto_continue_then_wait_confirmation" and helper_auto_policy.get("auto_run_command") == "execute")
+    helper_confirm_policy = helper_summary_execution_policy({
+        "requires_confirmation": True,
+        "inspect_helper_command": "inspect",
+        "execute_helper_command": "",
+    })
+    check("helper_execution_policy_wait_confirmation", helper_confirm_policy.get("recommended_agent_behavior") == "wait_user_confirmation" and helper_confirm_policy.get("confirm_command") == "inspect")
+    helper_stop_policy = helper_summary_execution_policy({})
+    check("helper_execution_policy_stop_without_commands", helper_stop_policy.get("recommended_agent_behavior") == "stop")
 
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")

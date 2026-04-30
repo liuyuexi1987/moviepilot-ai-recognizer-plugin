@@ -1,5 +1,10 @@
 # agent-resource-officer changelog
 
+## 0.1.33
+
+- Extended the helper-owned execution policy summary to legacy helper summaries such as `decide`, `auto`, `doctor`, and `recover`, so external agents no longer need two different parsing paths.
+- Added selftest coverage for legacy helper summary auto-continue and wait-confirmation behavior.
+
 ## 0.1.32
 
 - Added a helper-owned command execution policy summary for `--summary-only`, including `recommended_agent_behavior`, `auto_run_command`, `confirm_command`, `display_command`, `stop_after_auto`, and `reason`.
