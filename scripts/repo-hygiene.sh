@@ -4,6 +4,23 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+show_help() {
+  cat <<'EOF'
+Usage:
+  bash scripts/repo-hygiene.sh
+
+Runs the lightweight repository maintenance checks:
+1. git fetch --prune origin
+2. remote/local branch audit
+3. local branch archive dry-run
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  show_help
+  exit 0
+fi
+
 echo "[1/3] fetch --prune origin"
 git fetch --prune origin >/dev/null
 

@@ -3,6 +3,28 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
+
+show_help() {
+  cat <<'EOF'
+Usage:
+  bash scripts/pre-release-check.sh
+
+Runs the low-level repository release checks:
+- sync repo layout
+- ensure clean worktree
+- shell/Python syntax
+- skill selftests
+- metadata/doc drift checks
+- package build and manifest verification
+
+Set RUN_AGENT_RESOURCE_OFFICER_LIVE_SMOKE=1 to include live smoke.
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  show_help
+  exit 0
+fi
 export PYTHONDONTWRITEBYTECODE=1
 mkdir -p .tmp
 LOCK_DIR="$ROOT_DIR/.tmp/pre-release-check.lock"
