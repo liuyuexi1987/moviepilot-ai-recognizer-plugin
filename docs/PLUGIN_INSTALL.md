@@ -30,6 +30,12 @@ bash scripts/package-plugin.sh --all
 
 正式发布前仍建议使用 `pre-release-check.sh`，它会额外检查元数据、Skill helper 和 ZIP 内容。
 
+如果本机已经有可访问的 MoviePilot 实例，并且 `~/.config/agent-resource-officer/config` 配好了 `ARO_BASE_URL` / `ARO_API_KEY`，可以再跑一遍真实只读 smoke：
+
+```bash
+RUN_AGENT_RESOURCE_OFFICER_LIVE_SMOKE=1 bash scripts/pre-release-check.sh
+```
+
 生成目录：
 
 ```text

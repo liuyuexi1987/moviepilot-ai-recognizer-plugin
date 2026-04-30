@@ -34,6 +34,12 @@ bash scripts/pre-release-check.sh
 
 这个命令会同步 `plugins/` 和 `plugins.v2/`，检查元数据、Skill helper、ZIP 内容，并重新生成插件 ZIP、Skill ZIP、`SHA256SUMS.txt` 和 `MANIFEST.json`。
 
+如果本机已经跑着可访问的 MoviePilot，并且 `~/.config/agent-resource-officer/config` 已配置 `ARO_BASE_URL` / `ARO_API_KEY`，建议追加一次真实链路检查：
+
+```bash
+RUN_AGENT_RESOURCE_OFFICER_LIVE_SMOKE=1 bash scripts/pre-release-check.sh
+```
+
 ## 4. 上传 ZIP
 
 Release 附件上传 `dist/` 下的插件 ZIP、`dist/skills/` 下的 Skill ZIP。创建 Draft Release 时，脚本会把校验文件改名为唯一附件名，避免 GitHub Release 附件重名：

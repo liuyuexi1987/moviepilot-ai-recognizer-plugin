@@ -67,6 +67,10 @@ print(f"syntax_ok files={count}")
 PY
 bash scripts/check-skills.sh
 python3 scripts/check-agent-resource-officer-feishu.py
+if [[ "${RUN_AGENT_RESOURCE_OFFICER_LIVE_SMOKE:-0}" == "1" ]]; then
+  echo "[3.1] 执行 AgentResourceOfficer 本机 live smoke..."
+  python3 scripts/smoke-agent-resource-officer.py --include-search
+fi
 
 echo "[4/6] 检查 package.json 与运行代码元数据..."
 PACKAGE_PLUGIN_LIST="${PACKAGE_PLUGINS[*]}" python3 - <<'PY'
