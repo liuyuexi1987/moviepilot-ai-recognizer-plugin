@@ -50,6 +50,18 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 4. 读取 `recommended_agent_behavior`
 5. 如果执行过计划，再调 `followup --summary-only`
 
+如果场景是“只给片名，让智能体自己比较多个来源”，优先使用统一搜索决策入口：
+
+- `route "智能搜索 <片名>" --summary-only`
+- 或者先读模板：`templates --recipe smart_search --compact`
+
+这条入口会统一按 `盘搜 -> 影巢 -> MP/PT` 搜索，并自动读取当前会话偏好中的：
+
+- 可用源：`enable_pansou / enable_hdhive / enable_mp_pt`
+- 可用云盘：`has_115 / has_quark`
+
+所以如果用户提前说明“只有夸克”“没有 115”“不用盘搜”“只用 MP/PT”，外部智能体无需自己再维护一套分支判断，直接先保存偏好，再调用 `智能搜索` 即可。
+
 三类入口都复用这一套 assistant 协议：
 
 - 外部智能体：优先用 Skill/helper，按 `startup -> decide -> route -> followup` 跑。

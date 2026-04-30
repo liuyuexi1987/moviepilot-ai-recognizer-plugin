@@ -13,7 +13,7 @@
   - `python3 scripts/aro_request.py readiness`
   - `python3 scripts/aro_request.py external-agent`
   - `python3 scripts/aro_request.py decide --summary-only`
-  - `python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人" --summary-only`
+  - `python3 scripts/aro_request.py route --text "智能搜索 蜘蛛侠" --summary-only`
 
 公开仓库：
 
@@ -63,6 +63,7 @@ ARO_API_KEY=your_moviepilot_api_token
 
 - `python3 scripts/aro_request.py route "盘搜搜索 大君夫人"`
 - `python3 scripts/aro_request.py route --text "盘搜搜索 大君夫人"`
+- `python3 scripts/aro_request.py route "智能搜索 蜘蛛侠"`
 
 `route`、`pick`、`workflow`、`plan-execute`、`followup` 还支持：
 
@@ -120,6 +121,7 @@ python3 scripts/aro_request.py session-clear default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py route "盘搜搜索 大君夫人"
+python3 scripts/aro_request.py route "智能搜索 蜘蛛侠"
 python3 scripts/aro_request.py pick 1
 ```
 
@@ -150,6 +152,18 @@ python3 scripts/aro_request.py pick 1
 `route`、`pick`、`workflow` 等主响应会带上低 token 的 `preference_status`。如果其中 `needs_onboarding=true`，智能体应先完成偏好询问与保存，再继续自动选择或入库。
 
 偏好也可以直接走主入口自然语言：`偏好` 查看，`保存偏好 4K 杜比 HDR 中字 全集 做种>=3 影巢积分20 不自动入库` 写入，`重置偏好` 清除。
+
+如果用户已经提前说明“只用夸克”“没有 115”“不用盘搜”“只用 MP/PT”，也可以直接保存进偏好，例如：
+
+- `保存偏好 只有夸克 不用115`
+- `保存偏好 只用盘搜 不用影巢`
+- `保存偏好 只用 MP/PT`
+
+之后优先用 `智能搜索`：
+
+- `python3 scripts/aro_request.py route "智能搜索 蜘蛛侠"`
+
+这条入口会先按偏好过滤可用源和可用云盘，再按默认顺序 `盘搜 -> 影巢 -> MP/PT` 做统一搜索决策；如果前面某一源已经给出足够高分、风险可控的候选，就不会继续无意义展开后面的源。
 
 搜索类响应可能带有 `score_summary`，包含 `best` 和 `top_recommendations`。外部智能体应优先读取这个结构化摘要，而不是解析长文本；存在 `hard_risk_reasons` 时不要自动执行，`risk_reasons` 只作为确认前需要解释的提醒。
 

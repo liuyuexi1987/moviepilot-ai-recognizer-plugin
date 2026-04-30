@@ -379,6 +379,19 @@ def main() -> int:
             ),
             str(local_ingest_templates.get("message") or ""),
         )
+        smart_search_templates = request_templates(base_url, api_key, "smart_search")
+        smart_search_templates_data = data(smart_search_templates)
+        smart_search_names = smart_search_templates_data.get("selected_names") or []
+        assert_ok(
+            "smart_search_request_templates",
+            bool(
+                smart_search_templates.get("success")
+                and smart_search_templates_data.get("ok")
+                and smart_search_templates_data.get("selected_recipe") == "smart_search"
+                and smart_search_names == ["smart_search", "preferences_get", "scoring_policy"]
+            ),
+            str(smart_search_templates.get("message") or ""),
+        )
         preferences_view = route(base_url, api_key, sessions[0], "偏好")
         preferences_view_data = assert_route_action("route_preferences_get", preferences_view, "preferences")
         assert_ok(
@@ -547,6 +560,38 @@ def main() -> int:
                 "route_downloaders_templates",
                 "query_mp_sites" in downloader_templates and "start_mp_media_search" in downloader_templates,
                 json.dumps(downloader_templates, ensure_ascii=False),
+            )
+
+            smart_search = route(base_url, api_key, sessions[1], f"智能搜索 {args.keyword}")
+            smart_search_data = assert_route_action("route_smart_search", smart_search, "smart_resource_search")
+            checked_sources = [
+                str(item.get("source_type") or "").strip()
+                for item in (smart_search_data.get("sources_checked") or [])
+                if isinstance(item, dict)
+            ]
+            assert_ok(
+                "route_smart_search_checked_sources",
+                bool(checked_sources) and checked_sources[0] == "pansou",
+                json.dumps(smart_search_data.get("sources_checked") or [], ensure_ascii=False)[:240],
+            )
+            assert_ok(
+                "route_smart_search_best_candidate",
+                isinstance(smart_search_data.get("best_candidate"), dict)
+                and bool((smart_search_data.get("best_candidate") or {}).get("source_type"))
+                and bool((smart_search_data.get("decision_summary") or {}).get("preferred_command")),
+                json.dumps({
+                    "best_candidate": smart_search_data.get("best_candidate"),
+                    "decision_summary": smart_search_data.get("decision_summary"),
+                }, ensure_ascii=False)[:240],
+            )
+            assert_ok(
+                "route_smart_search_preference_status",
+                (
+                    isinstance((smart_search_data.get("preference_status") or {}).get("summary"), dict)
+                    and "enable_pansou" in ((smart_search_data.get("preference_status") or {}).get("summary") or {})
+                    and "has_quark" in ((smart_search_data.get("preference_status") or {}).get("summary") or {})
+                ),
+                json.dumps(smart_search_data.get("preference_status") or {}, ensure_ascii=False)[:240],
             )
 
             mp_search = route(base_url, api_key, sessions[1], f"MP搜索 {args.keyword}")
