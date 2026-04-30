@@ -73,6 +73,12 @@ MP_API_TOKEN=你的 MoviePilot API_TOKEN
 
 不要把 `MP_API_TOKEN` 写进提示词正文。它应该放在外部智能体的安全变量、工具密钥或私有配置中。
 
+如果 `MoviePilot` 不在当前机器，而是在 NAS、Windows 或另一台 Docker 主机，请同时阅读：
+
+- `docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`
+
+跨机器时，外部智能体的用法不变，主要变化只是 `BASE_URL` 和旁路服务地址的可达性配置。
+
 ## 从仓库安装 Skill
 
 ```bash

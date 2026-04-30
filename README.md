@@ -43,9 +43,18 @@ AI识别增强
 
 ```text
 docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
+docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md
 skills/agent-resource-officer/SKILL.md
 skills/agent-resource-officer/EXTERNAL_AGENTS.md
 ```
+
+如果 `MoviePilot` 不在当前机器，而是在 NAS、Windows 或另一台 Docker 主机上，先看：
+
+```text
+docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md
+```
+
+重点不是换另一套方案，而是把 `ARO_BASE_URL`、盘搜地址和 Docker 网络视角配对。
 
 ## 新用户推荐方案
 
