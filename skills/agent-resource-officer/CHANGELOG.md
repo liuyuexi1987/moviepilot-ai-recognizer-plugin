@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.32
+
+- Added a helper-owned command execution policy summary for `--summary-only`, including `recommended_agent_behavior`, `auto_run_command`, `confirm_command`, `display_command`, `stop_after_auto`, and `reason`.
+- Added `auto_continue_rule` to the external-agent payload so other agents can decide when to auto-run the preferred command and when to stop for confirmation.
+- Added selftest coverage for the new auto-continue decision layer.
+
 ## 0.1.31
 
 - Preserved compact command execution semantics in helper summaries: `command_policy`, `preferred_requires_confirmation`, `fallback_requires_confirmation`, and `can_auto_run_preferred`.

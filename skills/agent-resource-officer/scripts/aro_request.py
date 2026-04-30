@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.31"
+HELPER_VERSION = "0.1.32"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -174,6 +174,7 @@ def external_agent_payload():
         "pick_command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
         "followup_command": "python3 scripts/aro_request.py followup --session 'agent:<会话ID>'",
         "next_command_rule": "优先读取 compact 主响应顶层的 preferred_command、fallback_command、compact_commands；只有这些字段为空时，再回退到 error_summary / followup_summary / score_summary.decision。",
+        "auto_continue_rule": "如果 summary-only 输出里 recommended_agent_behavior=auto_continue 或 auto_continue_then_wait_confirmation，则可以直接执行 auto_run_command；如果是 wait_user_confirmation，则先向用户展示 confirm_command；如果是 stop，则不要继续自动执行。",
         "compat_aliases": ["workbuddy"],
         "prompt": prompt,
         "tools": [
@@ -372,7 +373,7 @@ def compact_command_summary(output):
     ok = bool(payload.get("ok")) if "ok" in payload else bool(payload.get("success"))
     session = str(payload.get("session") or "").strip()
     session_id = str(payload.get("session_id") or "").strip()
-    return {
+    summary = {
         "success": bool(payload.get("success", ok)),
         "ok": ok,
         "action": action,
@@ -389,6 +390,85 @@ def compact_command_summary(output):
         "fallback_helper_command": helper_route_command(fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""), session=session, session_id=session_id),
         "requires_confirmation": write_effect == "write",
         "message_head": str(payload.get("message") or payload.get("message_head") or "").strip(),
+    }
+    summary.update(command_execution_policy(summary))
+    return summary
+
+
+def command_execution_policy(summary):
+    summary = summary if isinstance(summary, dict) else {}
+    preferred_command = str(summary.get("preferred_command") or "").strip()
+    fallback_command = str(summary.get("fallback_command") or "").strip()
+    preferred_requires_confirmation = bool(summary.get("preferred_requires_confirmation"))
+    fallback_requires_confirmation = bool(summary.get("fallback_requires_confirmation"))
+    can_auto_run_preferred = bool(summary.get("can_auto_run_preferred"))
+
+    if preferred_command and can_auto_run_preferred and not preferred_requires_confirmation:
+        if fallback_command and fallback_requires_confirmation:
+            return {
+                "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+                "auto_run_command": preferred_command,
+                "confirm_command": fallback_command,
+                "display_command": preferred_command,
+                "stop_after_auto": True,
+                "reason": "首选命令是安全读步骤，可自动继续；后续备选命令涉及确认。",
+            }
+        return {
+            "recommended_agent_behavior": "auto_continue",
+            "auto_run_command": preferred_command,
+            "confirm_command": "",
+            "display_command": preferred_command,
+            "stop_after_auto": False,
+            "reason": "首选命令是安全读步骤，可直接继续。",
+        }
+
+    if preferred_command and preferred_requires_confirmation:
+        return {
+            "recommended_agent_behavior": "wait_user_confirmation",
+            "auto_run_command": "",
+            "confirm_command": preferred_command,
+            "display_command": preferred_command,
+            "stop_after_auto": False,
+            "reason": "首选命令本身需要用户确认，不能自动执行。",
+        }
+
+    if preferred_command:
+        return {
+            "recommended_agent_behavior": "show_only",
+            "auto_run_command": "",
+            "confirm_command": "",
+            "display_command": preferred_command,
+            "stop_after_auto": False,
+            "reason": "已有首选命令，但当前不建议自动执行。",
+        }
+
+    if fallback_command and fallback_requires_confirmation:
+        return {
+            "recommended_agent_behavior": "wait_user_confirmation",
+            "auto_run_command": "",
+            "confirm_command": fallback_command,
+            "display_command": fallback_command,
+            "stop_after_auto": False,
+            "reason": "仅存在需要确认的备选命令。",
+        }
+
+    if fallback_command:
+        return {
+            "recommended_agent_behavior": "show_only",
+            "auto_run_command": "",
+            "confirm_command": "",
+            "display_command": fallback_command,
+            "stop_after_auto": False,
+            "reason": "仅存在备选命令，建议先展示。",
+        }
+
+    return {
+        "recommended_agent_behavior": "stop",
+        "auto_run_command": "",
+        "confirm_command": "",
+        "display_command": "",
+        "stop_after_auto": False,
+        "reason": "当前没有可继续执行的短命令。",
     }
 
 
@@ -668,6 +748,22 @@ def selftest_result():
         "fallback_command": "下载1",
     }
     check("command_only_confirmed_uses_top_level_fallback", summary_command(top_level_confirm_summary, confirmed=True) == "下载1")
+    top_level_policy_summary = {
+        "preferred_requires_confirmation": False,
+        "fallback_requires_confirmation": True,
+        "can_auto_run_preferred": True,
+        "preferred_command": "选择 1",
+        "fallback_command": "下载1",
+    }
+    top_level_policy = command_execution_policy(top_level_policy_summary)
+    check("command_execution_policy_auto_continue_then_wait", top_level_policy.get("recommended_agent_behavior") == "auto_continue_then_wait_confirmation")
+    confirm_only_policy = command_execution_policy({
+        "preferred_requires_confirmation": True,
+        "preferred_command": "下载1",
+    })
+    check("command_execution_policy_wait_confirmation", confirm_only_policy.get("recommended_agent_behavior") == "wait_user_confirmation" and confirm_only_policy.get("confirm_command") == "下载1")
+    stop_policy = command_execution_policy({})
+    check("command_execution_policy_stop_without_commands", stop_policy.get("recommended_agent_behavior") == "stop")
 
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
@@ -760,6 +856,7 @@ def selftest_result():
     check("compact_command_summary_prefers_top_level", top_level_summary.get("preferred_command") == "选择 1" and top_level_summary.get("command_source") == "score_summary")
     check("compact_command_summary_preserves_confirmation_flags", top_level_summary.get("fallback_requires_confirmation") is True and top_level_summary.get("can_auto_run_preferred") is True)
     check("compact_command_summary_builds_helper_command", top_level_summary.get("preferred_helper_command") == "python3 scripts/aro_request.py route '选择 1'")
+    check("compact_command_summary_includes_execution_policy", top_level_summary.get("recommended_agent_behavior") == "auto_continue_then_wait_confirmation" and top_level_summary.get("auto_run_command") == "选择 1")
     compact_clear = compact({
         "success": True,
         "data": {

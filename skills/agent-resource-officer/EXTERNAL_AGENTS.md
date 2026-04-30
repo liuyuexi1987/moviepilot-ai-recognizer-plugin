@@ -23,6 +23,7 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 用户明确给出链接或编号后，才继续可能写入的动作。
 - 第一次接入用户时先读取 `preferences`。如果未初始化，询问片源偏好并保存，后续云盘与 PT 评分都复用这份画像。
 - 云盘资源按质量、字幕、完整度、目录和影巢积分评分；PT 资源按做种、免费/促销、下载折算、质量、字幕和匹配度评分。
+- 如果 helper 的 `summary-only` 返回 `recommended_agent_behavior=auto_continue` 或 `auto_continue_then_wait_confirmation`，可以直接执行 `auto_run_command`；其他结果先展示或等待确认。
 
 ## 连接变量
 
