@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.30"
+HELPER_VERSION = "0.1.31"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -280,6 +280,10 @@ def compact(data):
             "needs_onboarding",
             "initialized",
             "command_source",
+            "command_policy",
+            "preferred_requires_confirmation",
+            "fallback_requires_confirmation",
+            "can_auto_run_preferred",
             "preferred_command",
             "fallback_command",
             "compact_commands",
@@ -330,9 +334,13 @@ def summary_command(summary, confirmed=False):
     summary = summary or {}
     preferred_command = str(summary.get("preferred_command") or "").strip()
     fallback_command = str(summary.get("fallback_command") or "").strip()
+    preferred_requires_confirmation = bool(summary.get("preferred_requires_confirmation"))
+    fallback_requires_confirmation = bool(summary.get("fallback_requires_confirmation"))
     if preferred_command:
-        if confirmed and bool(summary.get("requires_confirmation")) and fallback_command:
+        if confirmed and fallback_command and fallback_requires_confirmation:
             return fallback_command
+        if not confirmed and preferred_requires_confirmation:
+            return preferred_command
         return preferred_command
     if "first_requires_confirmation" in summary:
         requires_confirmation = bool(summary.get("first_requires_confirmation"))
@@ -362,15 +370,23 @@ def compact_command_summary(output):
     action = str(payload.get("action") or "").strip()
     write_effect = str(payload.get("write_effect") or "").strip()
     ok = bool(payload.get("ok")) if "ok" in payload else bool(payload.get("success"))
+    session = str(payload.get("session") or "").strip()
+    session_id = str(payload.get("session_id") or "").strip()
     return {
         "success": bool(payload.get("success", ok)),
         "ok": ok,
         "action": action,
         "write_effect": write_effect,
         "command_source": str(payload.get("command_source") or "").strip(),
+        "command_policy": str(payload.get("command_policy") or "").strip(),
+        "preferred_requires_confirmation": bool(payload.get("preferred_requires_confirmation")),
+        "fallback_requires_confirmation": bool(payload.get("fallback_requires_confirmation")),
+        "can_auto_run_preferred": bool(payload.get("can_auto_run_preferred")) if "can_auto_run_preferred" in payload else write_effect != "write",
         "preferred_command": preferred_command or (compact_commands[0] if compact_commands else ""),
         "fallback_command": fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""),
         "compact_commands": compact_commands[:2],
+        "preferred_helper_command": helper_route_command(preferred_command or (compact_commands[0] if compact_commands else ""), session=session, session_id=session_id),
+        "fallback_helper_command": helper_route_command(fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""), session=session, session_id=session_id),
         "requires_confirmation": write_effect == "write",
         "message_head": str(payload.get("message") or payload.get("message_head") or "").strip(),
     }
@@ -386,6 +402,15 @@ def print_summary(summary, command_only=False, confirmed=False):
 def shell_quote(value):
     text = str(value or "")
     return "'" + text.replace("'", "'\"'\"'") + "'"
+
+
+def helper_route_command(command, session="", session_id=""):
+    command_text = str(command or "").strip()
+    if not command_text:
+        return ""
+    session_part = f" --session {shell_quote(session)}" if str(session or "").strip() else ""
+    session_id_part = f" --session-id {shell_quote(session_id)}" if str(session_id or "").strip() else ""
+    return f"python3 scripts/aro_request.py route {shell_quote(command_text)}{session_part}{session_id_part}"
 
 
 def recovery_helper_commands(recovery):
@@ -629,12 +654,16 @@ def selftest_result():
     check("command_only_without_confirmation_executes", summary_command(no_confirm_summary) == "execute")
     top_level_preferred_summary = {
         "requires_confirmation": False,
+        "preferred_requires_confirmation": False,
+        "fallback_requires_confirmation": True,
         "preferred_command": "选择 1",
         "fallback_command": "下载1",
     }
     check("command_only_prefers_top_level_command", summary_command(top_level_preferred_summary) == "选择 1")
     top_level_confirm_summary = {
         "requires_confirmation": True,
+        "preferred_requires_confirmation": False,
+        "fallback_requires_confirmation": True,
         "preferred_command": "选择 1",
         "fallback_command": "下载1",
     }
@@ -642,6 +671,7 @@ def selftest_result():
 
     quote_value = shell_quote("a'b")
     check("shell_quote_single_quote", quote_value == "'a'\"'\"'b'")
+    check("helper_route_command_with_session", helper_route_command("选择 1", session="agent:demo") == "python3 scripts/aro_request.py route '选择 1' --session 'agent:demo'")
 
     route_args = normalize_command_args(argparse.Namespace(command="route", extra=["盘搜搜索", "大君夫人"], text=None))
     check("normalize_route_positional_text", route_args.text == "盘搜搜索 大君夫人")
@@ -716,6 +746,10 @@ def selftest_result():
         "data": {
             "action": "mp_media_search",
             "command_source": "score_summary",
+            "command_policy": "read_then_confirm_write",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": True,
+            "can_auto_run_preferred": True,
             "preferred_command": "选择 1",
             "fallback_command": "下载1",
             "compact_commands": ["选择 1", "下载1"],
@@ -724,6 +758,8 @@ def selftest_result():
     top_level_summary = compact_command_summary(compact_top_level_commands)
     check("compact_preserves_top_level_preferred_command", compact_top_level_commands.get("preferred_command") == "选择 1")
     check("compact_command_summary_prefers_top_level", top_level_summary.get("preferred_command") == "选择 1" and top_level_summary.get("command_source") == "score_summary")
+    check("compact_command_summary_preserves_confirmation_flags", top_level_summary.get("fallback_requires_confirmation") is True and top_level_summary.get("can_auto_run_preferred") is True)
+    check("compact_command_summary_builds_helper_command", top_level_summary.get("preferred_helper_command") == "python3 scripts/aro_request.py route '选择 1'")
     compact_clear = compact({
         "success": True,
         "data": {

@@ -476,6 +476,8 @@ def main() -> int:
                     execution_followup_data.get("command_source") == "error_summary"
                     and execution_followup_data.get("preferred_command") == execution_followup_error_summary.get("preferred_command")
                     and isinstance(execution_followup_data.get("compact_commands"), list)
+                    and execution_followup_data.get("command_policy") == "safe_read_recovery"
+                    and execution_followup_data.get("preferred_requires_confirmation") is False
                 ),
                 json.dumps(execution_followup_data, ensure_ascii=False)[:240],
             )
@@ -577,6 +579,9 @@ def main() -> int:
                     mp_search_data.get("command_source") == "score_summary"
                     and mp_search_data.get("preferred_command") == (((mp_search_data.get("score_summary") or {}).get("decision") or {}).get("preferred_command"))
                     and isinstance(mp_search_data.get("compact_commands"), list)
+                    and mp_search_data.get("command_policy") == "read_then_confirm_write"
+                    and mp_search_data.get("preferred_requires_confirmation") is False
+                    and mp_search_data.get("fallback_requires_confirmation") is True
                 ),
                 json.dumps(mp_search_data, ensure_ascii=False)[:240],
             )
@@ -828,6 +833,8 @@ def main() -> int:
                     smart_followup_idle_data.get("command_source") == "followup_summary"
                     and smart_followup_idle_data.get("preferred_command") == ((smart_followup_idle_data.get("followup_summary") or {}).get("preferred_command"))
                     and isinstance(smart_followup_idle_data.get("compact_commands"), list)
+                    and smart_followup_idle_data.get("command_policy") == "safe_read_only"
+                    and smart_followup_idle_data.get("preferred_requires_confirmation") is False
                 ),
                 json.dumps(smart_followup_idle_data, ensure_ascii=False)[:240],
             )

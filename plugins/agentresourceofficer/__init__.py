@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.62"
+    plugin_version = "0.2.63"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -3628,6 +3628,10 @@ class AgentResourceOfficer(_PluginBase):
                 "requires_confirmation": False,
                 "prefer_plan_first": True,
                 "decision_hint": "当前没有可评分条目，先完成搜索或选择后再判断。",
+                "command_policy": "none",
+                "preferred_requires_confirmation": False,
+                "fallback_requires_confirmation": False,
+                "can_auto_run_preferred": False,
                 "preferred_command": "",
                 "fallback_command": "",
                 "compact_commands": [],
@@ -3665,6 +3669,10 @@ class AgentResourceOfficer(_PluginBase):
             "score": self._safe_int(best.get("score"), 0),
             "requires_confirmation": not bool(best.get("can_auto_execute")),
             "prefer_plan_first": True,
+            "command_policy": "read_then_confirm_write" if len(commands) > 1 else "safe_read_only",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": bool(len(commands) > 1),
+            "can_auto_run_preferred": bool(commands),
             "preferred_command": commands[0] if commands else "",
             "fallback_command": commands[1] if len(commands) > 1 else "",
             "compact_commands": commands[:2],
@@ -5113,10 +5121,15 @@ class AgentResourceOfficer(_PluginBase):
             command = self._assistant_followup_command(name, keyword=keyword or target, hash_value=hash_value)
             if command and command not in command_candidates:
                 command_candidates.append(command)
+        preferred_requires_confirmation = code in {"latest_plan_not_executed", "plan_not_executed"}
         return {
             "error_code": code,
             "label": label_map.get(code, message_head or code),
             "decision_hint": hint_map.get(code, message_head or "当前请求未完成，请先按建议补充上下文。"),
+            "command_policy": "confirm_then_resume" if preferred_requires_confirmation else "safe_read_recovery",
+            "preferred_requires_confirmation": preferred_requires_confirmation,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": not preferred_requires_confirmation and bool(command_candidates),
             "preferred_command": command_candidates[0] if command_candidates else "",
             "fallback_command": command_candidates[1] if len(command_candidates) > 1 else "",
             "compact_commands": command_candidates[:2],
@@ -5153,6 +5166,10 @@ class AgentResourceOfficer(_PluginBase):
             "label": label_map.get(category, category or "后续追踪"),
             "preferred_action": self._clean_text(recommended_action),
             "decision_hint": self._clean_text(follow_up_hint),
+            "command_policy": "safe_read_only",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": bool(command_candidates),
             "preferred_command": command_candidates[0] if command_candidates else "",
             "fallback_command": command_candidates[1] if len(command_candidates) > 1 else "",
             "compact_commands": command_candidates[:2],
@@ -8398,6 +8415,10 @@ class AgentResourceOfficer(_PluginBase):
             if preferred_command or compact_commands:
                 return {
                     "command_source": source,
+                    "command_policy": AgentResourceOfficer._clean_text(summary.get("command_policy")) or ("confirm_then_resume" if bool(summary.get("preferred_requires_confirmation")) else "safe_read_only"),
+                    "preferred_requires_confirmation": bool(summary.get("preferred_requires_confirmation")),
+                    "fallback_requires_confirmation": bool(summary.get("fallback_requires_confirmation")),
+                    "can_auto_run_preferred": bool(summary.get("can_auto_run_preferred")) if "can_auto_run_preferred" in summary else not bool(summary.get("preferred_requires_confirmation")),
                     "preferred_command": preferred_command or (compact_commands[0] if compact_commands else ""),
                     "fallback_command": fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""),
                     "compact_commands": compact_commands[:2],

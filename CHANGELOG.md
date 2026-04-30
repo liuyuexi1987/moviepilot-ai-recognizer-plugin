@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.62`
+- `AgentResourceOfficer`: `0.2.63`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.63`：为 compact 顶层短命令增加执行语义字段：`command_policy`、`preferred_requires_confirmation`、`fallback_requires_confirmation`、`can_auto_run_preferred`；外部智能体现在可以机械判断“直接读”还是“先确认再写”。
 - `AgentResourceOfficer 0.2.62`：把 `error_summary`、`followup_summary`、`score_summary.decision` 三层短命令继续上浮到 compact 主响应顶层；外部智能体现在只读 `preferred_command` / `compact_commands` 和 `command_source` 就能续跑。
 - `AgentResourceOfficer 0.2.61`：为 compact 失败回执增加统一 `error_summary`；外部智能体现在可以直接读取失败标签、建议说明，以及 `preferred_command` / `compact_commands` 这样的最短恢复命令。
 - `AgentResourceOfficer 0.2.60`：为 `score_summary.decision` 和 `followup_summary` 增加 `preferred_command`、`fallback_command` 与 `compact_commands`；`mp_recent_activity` 也补齐了 `followup_summary`，外部智能体可直接读取最短下一步命令。

@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.31
+
+- Preserved compact command execution semantics in helper summaries: `command_policy`, `preferred_requires_confirmation`, `fallback_requires_confirmation`, and `can_auto_run_preferred`.
+- Taught `summary_command()` to use those confirmation flags instead of only falling back to the old helper inspect/execute flow.
+- Added selftest coverage for top-level command confirmation behavior.
+
 ## 0.1.30
 
 - Added top-level compact command extraction for `route`, `pick`, `workflow`, `plan-execute`, and `followup`.
