@@ -6,6 +6,10 @@
 bash scripts/repo-hygiene.sh
 ```
 
+如果只想快速查维护/发布命令，不想先读完整文档，直接看：
+
+- `docs/MAINTENANCE_COMMANDS.md`
+
 如果要直接跑完整发版前检查，执行：
 
 ```bash

@@ -36,6 +36,10 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 bash scripts/repo-hygiene.sh
 ```
 
+如果只想快速查维护/发布命令，不想先读完整安装说明，直接看：
+
+- `docs/MAINTENANCE_COMMANDS.md`
+
 如果要跑完整发版前检查，直接执行：
 
 ```bash
