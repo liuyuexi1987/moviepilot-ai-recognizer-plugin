@@ -364,6 +364,14 @@ def main() -> int:
                 bool(mp_best_download_data.get("plan_id")) and mp_best_download_data.get("workflow") == "mp_best_download",
                 json.dumps(mp_best_download_data, ensure_ascii=False)[:240],
             )
+            mp_recover_after_plan = recover(base_url, api_key, sessions[1])
+            mp_recover_after_plan_data = data(mp_recover_after_plan)
+            assert_ok(
+                "route_mp_download_recover_priority",
+                (mp_recover_after_plan_data.get("recovery") or {}).get("mode") == "resume_saved_plan"
+                and (mp_recover_after_plan_data.get("recovery") or {}).get("recommended_action") == "execute_latest_plan",
+                json.dumps(mp_recover_after_plan_data.get("recovery") or {}, ensure_ascii=False),
+            )
             workflow_download_control_missing = workflow(
                 base_url,
                 api_key,
