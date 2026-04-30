@@ -234,6 +234,33 @@ def main() -> int:
         assert_route_action("route_115_status", status, "p115_status")
 
         if args.include_search:
+            download_tasks = route(base_url, api_key, sessions[0], "下载任务")
+            download_tasks_data = assert_route_action("route_download_tasks", download_tasks, "mp_download_tasks")
+            download_task_actions = list(download_tasks_data.get("next_actions") or [])
+            assert_ok(
+                "route_download_tasks_empty_next_actions",
+                "mp_download_control.pause" not in download_task_actions
+                and "mp_download_control.resume" not in download_task_actions
+                and "mp_download_control.delete" not in download_task_actions,
+                json.dumps(download_task_actions, ensure_ascii=False),
+            )
+
+            sites = route(base_url, api_key, sessions[0], "站点状态")
+            sites_data = assert_route_action("route_sites", sites, "mp_sites")
+            assert_ok(
+                "route_sites_next_actions",
+                "mp_downloaders" in list(sites_data.get("next_actions") or []),
+                json.dumps(sites_data.get("next_actions") or [], ensure_ascii=False),
+            )
+
+            downloaders = route(base_url, api_key, sessions[0], "下载器状态")
+            downloaders_data = assert_route_action("route_downloaders", downloaders, "mp_downloaders")
+            assert_ok(
+                "route_downloaders_next_actions",
+                "mp_sites" in list(downloaders_data.get("next_actions") or []),
+                json.dumps(downloaders_data.get("next_actions") or [], ensure_ascii=False),
+            )
+
             mp_search = route(base_url, api_key, sessions[1], f"MP搜索 {args.keyword}")
             mp_search_data = assert_route_action("route_mp_search", mp_search, "mp_media_search")
             mp_search_message = message_text(mp_search)
@@ -296,6 +323,15 @@ def main() -> int:
             subscribe_list = route(base_url, api_key, sessions[4], f"订阅列表{args.keyword}")
             subscribe_data = assert_route_action("route_subscribe_list_compact", subscribe_list, "mp_subscribes")
             assert_ok("route_subscribe_list_no_plan", not subscribe_data.get("plan_id"), json.dumps(subscribe_data, ensure_ascii=False)[:240])
+            subscribe_actions = list(subscribe_data.get("next_actions") or [])
+            assert_ok(
+                "route_subscribe_list_empty_next_actions",
+                "mp_subscribe_control.search" not in subscribe_actions
+                and "mp_subscribe_control.pause" not in subscribe_actions
+                and "mp_subscribe_control.resume" not in subscribe_actions
+                and "mp_subscribe_control.delete" not in subscribe_actions,
+                json.dumps(subscribe_actions, ensure_ascii=False),
+            )
             subscribe_control_missing = route(base_url, api_key, sessions[4], "搜索订阅 1")
             subscribe_control_missing_data = data(subscribe_control_missing)
             assert_ok(

@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.39`
+- `AgentResourceOfficer`: `0.2.40`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.40`：收紧 PT 只读会话的下一步建议；下载任务、站点、下载器、订阅列表等场景不再给出误导性的控制动作提示。
 - `AgentResourceOfficer 0.2.39`：修复 workflow/tool 直调下的控制计划安全；空下载任务或空订阅列表时，不再为 `mp_download_control` / `mp_subscribe_control` 生成无效 `plan_id`。
 - `AgentResourceOfficer 0.2.38`：修复空订阅列表下的订阅控制安全；自然语言编号必须命中当前会话列表，避免把“搜索订阅 1”误写成订阅 ID=1 的计划。
 - `AgentResourceOfficer 0.2.37`：新增 `mp_pt_mainline` 与 `mp_recommendation` 请求模板 recipe，外部智能体可低 token 拉取 MP 原生 PT 主线与推荐主线模板，不再猜 workflow body。

@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.39"
+    plugin_version = "0.2.40"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4407,15 +4407,24 @@ class AgentResourceOfficer(_PluginBase):
             }),
         }
 
-    async def _assistant_mp_downloaders(self, *, session: str) -> Dict[str, Any]:
+    async def _assistant_mp_downloaders(self, *, session: str, cache_key: str) -> Dict[str, Any]:
         result = self._ensure_feishu_channel()._query_downloaders()
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_downloaders",
+            "stage": "downloaders",
+            "keyword": "downloaders",
+            "items": items,
+            "enabled_count": self._safe_int(result.get("enabled_count"), 0),
+            "target_path": "",
+        })
         return {
             "success": bool(result.get("success")),
             "message": self._clean_text(result.get("message")) or "下载器查询完成",
             "data": self._assistant_response_data(session=session, data={
                 "action": "mp_downloaders",
                 "ok": bool(result.get("success")),
-                "items": result.get("items") if isinstance(result.get("items"), list) else [],
+                "items": items,
                 "enabled_count": self._safe_int(result.get("enabled_count"), 0),
             }),
         }
@@ -4424,6 +4433,7 @@ class AgentResourceOfficer(_PluginBase):
         self,
         *,
         session: str,
+        cache_key: str,
         status: str = "active",
         name: str = "",
         limit: int = 30,
@@ -4433,6 +4443,15 @@ class AgentResourceOfficer(_PluginBase):
             name=name,
             limit=max(1, min(100, self._safe_int(limit, 30))),
         )
+        items = result.get("items") if isinstance(result.get("items"), list) else []
+        self._save_session(cache_key, {
+            "kind": "assistant_mp_sites",
+            "stage": "sites",
+            "keyword": name or status or "active",
+            "items": items,
+            "status": result.get("status") or status,
+            "target_path": "",
+        })
         return {
             "success": bool(result.get("success")),
             "message": self._clean_text(result.get("message")) or "站点查询完成",
@@ -4440,7 +4459,7 @@ class AgentResourceOfficer(_PluginBase):
                 "action": "mp_sites",
                 "ok": bool(result.get("success")),
                 "status": result.get("status") or status,
-                "items": result.get("items") if isinstance(result.get("items"), list) else [],
+                "items": items,
                 "total": self._safe_int(result.get("total"), 0),
             }),
         }
@@ -5600,7 +5619,65 @@ class AgentResourceOfficer(_PluginBase):
                     for idx, item in enumerate(items[:8])
                     if isinstance(item, dict)
                 ],
-                "suggested_actions": ["mp_download_control.pause", "mp_download_control.resume", "mp_download_control.delete", "session_clear"],
+                "suggested_actions": (
+                    ["mp_download_control.pause", "mp_download_control.resume", "mp_download_control.delete", "session_clear"]
+                    if items else
+                    ["mp_media_search", "mp_download_history", "session_clear"]
+                ),
+            })
+        elif kind == "assistant_mp_download_history":
+            items = state.get("items") or []
+            payload.update({
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "title": self._clean_text(item.get("title")),
+                        "year": self._clean_text(item.get("year")),
+                        "date": self._clean_text(item.get("date")),
+                        "transfer_status_text": self._clean_text(item.get("transfer_status_text")),
+                        "download_hash_short": self._clean_text(item.get("download_hash_short")),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_lifecycle_status", "mp_media_search", "session_clear"],
+            })
+        elif kind == "assistant_mp_downloaders":
+            items = state.get("items") or []
+            payload.update({
+                "enabled_count": self._safe_int(state.get("enabled_count"), 0),
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "name": self._clean_text(item.get("name")),
+                        "type": self._clean_text(item.get("type")),
+                        "enabled": bool(item.get("enabled")),
+                        "default": bool(item.get("default")),
+                    }
+                    for item in items[:8]
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_sites", "mp_media_search", "session_clear"],
+            })
+        elif kind == "assistant_mp_sites":
+            items = state.get("items") or []
+            payload.update({
+                "status": self._clean_text(state.get("status")),
+                "result_count": len(items),
+                "items_preview": [
+                    {
+                        "index": self._safe_int(item.get("index"), idx + 1),
+                        "name": self._clean_text(item.get("name")),
+                        "domain": self._clean_text(item.get("domain")),
+                        "enabled": bool(item.get("enabled")),
+                        "has_cookie": bool(item.get("has_cookie")),
+                        "priority": item.get("priority"),
+                    }
+                    for idx, item in enumerate(items[:8])
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_downloaders", "mp_media_search", "session_clear"],
             })
         elif kind == "assistant_mp_subscribes":
             items = state.get("items") or []
@@ -5618,7 +5695,50 @@ class AgentResourceOfficer(_PluginBase):
                     for idx, item in enumerate(items[:8])
                     if isinstance(item, dict)
                 ],
-                "suggested_actions": ["mp_subscribe_control.search", "mp_subscribe_control.pause", "mp_subscribe_control.resume", "mp_subscribe_control.delete", "session_clear"],
+                "suggested_actions": (
+                    ["mp_subscribe_control.search", "mp_subscribe_control.pause", "mp_subscribe_control.resume", "mp_subscribe_control.delete", "session_clear"]
+                    if items else
+                    ["mp_subscribe.keyword", "mp_media_search", "session_clear"]
+                ),
+            })
+        elif kind == "assistant_mp_lifecycle_status":
+            result_groups = state.get("items") if isinstance(state.get("items"), dict) else {}
+            task_items = result_groups.get("download_tasks") if isinstance(result_groups.get("download_tasks"), list) else []
+            download_items = result_groups.get("download_history") if isinstance(result_groups.get("download_history"), list) else []
+            transfer_items = result_groups.get("transfer_history") if isinstance(result_groups.get("transfer_history"), list) else []
+            payload.update({
+                "download_task_count": len(task_items),
+                "download_history_count": len(download_items),
+                "transfer_history_count": len(transfer_items),
+                "items_preview": [
+                    {
+                        "kind": "download_task",
+                        "title": self._clean_text(item.get("title")),
+                        "progress": self._clean_text(item.get("progress")),
+                        "state": self._clean_text(item.get("state")),
+                    }
+                    for item in task_items[:3]
+                    if isinstance(item, dict)
+                ] + [
+                    {
+                        "kind": "download_history",
+                        "title": self._clean_text(item.get("title")),
+                        "date": self._clean_text(item.get("date")),
+                        "transfer_status_text": self._clean_text(item.get("transfer_status_text")),
+                    }
+                    for item in download_items[:3]
+                    if isinstance(item, dict)
+                ] + [
+                    {
+                        "kind": "transfer_history",
+                        "title": self._clean_text(item.get("title")),
+                        "date": self._clean_text(item.get("date")),
+                        "status_text": self._clean_text(item.get("status_text")),
+                    }
+                    for item in transfer_items[:3]
+                    if isinstance(item, dict)
+                ],
+                "suggested_actions": ["mp_media_search", "mp_download_history", "session_clear"],
             })
         elif kind == "assistant_mp_recommend":
             items = state.get("items") or []
@@ -11826,10 +11946,11 @@ class AgentResourceOfficer(_PluginBase):
                 year=self._clean_text(body.get("year") or parsed.get("year")),
             ))
         if assistant_action == "mp_downloaders":
-            return finish(await self._assistant_mp_downloaders(session=session))
+            return finish(await self._assistant_mp_downloaders(session=session, cache_key=cache_key))
         if assistant_action == "mp_sites":
             return finish(await self._assistant_mp_sites(
                 session=session,
+                cache_key=cache_key,
                 status=self._clean_text(body.get("status") or parsed.get("status") or "active"),
                 name=keyword,
                 limit=self._safe_int(body.get("limit"), 30),
@@ -12594,18 +12715,19 @@ class AgentResourceOfficer(_PluginBase):
                 limit=self._safe_int(body.get("limit"), 5),
             ))
         if name == "query_mp_downloaders":
-            session_name, _ = self._normalize_assistant_session_ref(
+            session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
                 session_id=body.get("session_id"),
             )
-            return await finish(self._assistant_mp_downloaders(session=session_name))
+            return await finish(self._assistant_mp_downloaders(session=session_name, cache_key=cache_key))
         if name == "query_mp_sites":
-            session_name, _ = self._normalize_assistant_session_ref(
+            session_name, cache_key = self._normalize_assistant_session_ref(
                 session=body.get("session") or "default",
                 session_id=body.get("session_id"),
             )
             return await finish(self._assistant_mp_sites(
                 session=session_name,
+                cache_key=cache_key,
                 status=self._clean_text(body.get("status") or "active"),
                 name=self._clean_text(body.get("site_name") or body.get("keyword") or body.get("title")),
                 limit=self._safe_int(body.get("limit"), 30),
