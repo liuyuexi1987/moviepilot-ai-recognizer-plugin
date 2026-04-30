@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.44"
+    plugin_version = "0.2.45"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -6083,6 +6083,25 @@ class AgentResourceOfficer(_PluginBase):
                 break
         return result
 
+    @staticmethod
+    def _assistant_compact_next_actions(
+        primary: Optional[List[Any]] = None,
+        secondary: Optional[List[Any]] = None,
+        *,
+        limit: int = 6,
+    ) -> List[str]:
+        result: List[str] = []
+        seen: set[str] = set()
+        for item in [*(primary or []), *(secondary or [])]:
+            name = str(item or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            result.append(name)
+            if len(result) >= max(1, limit):
+                break
+        return result
+
     def _assistant_action_templates(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         session_name = self._clean_text(data.get("session")) or "default"
         session_id = self._clean_text(data.get("session_id")) or self._assistant_session_id(session_name)
@@ -7000,6 +7019,109 @@ class AgentResourceOfficer(_PluginBase):
             })
         return results
 
+    def _assistant_plan_execute_followup(
+        self,
+        *,
+        workflow: str,
+        session: str,
+        session_id: str,
+        session_state: Optional[Dict[str, Any]] = None,
+        ok: bool,
+    ) -> Dict[str, Any]:
+        if not ok:
+            return {"next_actions": [], "action_templates": []}
+
+        workflow_name = self._clean_text(workflow)
+        state = dict(session_state or {})
+        session_name = self._clean_text(session or state.get("session")) or "default"
+        session_cache = self._clean_text(session_id or state.get("session_id")) or self._assistant_session_id(session_name)
+        keyword = self._clean_text(state.get("keyword"))
+        base_route = {
+            "session": session_name,
+            "session_id": session_cache,
+        }
+        base_state = {
+            "session": session_name,
+            "session_id": session_cache,
+        }
+        keyword_value = keyword or "<关键词>"
+        next_actions: List[str] = []
+        templates: List[Dict[str, Any]] = []
+
+        if workflow_name in {"mp_best_download", "mp_download", "mp_search_download", "mp_download_control"}:
+            next_actions = ["query_mp_download_history", "query_mp_lifecycle_status", "query_mp_download_tasks"]
+            templates = [
+                self._assistant_action_template(
+                    name="query_mp_download_history",
+                    description="查看下载历史，并继续追踪整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_download_history", "keyword": keyword_value, "limit": 10},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_lifecycle_status",
+                    description="按关键词聚合查看下载任务、下载历史和整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_lifecycle_status", "keyword": keyword_value, "limit": 5},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_download_tasks",
+                    description="查看当前 MP 下载任务状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_download_tasks", "status": "all", "title": keyword},
+                ),
+            ]
+        elif workflow_name in {"mp_subscribe", "mp_subscribe_and_search", "mp_subscribe_control"}:
+            next_actions = ["query_mp_subscribes", "query_mp_lifecycle_status", "start_mp_media_search"]
+            templates = [
+                self._assistant_action_template(
+                    name="query_mp_subscribes",
+                    description="查看订阅列表，确认当前订阅是否已生效",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_subscribes", "status": "all", "keyword": keyword, "limit": 20},
+                ),
+                self._assistant_action_template(
+                    name="query_mp_lifecycle_status",
+                    description="继续追踪下载任务、下载历史和整理/入库状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_lifecycle_status", "keyword": keyword_value, "limit": 5},
+                ),
+                self._assistant_action_template(
+                    name="start_mp_media_search",
+                    description="按当前关键词重新发起 MP 原生搜索",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                    tool="agent_resource_officer_smart_entry",
+                    body={**base_route, "mode": "mp", "keyword": keyword_value},
+                ),
+            ]
+        elif workflow_name in {"share_transfer", "pansou_transfer_selected", "hdhive_unlock", "hdhive_unlock_selected"}:
+            next_actions = ["query_mp_transfer_history", "inspect_session_state"]
+            templates = [
+                self._assistant_action_template(
+                    name="query_mp_transfer_history",
+                    description="查看最近整理/入库历史，确认转存资源是否已落库",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                    tool="agent_resource_officer_execute_action",
+                    body={**base_state, "name": "query_mp_transfer_history", "keyword": keyword, "status": "all", "limit": 10},
+                ),
+                self._assistant_action_template(
+                    name="inspect_session_state",
+                    description="重新获取当前会话详细状态",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/session",
+                    tool="agent_resource_officer_session_state",
+                    body=base_state,
+                ),
+            ]
+
+        return {
+            "next_actions": next_actions,
+            "action_templates": templates,
+        }
+
     def _assistant_actions_compact_data(self, actions_data: Dict[str, Any]) -> Dict[str, Any]:
         data = dict(actions_data or {})
         session_state = dict(data.get("session_state") or {})
@@ -7033,6 +7155,13 @@ class AgentResourceOfficer(_PluginBase):
         results = self._assistant_compact_action_results(data.get("results"))
         success_count = len([item for item in results if item.get("success")])
         last_result = results[-1] if results else {}
+        followup = self._assistant_plan_execute_followup(
+            workflow=self._clean_text(data.get("workflow")),
+            session=self._clean_text(data.get("session") or session_state.get("session")) or "default",
+            session_id=self._clean_text(data.get("session_id") or session_state.get("session_id")),
+            session_state=session_state,
+            ok=bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
+        )
         payload = {
             "protocol_version": "assistant.v1",
             "action": "execute_plan",
@@ -7061,8 +7190,17 @@ class AgentResourceOfficer(_PluginBase):
                 "last_action": self._clean_text(last_result.get("action")),
                 "last_message_head": self._clean_text(last_result.get("message_head")),
             },
-            "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
-            "action_templates": data.get("action_templates") or [],
+            "next_actions": self._assistant_compact_next_actions(
+                followup.get("next_actions"),
+                data.get("next_actions") or session_state.get("suggested_actions") or [],
+            ),
+            "action_templates": self._assistant_compact_action_templates(
+                templates=[
+                    *(followup.get("action_templates") or []),
+                    *(data.get("action_templates") or []),
+                ],
+                limit=6,
+            ),
         }
         if isinstance(data.get("preference_status"), dict):
             payload["preference_status"] = data.get("preference_status")

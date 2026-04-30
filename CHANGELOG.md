@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.44`
+- `AgentResourceOfficer`: `0.2.45`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.45`：执行 `plan_id` 成功后，会按 PT 下载、订阅或云盘转存 workflow 返回更明确的后续动作模板，方便外部智能体继续追踪状态，而不是只收到通用回执。
 - `AgentResourceOfficer 0.2.44`：统一 `assistant/plan/execute` 的 compact 回执；失败态和执行态现在都会返回稳定的 `write_effect`、`error_code`、`result_summary` 与结果列表摘要，方便外部智能体续接。
 - `AgentResourceOfficer 0.2.43`：调整 `recover` 优先级为业务续接优先于偏好初始化；已有 PT/云盘会话时，恢复入口会先推荐继续当前任务。
 - `AgentResourceOfficer 0.2.42`：补齐 compact `session/recover` 协议里的 `action_templates`；外部智能体读取会话状态或恢复入口时，也能拿到完整的结构化下一步模板。
