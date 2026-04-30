@@ -52,7 +52,7 @@ fi
 if [[ "$SKIP_CHECK" == "1" ]]; then
   bash scripts/verify-release-assets.sh dist
 else
-  bash scripts/pre-release-check.sh
+  bash scripts/release-preflight.sh
 fi
 
 notes_file="$(mktemp)"

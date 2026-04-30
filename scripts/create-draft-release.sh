@@ -12,7 +12,7 @@ Usage:
 Options:
   <tag>         GitHub Release tag, for example v2026.04.28.1
   --dry-run     Run checks and print the release command without creating a release
-  --skip-check  Skip pre-release-check.sh and use existing dist/ files
+  --skip-check  Skip release-preflight.sh and use existing dist/ files
   --help        Show this help
 EOF
 }
@@ -51,7 +51,7 @@ if [ -z "$TAG" ]; then
 fi
 
 if [ "$SKIP_CHECK" -eq 0 ]; then
-  bash scripts/pre-release-check.sh
+  bash scripts/release-preflight.sh
 else
   bash scripts/verify-release-assets.sh dist
 fi
