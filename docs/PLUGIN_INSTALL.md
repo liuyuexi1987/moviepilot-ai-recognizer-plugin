@@ -46,7 +46,7 @@ dist/
 
 - `AIRecoginzerForwarder-2.0.1.zip`
 - `AIRecognizerEnhancer-0.1.11.zip`
-- `AgentResourceOfficer-0.2.47.zip`
+- `AgentResourceOfficer-0.2.48.zip`
 - `FeishuCommandBridgeLong-0.5.26.zip`
 - `HDHiveDailySign-1.0.0.zip`
 - `HdhiveOpenApi-0.3.0.zip`

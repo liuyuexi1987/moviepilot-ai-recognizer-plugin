@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.47"
+    plugin_version = "0.2.48"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -7196,8 +7196,8 @@ class AgentResourceOfficer(_PluginBase):
                 "last_action": self._clean_text(last_result.get("action")),
                 "last_message_head": self._clean_text(last_result.get("message_head")),
             },
-            "recommended_action": self._clean_text(followup.get("recommended_action")),
-            "follow_up_hint": self._clean_text(followup.get("follow_up_hint")),
+            "recommended_action": self._clean_text(data.get("recommended_action")) or self._clean_text(followup.get("recommended_action")),
+            "follow_up_hint": self._clean_text(data.get("follow_up_hint")) or self._clean_text(followup.get("follow_up_hint")),
             "next_actions": self._assistant_compact_next_actions(
                 followup.get("next_actions"),
                 data.get("next_actions") or session_state.get("suggested_actions") or [],
@@ -14182,11 +14182,39 @@ class AgentResourceOfficer(_PluginBase):
             "plan_executed_at": executed_at,
             "plan_executed_at_text": plan.get("executed_at_text"),
         })
+        followup = self._assistant_plan_execute_followup(
+            workflow=workflow_name,
+            session=session,
+            session_id=session_id,
+            session_state=data.get("session_state") if isinstance(data.get("session_state"), dict) else {},
+            ok=bool(action_result.get("success")),
+        )
+        data["recommended_action"] = self._clean_text(data.get("recommended_action")) or self._clean_text(followup.get("recommended_action"))
+        data["follow_up_hint"] = self._clean_text(data.get("follow_up_hint")) or self._clean_text(followup.get("follow_up_hint"))
+        data["next_actions"] = self._assistant_compact_next_actions(
+            followup.get("next_actions"),
+            data.get("next_actions") or [],
+        )
+        data["action_templates"] = self._assistant_compact_action_templates(
+            templates=[
+                *(followup.get("action_templates") or []),
+                *(data.get("action_templates") or []),
+            ],
+            limit=6,
+        )
         if not compact:
             data["workflow_actions"] = actions
+        message_lines = [
+            f"计划 {plan_id} 执行完成",
+            self._clean_text(action_result.get("message")),
+        ]
+        if data.get("recommended_action"):
+            message_lines.append(f"推荐动作：{data.get('recommended_action')}")
+        if data.get("follow_up_hint"):
+            message_lines.append(f"下一步：{data.get('follow_up_hint')}")
         result = {
             "success": bool(action_result.get("success")),
-            "message": f"计划 {plan_id} 执行完成\n{action_result.get('message') or ''}".strip(),
+            "message": "\n".join(line for line in message_lines if line).strip(),
             "data": data,
         }
         return self._assistant_plan_execute_compact_response(result) if compact else result
