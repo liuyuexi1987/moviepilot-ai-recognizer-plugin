@@ -129,6 +129,16 @@ def recover(base_url: str, api_key: str, session: str) -> dict:
     )
 
 
+def plan_execute(base_url: str, api_key: str, session: str, plan_id: str) -> dict:
+    return request(
+        base_url,
+        api_key,
+        "POST",
+        "/api/v1/plugin/AgentResourceOfficer/assistant/plan/execute",
+        body={"session": session, "plan_id": plan_id, "compact": True},
+    )
+
+
 def session_state(base_url: str, api_key: str, session: str) -> dict:
     return request(
         base_url,
@@ -371,6 +381,23 @@ def main() -> int:
                 (mp_recover_after_plan_data.get("recovery") or {}).get("mode") == "resume_saved_plan"
                 and (mp_recover_after_plan_data.get("recovery") or {}).get("recommended_action") == "execute_latest_plan",
                 json.dumps(mp_recover_after_plan_data.get("recovery") or {}, ensure_ascii=False),
+            )
+            missing_plan_execute = plan_execute(base_url, api_key, sessions[1], "plan-does-not-exist")
+            missing_plan_execute_data = data(missing_plan_execute)
+            assert_ok(
+                "route_plan_execute_missing_compact",
+                missing_plan_execute.get("success") is False
+                and missing_plan_execute_data.get("action") == "execute_plan"
+                and missing_plan_execute_data.get("write_effect") == "write"
+                and missing_plan_execute_data.get("error_code") == "plan_not_found"
+                and isinstance(missing_plan_execute_data.get("result_summary"), dict),
+                json.dumps({
+                    "success": missing_plan_execute.get("success"),
+                    "action": missing_plan_execute_data.get("action"),
+                    "write_effect": missing_plan_execute_data.get("write_effect"),
+                    "error_code": missing_plan_execute_data.get("error_code"),
+                    "result_summary": missing_plan_execute_data.get("result_summary"),
+                }, ensure_ascii=False),
             )
             workflow_download_control_missing = workflow(
                 base_url,

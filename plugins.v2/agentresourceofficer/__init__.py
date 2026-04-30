@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.43"
+    plugin_version = "0.2.44"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -6979,11 +6979,9 @@ class AgentResourceOfficer(_PluginBase):
             "action_templates": templates,
         }
 
-    def _assistant_actions_compact_data(self, actions_data: Dict[str, Any]) -> Dict[str, Any]:
-        data = dict(actions_data or {})
-        session_state = dict(data.get("session_state") or {})
+    def _assistant_compact_action_results(self, rows: Any) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
-        for item in data.get("results") or []:
+        for item in rows or []:
             if not isinstance(item, dict):
                 continue
             results.append({
@@ -7000,6 +6998,12 @@ class AgentResourceOfficer(_PluginBase):
                 "has_pending_p115": bool(item.get("has_pending_p115")),
                 "next_actions": item.get("next_actions") or [],
             })
+        return results
+
+    def _assistant_actions_compact_data(self, actions_data: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(actions_data or {})
+        session_state = dict(data.get("session_state") or {})
+        results = self._assistant_compact_action_results(data.get("results"))
         payload = {
             "protocol_version": "assistant.v1",
             "action": self._clean_text(data.get("action")) or "execute_actions",
@@ -7021,6 +7025,57 @@ class AgentResourceOfficer(_PluginBase):
         if isinstance(data.get("score_summary"), dict):
             payload["score_summary"] = data.get("score_summary")
         return payload
+
+    def _assistant_plan_execute_compact_response(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        response = dict(result or {})
+        data = dict(response.get("data") or {})
+        session_state = dict(data.get("session_state") or {})
+        results = self._assistant_compact_action_results(data.get("results"))
+        success_count = len([item for item in results if item.get("success")])
+        last_result = results[-1] if results else {}
+        payload = {
+            "protocol_version": "assistant.v1",
+            "action": "execute_plan",
+            "ok": bool(data.get("ok")) if "ok" in data else bool(response.get("success")),
+            "compact": True,
+            "write_effect": data.get("write_effect") or "write",
+            "error_code": self._clean_text(data.get("error_code")) or ("" if response.get("success") else "assistant_error"),
+            "session": self._clean_text(data.get("session") or session_state.get("session")) or "default",
+            "session_id": self._clean_text(data.get("session_id") or session_state.get("session_id")),
+            "message_head": self._assistant_result_message_head(response.get("message")),
+            "plan_id": self._clean_text(data.get("plan_id")),
+            "workflow": self._clean_text(data.get("workflow")),
+            "plan_auto_selected": bool(data.get("plan_auto_selected")),
+            "plan_created_at": data.get("plan_created_at"),
+            "plan_created_at_text": data.get("plan_created_at_text"),
+            "plan_executed_at": data.get("plan_executed_at"),
+            "plan_executed_at_text": data.get("plan_executed_at_text"),
+            "executed_count": data.get("executed_count") or len(results),
+            "requested_count": data.get("requested_count") or len(results),
+            "stopped_on_error": bool(data.get("stopped_on_error")),
+            "halted_at": data.get("halted_at") or 0,
+            "results": results,
+            "result_summary": {
+                "success_count": success_count,
+                "failure_count": max(len(results) - success_count, 0),
+                "last_action": self._clean_text(last_result.get("action")),
+                "last_message_head": self._clean_text(last_result.get("message_head")),
+            },
+            "next_actions": data.get("next_actions") or session_state.get("suggested_actions") or [],
+            "action_templates": data.get("action_templates") or [],
+        }
+        if isinstance(data.get("preference_status"), dict):
+            payload["preference_status"] = data.get("preference_status")
+            payload["needs_onboarding"] = bool(data["preference_status"].get("needs_onboarding"))
+        if isinstance(data.get("score_summary"), dict):
+            payload["score_summary"] = data.get("score_summary")
+        if isinstance(data.get("recovery"), dict):
+            payload["recovery"] = data.get("recovery")
+        return {
+            "success": bool(response.get("success")),
+            "message": response.get("message") or "",
+            "data": payload,
+        }
 
     def _assistant_single_action_compact_response(self, name: str, result: Dict[str, Any]) -> Dict[str, Any]:
         response = dict(result or {})
@@ -13866,31 +13921,22 @@ class AgentResourceOfficer(_PluginBase):
                 executed=None,
             )
         if not plan:
-            if plan_id:
-                return {
-                    "success": False,
-                    "message": f"计划不存在或已过期：{plan_id}",
-                    "data": self._assistant_response_data(session=session or "default", data={
-                        "action": "execute_plan",
-                        "ok": False,
-                        "plan_id": plan_id,
-                        "error_code": "plan_not_found",
-                    }),
-                }
-            return {
+            result = {
                 "success": False,
-                "message": "没有匹配到可执行计划，请先生成 dry_run 计划或改传 plan_id。",
+                "message": f"计划不存在或已过期：{plan_id}" if plan_id else "没有匹配到可执行计划，请先生成 dry_run 计划或改传 plan_id。",
                 "data": self._assistant_response_data(session=session or "default", data={
                     "action": "execute_plan",
                     "ok": False,
+                    "plan_id": plan_id,
                     "error_code": "plan_not_found",
                 }),
             }
+            return self._assistant_plan_execute_compact_response(result) if compact else result
         plan_id = self._clean_text(plan.get("plan_id"))
 
         actions = plan.get("actions") or []
         if not isinstance(actions, list) or not actions:
-            return {
+            result = {
                 "success": False,
                 "message": f"计划没有可执行动作：{plan_id}",
                 "data": self._assistant_response_data(session=session or "default", data={
@@ -13900,11 +13946,12 @@ class AgentResourceOfficer(_PluginBase):
                     "error_code": "plan_has_no_actions",
                 }),
             }
+            return self._assistant_plan_execute_compact_response(result) if compact else result
 
         workflow_name = self._clean_text(plan.get("workflow")) or "saved_plan"
         session = self._clean_text(plan.get("session")) or "default"
         session_id = self._clean_text(plan.get("session_id"))
-        result = await self.api_assistant_actions(
+        action_result = await self.api_assistant_actions(
             _JsonRequestShim(
                 request,
                 {
@@ -13915,7 +13962,7 @@ class AgentResourceOfficer(_PluginBase):
                     "execute": True,
                     "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
                     "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
-                    "compact": compact,
+                    "compact": False,
                     "apikey": self._extract_apikey(request, body),
                 },
             )
@@ -13926,13 +13973,13 @@ class AgentResourceOfficer(_PluginBase):
             "executed": True,
             "executed_at": executed_at,
             "executed_at_text": self._format_unix_time(executed_at),
-            "last_success": bool(result.get("success")),
-            "last_message": self._assistant_result_message_head(result.get("message")),
+            "last_success": bool(action_result.get("success")),
+            "last_message": self._assistant_result_message_head(action_result.get("message")),
         })
         self._workflow_plans[plan_id] = plan
         self._persist_workflow_plans()
 
-        data = dict(result.get("data") or {})
+        data = dict(action_result.get("data") or {})
         data.update({
             "action": "execute_plan",
             "plan_id": plan_id,
@@ -13945,11 +13992,12 @@ class AgentResourceOfficer(_PluginBase):
         })
         if not compact:
             data["workflow_actions"] = actions
-        return {
-            "success": bool(result.get("success")),
-            "message": f"计划 {plan_id} 执行完成\n{result.get('message') or ''}".strip(),
+        result = {
+            "success": bool(action_result.get("success")),
+            "message": f"计划 {plan_id} 执行完成\n{action_result.get('message') or ''}".strip(),
             "data": data,
         }
+        return self._assistant_plan_execute_compact_response(result) if compact else result
 
     async def api_assistant_pick(self, request: Request):
         body = await request.json()
