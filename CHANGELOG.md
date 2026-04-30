@@ -14,7 +14,7 @@
 
 - `AIRecoginzerForwarder`: `2.0.1`
 - `AIRecognizerEnhancer`: `0.1.11`
-- `AgentResourceOfficer`: `0.2.34`
+- `AgentResourceOfficer`: `0.2.35`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `HDHiveDailySign`: `1.0.0`
@@ -23,6 +23,7 @@
 
 ## 近期基础设施更新
 
+- `AgentResourceOfficer 0.2.35`：修正 MP 推荐回退过滤；`热门电影`、`热门电视剧` 在回退到 `tmdb_trending` 时仍保留电影/电视剧类型，不再混入另一类结果。
 - `AgentResourceOfficer 0.2.34`：修正 MP 原生搜索结果的下载提示；明确“下载资源 序号”会先生成下载计划，不会静默下载。
 - `AgentResourceOfficer 0.2.33`：统一 MP 原生命令前缀解析；`下载历史蜘蛛侠`、`追踪蜘蛛侠`、`入库失败蜘蛛侠`、`暂停订阅1` 等无空格/冒号写法不再误落到资源搜索。
 - `AgentResourceOfficer 0.2.32`：修复订阅列表自然语言解析；`订阅列表 蜘蛛侠`、`订阅列表：蜘蛛侠`、`订阅列表蜘蛛侠` 现在稳定走只读查询，不会被通用“订阅”写入计划覆盖。

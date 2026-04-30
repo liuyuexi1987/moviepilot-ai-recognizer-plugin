@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.34"
+    plugin_version = "0.2.35"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4653,7 +4653,13 @@ class AgentResourceOfficer(_PluginBase):
                     item_type = raw_item.get("type")
                     if current_media_type != "all":
                         enum_type = MediaType.from_agent(current_media_type)
-                        if enum_type and item_type != enum_type:
+                        agent_type = media_type_to_agent(item_type)
+                        expected_types = {current_media_type}
+                        if current_media_type == "movie":
+                            expected_types.add("电影")
+                        elif current_media_type == "tv":
+                            expected_types.update({"电视剧", "剧集"})
+                        if enum_type and item_type != enum_type and agent_type not in expected_types:
                             continue
                     collected.append({
                         "index": len(collected) + 1,
@@ -4699,7 +4705,8 @@ class AgentResourceOfficer(_PluginBase):
             fallback_source = ""
             if not items and source_name != "tmdb_trending":
                 fallback_source = "tmdb_trending"
-                items = collect_items(await chain.async_tmdb_trending(page=1), "all")
+                fallback_media_type = media_type_name if media_type_name in {"movie", "tv"} else "all"
+                items = collect_items(await chain.async_tmdb_trending(page=1), fallback_media_type)
             display_source = fallback_source or source_name
             lines = [f"MP 热门推荐：{display_source}，共 {len(items)} 条"]
             if fallback_source:
