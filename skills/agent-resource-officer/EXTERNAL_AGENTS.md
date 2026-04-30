@@ -8,6 +8,13 @@
 https://github.com/liuyuexi1987/MoviePilot-Plugins
 ```
 
+## 当前接入状态
+
+- 当前插件版本：`Agent影视助手 0.2.66`
+- 当前 helper 版本：`agent-resource-officer 0.1.39`
+- 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
+- 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
+
 给外部智能体学习时，建议让它先读仓库中的：
 
 - `skills/agent-resource-officer/SKILL.md`
@@ -78,6 +85,15 @@ MP_API_TOKEN=你的 MoviePilot API_TOKEN
 - `docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`
 
 跨机器时，外部智能体的用法不变，主要变化只是 `BASE_URL` 和旁路服务地址的可达性配置。
+
+如果你只想最低成本接入，不要先读完整说明，先执行：
+
+```bash
+python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py readiness
+python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agent
+```
+
+然后按 `external-agent` 输出里的 `execution_policy_contract`、`execution_loop_contract` 和 `entry_playbooks` 接入。
 
 ## 从仓库安装 Skill
 
