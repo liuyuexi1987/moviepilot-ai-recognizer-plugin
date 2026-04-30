@@ -36,25 +36,29 @@ def local_branches() -> list[str]:
     return [branch.strip() for branch in output.splitlines() if branch.strip() and branch.strip() != "main"]
 
 
-def pr_map() -> dict[str, dict]:
-    output = run(
-        "gh",
-        "pr",
-        "list",
-        "--state",
-        "all",
-        "--limit",
-        "100",
-        "--json",
-        "number,state,headRefName,baseRefName,title",
-    )
+def pr_map() -> tuple[dict[str, dict], str]:
+    try:
+        output = run(
+            "gh",
+            "pr",
+            "list",
+            "--state",
+            "all",
+            "--limit",
+            "100",
+            "--json",
+            "number,state,headRefName,baseRefName,title",
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return {}, "unavailable"
+
     items = json.loads(output)
     mapping = {}
     for item in items:
         head = item.get("headRefName")
         if head:
             mapping[head] = item
-    return mapping
+    return mapping, "ok"
 
 
 def is_ancestor(branch: str) -> bool:
@@ -95,7 +99,7 @@ def local_recommendation(*, has_remote: bool, has_pr: bool, pr_state: str | None
 
 
 def main() -> int:
-    prs = pr_map()
+    prs, pr_lookup = pr_map()
     remotes = remote_branches()
     locals_ = local_branches()
     remote_set = set(remotes)
@@ -148,7 +152,17 @@ def main() -> int:
             }
         )
 
-    print(json.dumps({"remote_branches": remote_rows, "local_branches": local_rows}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "pr_lookup": pr_lookup,
+                "remote_branches": remote_rows,
+                "local_branches": local_rows,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 

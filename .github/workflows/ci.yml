@@ -13,13 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install packaging tools
         run: sudo apt-get update && sudo apt-get install -y zip rsync
       - name: Run release checks
-        run: bash scripts/pre-release-check.sh
+        run: bash scripts/release-preflight.sh
       - name: Upload release asset artifacts
         uses: actions/upload-artifact@v7
         with:
