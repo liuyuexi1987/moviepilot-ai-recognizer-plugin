@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -50,8 +51,24 @@ def request(base_url: str, api_key: str, method: str, path: str, body: dict | No
         payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=payload, method=method.upper(), headers=headers)
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        raw = resp.read().decode("utf-8")
+    last_error = None
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                raw = resp.read().decode("utf-8")
+            break
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code not in {502, 503, 504} or attempt >= 5:
+                raise
+            time.sleep(2)
+        except urllib.error.URLError as exc:
+            last_error = exc
+            if attempt >= 5:
+                raise
+            time.sleep(2)
+    else:
+        raise last_error or RuntimeError("request failed without response")
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
