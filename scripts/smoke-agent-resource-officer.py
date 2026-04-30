@@ -424,6 +424,14 @@ def main() -> int:
                 and "start_mp_subscribe" in subscribe_templates,
                 json.dumps(subscribe_templates, ensure_ascii=False),
             )
+            subscribe_recover = recover(base_url, api_key, sessions[4])
+            subscribe_recover_data = data(subscribe_recover)
+            assert_ok(
+                "route_subscribe_recover_priority",
+                (subscribe_recover_data.get("recovery") or {}).get("mode") == "continue_mp_subscribes"
+                and (subscribe_recover_data.get("recovery") or {}).get("recommended_action") == "start_mp_subscribe",
+                json.dumps(subscribe_recover_data.get("recovery") or {}, ensure_ascii=False),
+            )
             subscribe_control_missing = route(base_url, api_key, sessions[4], "搜索订阅 1")
             subscribe_control_missing_data = data(subscribe_control_missing)
             assert_ok(
@@ -465,10 +473,26 @@ def main() -> int:
             )
 
             download_history = route(base_url, api_key, sessions[4], f"下载历史{args.keyword}")
-            assert_route_action("route_download_history_compact", download_history, "mp_download_history")
+            download_history_data = assert_route_action("route_download_history_compact", download_history, "mp_download_history")
+            download_history_recover = recover(base_url, api_key, sessions[4])
+            download_history_recover_data = data(download_history_recover)
+            assert_ok(
+                "route_download_history_recover_priority",
+                (download_history_recover_data.get("recovery") or {}).get("mode") == "continue_mp_download_history"
+                and (download_history_recover_data.get("recovery") or {}).get("recommended_action") == "query_mp_lifecycle_status",
+                json.dumps(download_history_recover_data.get("recovery") or {}, ensure_ascii=False),
+            )
 
             lifecycle = route(base_url, api_key, sessions[4], f"追踪{args.keyword}")
-            assert_route_action("route_lifecycle_compact", lifecycle, "mp_lifecycle_status")
+            lifecycle_data = assert_route_action("route_lifecycle_compact", lifecycle, "mp_lifecycle_status")
+            lifecycle_recover = recover(base_url, api_key, sessions[4])
+            lifecycle_recover_data = data(lifecycle_recover)
+            assert_ok(
+                "route_lifecycle_recover_priority",
+                (lifecycle_recover_data.get("recovery") or {}).get("mode") == "continue_mp_lifecycle_status"
+                and (lifecycle_recover_data.get("recovery") or {}).get("recommended_action") == "query_mp_download_history",
+                json.dumps(lifecycle_recover_data.get("recovery") or {}, ensure_ascii=False),
+            )
 
             transfer_failed = route(base_url, api_key, sessions[4], f"入库失败{args.keyword}")
             assert_route_action("route_transfer_failed_compact", transfer_failed, "mp_transfer_history")
