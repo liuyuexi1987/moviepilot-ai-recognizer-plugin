@@ -104,13 +104,13 @@ gh run list --limit 3
 如需在本地下载并校验最近一次成功 `Release Preflight` artifact：
 
 ```bash
-bash scripts/verify-ci-artifact.sh
+bash scripts/verify-release-preflight-artifact.sh
 ```
 
 也可以指定 run id：
 
 ```bash
-bash scripts/verify-ci-artifact.sh 25017759143
+bash scripts/verify-release-preflight-artifact.sh 25017759143
 ```
 
 如果已经从 GitHub Release 页面下载了全部附件，也可以直接校验下载目录：
