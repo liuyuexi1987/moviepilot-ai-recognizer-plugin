@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.38"
+    plugin_version = "0.2.39"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -4108,6 +4108,17 @@ class AgentResourceOfficer(_PluginBase):
                     "action": "mp_download_control",
                     "ok": False,
                     "error_code": "invalid_download_control_args",
+                }),
+            }
+        if not self._resolve_mp_download_task_target(target=target, cache_key=cache_key):
+            return {
+                "success": False,
+                "message": "未找到可操作的下载任务。请先发送“下载任务”获取列表，再按编号操作；也可以直接传 40 位任务 hash。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "mp_download_control",
+                    "ok": False,
+                    "error_code": "download_target_not_found",
+                    "target": target,
                 }),
             }
         downloader = self._clean_text(downloader)
@@ -13446,6 +13457,32 @@ class AgentResourceOfficer(_PluginBase):
             self._clean_text(workflow_name).lower() in write_workflows,
         )
         if dry_run:
+            if workflow_name == "mp_download_control":
+                control = self._clean_text(body.get("control") or body.get("download_control") or body.get("operation"))
+                target = self._clean_text(body.get("target") or body.get("hash") or body.get("index") or body.get("choice"))
+                result = self._assistant_mp_download_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session,
+                    cache_key=self._clean_text(body.get("session_id")),
+                    downloader=self._clean_text(body.get("downloader")),
+                    delete_files=self._parse_bool_value(body.get("delete_files"), False),
+                )
+                if not result.get("success"):
+                    return result
+            if workflow_name == "mp_subscribe_control":
+                control = self._clean_text(body.get("control") or body.get("subscribe_control") or body.get("operation"))
+                target = self._clean_text(body.get("target") or body.get("subscribe_id") or body.get("index") or body.get("choice"))
+                allow_raw_id = self._parse_bool_value(body.get("allow_raw_id"), False)
+                result = self._assistant_mp_subscribe_control_plan_response(
+                    control=control,
+                    target=target,
+                    session=session,
+                    cache_key=self._clean_text(body.get("session_id")),
+                    allow_raw_id=allow_raw_id,
+                )
+                if not result.get("success"):
+                    return result
             execute_body = {
                 **{key: value for key, value in body.items() if key not in {"apikey", "dry_run"}},
                 "dry_run": False,

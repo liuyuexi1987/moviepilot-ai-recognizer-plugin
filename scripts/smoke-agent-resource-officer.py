@@ -102,6 +102,18 @@ def route(base_url: str, api_key: str, session: str, text: str) -> dict:
     )
 
 
+def workflow(base_url: str, api_key: str, session: str, workflow_name: str, **kwargs) -> dict:
+    body = {"session": session, "workflow": workflow_name, "compact": True}
+    body.update(kwargs)
+    return request(
+        base_url,
+        api_key,
+        "POST",
+        "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+        body=body,
+    )
+
+
 def request_templates(base_url: str, api_key: str, recipe: str) -> dict:
     return request(
         base_url,
@@ -251,6 +263,29 @@ def main() -> int:
                 bool(mp_best_download_data.get("plan_id")) and mp_best_download_data.get("workflow") == "mp_best_download",
                 json.dumps(mp_best_download_data, ensure_ascii=False)[:240],
             )
+            workflow_download_control_missing = workflow(
+                base_url,
+                api_key,
+                sessions[1],
+                "mp_download_control",
+                control="pause",
+                target="1",
+            )
+            workflow_download_control_missing_data = data(workflow_download_control_missing)
+            assert_ok(
+                "workflow_download_control_requires_task_item",
+                workflow_download_control_missing.get("success") is False
+                and workflow_download_control_missing_data.get("action") == "mp_download_control"
+                and workflow_download_control_missing_data.get("error_code") == "download_target_not_found"
+                and not workflow_download_control_missing_data.get("plan_id"),
+                json.dumps({
+                    "success": workflow_download_control_missing.get("success"),
+                    "action": workflow_download_control_missing_data.get("action"),
+                    "error_code": workflow_download_control_missing_data.get("error_code"),
+                    "plan_id": workflow_download_control_missing_data.get("plan_id"),
+                    "message": message_text(workflow_download_control_missing)[:160],
+                }, ensure_ascii=False),
+            )
 
             pansou = route(base_url, api_key, sessions[2], f"ps{args.pansou_keyword}")
             assert_route_action("route_pansou_alias", pansou, "pansou_search")
@@ -275,6 +310,29 @@ def main() -> int:
                     "error_code": subscribe_control_missing_data.get("error_code"),
                     "plan_id": subscribe_control_missing_data.get("plan_id"),
                     "message": message_text(subscribe_control_missing)[:160],
+                }, ensure_ascii=False),
+            )
+            workflow_subscribe_control_missing = workflow(
+                base_url,
+                api_key,
+                sessions[4],
+                "mp_subscribe_control",
+                control="search",
+                target="1",
+            )
+            workflow_subscribe_control_missing_data = data(workflow_subscribe_control_missing)
+            assert_ok(
+                "workflow_subscribe_control_requires_list_item",
+                workflow_subscribe_control_missing.get("success") is False
+                and workflow_subscribe_control_missing_data.get("action") == "mp_subscribe_control"
+                and workflow_subscribe_control_missing_data.get("error_code") == "subscribe_target_not_found"
+                and not workflow_subscribe_control_missing_data.get("plan_id"),
+                json.dumps({
+                    "success": workflow_subscribe_control_missing.get("success"),
+                    "action": workflow_subscribe_control_missing_data.get("action"),
+                    "error_code": workflow_subscribe_control_missing_data.get("error_code"),
+                    "plan_id": workflow_subscribe_control_missing_data.get("plan_id"),
+                    "message": message_text(workflow_subscribe_control_missing)[:160],
                 }, ensure_ascii=False),
             )
 
