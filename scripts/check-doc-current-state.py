@@ -76,6 +76,11 @@ checks = {
         f"当前插件版本：`Agent影视助手 {plugin_version}`",
         f"当前 helper 版本：`agent-resource-officer {helper_version}`",
     ],
+    "docs/MAINTENANCE_COMMANDS.md": [
+        f"当前插件版本：`AgentResourceOfficer {plugin_version}`",
+        f"当前 Skill helper 版本：`{helper_version}`",
+        release_url,
+    ],
     "skills/agent-resource-officer/README.md": [
         f"当前 helper 版本：`{helper_version}`",
         f"当前插件版本：`Agent影视助手 {plugin_version}`",

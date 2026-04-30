@@ -2,6 +2,12 @@
 
 这份文档只列当前常用的仓库维护与发布命令，不解释历史方案。
 
+## 当前状态
+
+- 当前插件版本：`AgentResourceOfficer 0.2.67`
+- 当前 Skill helper 版本：`0.1.40`
+- 当前 Release：<https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.67>
+
 ## 最常用入口
 
 - 仓库卫生检查：
