@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制 115 云盘、夸克云盘等云盘资源工作流。
 
-当前 helper 版本：`0.1.26`
+当前 helper 版本：`0.1.27`
 
 公开仓库：
 
@@ -83,6 +83,7 @@ python3 scripts/aro_request.py doctor --summary-only
 python3 scripts/aro_request.py feishu-health
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py followup --session agent:<用户ID>
+python3 scripts/aro_request.py templates --recipe followup --compact
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands

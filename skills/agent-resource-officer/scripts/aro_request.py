@@ -12,7 +12,7 @@ CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.26"
+HELPER_VERSION = "0.1.27"
 HELPER_COMMANDS = [
     "auto",
     "commands",
@@ -165,6 +165,7 @@ def external_agent_payload():
         "recipe_command": "python3 scripts/aro_request.py templates --recipe external_agent --compact",
         "mp_pt_recipe_command": "python3 scripts/aro_request.py templates --recipe mp_pt --compact",
         "mp_recommend_recipe_command": "python3 scripts/aro_request.py templates --recipe recommend --compact",
+        "post_execute_recipe_command": "python3 scripts/aro_request.py templates --recipe followup --compact",
         "startup_command": "python3 scripts/aro_request.py startup",
         "route_command": "python3 scripts/aro_request.py route '<用户原始指令>' --session 'agent:<会话ID>'",
         "pick_command": "python3 scripts/aro_request.py pick <编号> --session 'agent:<会话ID>'",
@@ -448,6 +449,8 @@ def recipe_helper_commands(recipe_summary, recipe_request):
         execute = "python3 scripts/aro_request.py maintain --execute"
     elif first_template == "saved_plan_execute":
         execute = "python3 scripts/aro_request.py plan-execute"
+    elif first_template == "execution_followup":
+        execute = "python3 scripts/aro_request.py followup"
     elif first_template == "pick_continue":
         execute = "python3 scripts/aro_request.py recover --execute"
     elif first_template == "workflow_dry_run":
@@ -667,6 +670,7 @@ def selftest_result():
     check("external_agent_payload_has_followup", bool(external_agent.get("followup_command")))
     check("external_agent_payload_has_mp_pt_recipe", bool(external_agent.get("mp_pt_recipe_command")))
     check("external_agent_payload_has_mp_recommend_recipe", bool(external_agent.get("mp_recommend_recipe_command")))
+    check("external_agent_payload_has_post_execute_recipe", bool(external_agent.get("post_execute_recipe_command")))
 
     catalog = commands_catalog()
     catalog_commands = catalog.get("commands") or []

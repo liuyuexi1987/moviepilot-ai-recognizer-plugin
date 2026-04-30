@@ -115,7 +115,7 @@ class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
     plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
-    plugin_version = "0.2.50"
+    plugin_version = "0.2.51"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
     author_url = "https://github.com/liuyuexi1987"
@@ -9093,6 +9093,26 @@ class AgentResourceOfficer(_PluginBase):
                     "compact": True,
                 },
             },
+            "execution_followup": {
+                "description": "按最近已执行计划自动追踪下载、订阅或入库后续状态，由插件决定先查哪个只读动作。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 60,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                "tool": "agent_resource_officer_execute_action",
+                "tool_args": {
+                    "name": "query_execution_followup",
+                    "session": "assistant",
+                    "compact": True,
+                },
+                "body": {
+                    "name": "query_execution_followup",
+                    "session": "assistant",
+                    "compact": True,
+                },
+            },
             "action_execute": {
                 "description": "按动作名执行单个 action template，适合无映射继续执行。",
                 "side_effect": "depends_on_action",
@@ -9178,6 +9198,7 @@ class AgentResourceOfficer(_PluginBase):
         recipe_templates_map = {
             "safe_bootstrap": ["startup_probe", "selfcheck_probe", "maintain_preview"],
             "plan_then_confirm": ["workflow_dry_run", "saved_plan_execute"],
+            "post_execute_followup": ["execution_followup", "mp_download_history", "mp_lifecycle_status", "mp_subscribes", "mp_transfer_history"],
             "continue_existing_session": ["pick_continue"],
             "maintenance_cycle": ["maintain_preview", "maintain_execute"],
             "external_agent_quickstart": ["startup_probe", "route_text", "pick_continue"],
@@ -9220,6 +9241,14 @@ class AgentResourceOfficer(_PluginBase):
             "dry_run": "plan_then_confirm",
             "confirm": "plan_then_confirm",
             "计划": "plan_then_confirm",
+            "followup": "post_execute_followup",
+            "post_execute": "post_execute_followup",
+            "post-execute": "post_execute_followup",
+            "after_execute": "post_execute_followup",
+            "after-execute": "post_execute_followup",
+            "执行后": "post_execute_followup",
+            "执行后追踪": "post_execute_followup",
+            "后续追踪": "post_execute_followup",
             "continue": "continue_existing_session",
             "pick": "continue_existing_session",
             "resume": "continue_existing_session",
@@ -9328,6 +9357,11 @@ class AgentResourceOfficer(_PluginBase):
                 "when": "已确认 dry_run 计划后执行。",
             },
             {
+                "step": "post_execute_followup",
+                "template": "execution_followup",
+                "when": "计划执行成功后，自动决定先查下载历史、生命周期、订阅或入库历史。",
+            },
+            {
                 "step": "continue_session",
                 "template": "pick_continue",
                 "when": "盘搜、影巢候选或资源列表需要按编号继续时使用。",
@@ -9353,6 +9387,11 @@ class AgentResourceOfficer(_PluginBase):
                 "name": "plan_then_confirm",
                 "description": "先生成计划，等待用户确认后再执行保存计划。",
                 "templates": recipe_templates_map["plan_then_confirm"],
+            },
+            {
+                "name": "post_execute_followup",
+                "description": "执行计划后的统一只读跟踪：由插件自动选择最合适的后续查询动作。",
+                "templates": recipe_templates_map["post_execute_followup"],
             },
             {
                 "name": "continue_existing_session",

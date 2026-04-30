@@ -312,6 +312,22 @@ def main() -> int:
             ),
             str(mp_recommend_templates.get("message") or ""),
         )
+        followup_templates = request_templates(base_url, api_key, "followup")
+        followup_templates_data = data(followup_templates)
+        followup_names = followup_templates_data.get("selected_names") or []
+        assert_ok(
+            "followup_request_templates",
+            bool(
+                followup_templates.get("success")
+                and followup_templates_data.get("ok")
+                and followup_templates_data.get("selected_recipe") == "post_execute_followup"
+                and "execution_followup" in followup_names
+                and "mp_download_history" in followup_names
+                and "mp_lifecycle_status" in followup_names
+                and "mp_transfer_history" in followup_names
+            ),
+            str(followup_templates.get("message") or ""),
+        )
 
         status = route(base_url, api_key, sessions[0], "115状态")
         assert_route_action("route_115_status", status, "p115_status")

@@ -289,6 +289,7 @@ python3 scripts/aro_request.py session-clear default
 python3 scripts/aro_request.py sessions-clear --has-pending-p115 --limit 10
 python3 scripts/aro_request.py recover
 python3 scripts/aro_request.py recover --execute
+python3 scripts/aro_request.py templates --recipe followup --compact
 python3 scripts/aro_request.py history --limit 10
 python3 scripts/aro_request.py history agent:demo
 python3 scripts/aro_request.py plans --limit 10

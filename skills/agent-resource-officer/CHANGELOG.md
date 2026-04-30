@@ -1,5 +1,11 @@
 # agent-resource-officer changelog
 
+## 0.1.27
+
+- Added `post_execute_recipe_command` to the external-agent payload.
+- Taught recipe command generation that `execution_followup` maps to `python3 scripts/aro_request.py followup`.
+- Documented the `templates --recipe followup` low-token entry for post-execution tracking.
+
 ## 0.1.26
 
 - Added `followup`, a direct helper command for the plugin-owned `query_execution_followup` action.
