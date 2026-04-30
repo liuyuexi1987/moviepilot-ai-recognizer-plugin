@@ -100,6 +100,41 @@ done
 for py_file in "${HELP_PYTHON_SCRIPTS[@]}"; do
   python3 "$py_file" --help >/dev/null
 done
+python3 - <<'PY'
+from pathlib import Path
+
+doc = Path("docs/MAINTENANCE_COMMANDS.md").read_text(encoding="utf-8")
+scripts = [
+    "repo-hygiene.sh",
+    "release-preflight.sh",
+    "pre-release-check.sh",
+    "check-skills.sh",
+    "package-plugin.sh",
+    "sync-repo-layout.sh",
+    "sync-package-v2.sh",
+    "create-draft-release.sh",
+    "update-draft-release-assets.sh",
+    "generate-release-notes.sh",
+    "write-dist-sha256.sh",
+    "patch-p115strmhelper-mp-compat.sh",
+    "verify-release-preflight-artifact.sh",
+    "verify-ci-artifact.sh",
+    "verify-release-download.sh",
+    "verify-release-assets.sh",
+    "verify-dist.sh",
+    "verify-skill-dist.sh",
+    "print-release-summary.sh",
+    "print-skill-release-summary.sh",
+    "check-doc-current-state.py",
+    "audit-remote-branches.py",
+    "archive-local-branches.py",
+]
+missing = [name for name in scripts if f"`{name}`" not in doc]
+if missing:
+    print("docs/MAINTENANCE_COMMANDS.md 缺少帮助脚本清单:")
+    print("\n".join(missing))
+    raise SystemExit(1)
+PY
 echo "script_help_ok"
 grep -Fq 'WORKFLOW_NAME="${WORKFLOW_NAME:-Release Preflight}"' scripts/verify-release-preflight-artifact.sh
 grep -Fq 'WORKFLOW_FILE="${WORKFLOW_FILE:-ci.yml}"' scripts/verify-release-preflight-artifact.sh
