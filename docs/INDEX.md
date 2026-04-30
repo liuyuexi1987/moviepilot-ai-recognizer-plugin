@@ -30,7 +30,9 @@
    `bash scripts/release-preflight.sh`
 3. 再看：
    [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)
-4. 如需当前发版口径：
+4. 如需命令速查：
+   [MAINTENANCE_COMMANDS.md](./MAINTENANCE_COMMANDS.md)
+5. 如需当前发版口径：
    [GITHUB_PUBLISH.md](./GITHUB_PUBLISH.md)
 
 ## 当前有效文档清单
@@ -41,6 +43,7 @@
 - [PACKAGING.md](./PACKAGING.md)
 - [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)
 - [GITHUB_PUBLISH.md](./GITHUB_PUBLISH.md)
+- [MAINTENANCE_COMMANDS.md](./MAINTENANCE_COMMANDS.md)
 
 ## 历史归档文档
 
