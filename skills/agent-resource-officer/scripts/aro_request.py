@@ -493,29 +493,34 @@ def summary_command(summary, confirmed=False):
     auto_run_command = str(summary.get("auto_run_command") or "").strip()
     confirm_command = str(summary.get("confirm_command") or "").strip()
     display_command = str(summary.get("display_command") or "").strip()
+    auto_run_short_command = str(summary.get("auto_run_short_command") or "").strip()
+    confirm_short_command = str(summary.get("confirm_short_command") or "").strip()
+    display_short_command = str(summary.get("display_short_command") or "").strip()
     if explicit_behavior:
         if confirmed and confirm_command:
-            return confirm_command
+            return confirm_short_command or confirm_command
         if explicit_behavior in {"auto_continue", "auto_continue_then_wait_confirmation"} and auto_run_command:
-            return auto_run_command
+            return auto_run_short_command or auto_run_command
         if explicit_behavior == "wait_user_confirmation":
-            return confirm_command or display_command
+            return confirm_short_command or confirm_command or display_short_command or display_command
         if explicit_behavior == "show_only":
-            return display_command or auto_run_command or confirm_command
+            return display_short_command or display_command or auto_run_short_command or auto_run_command or confirm_short_command or confirm_command
         if explicit_behavior == "stop":
             return ""
         if auto_run_command or confirm_command or display_command:
-            return auto_run_command or confirm_command or display_command
+            return auto_run_short_command or auto_run_command or confirm_short_command or confirm_command or display_short_command or display_command
     preferred_command = str(summary.get("preferred_command") or "").strip()
     fallback_command = str(summary.get("fallback_command") or "").strip()
+    preferred_short_command = str(summary.get("preferred_short_command") or "").strip()
+    fallback_short_command = str(summary.get("fallback_short_command") or "").strip()
     preferred_requires_confirmation = bool(summary.get("preferred_requires_confirmation"))
     fallback_requires_confirmation = bool(summary.get("fallback_requires_confirmation"))
     if preferred_command:
         if confirmed and fallback_command and fallback_requires_confirmation:
-            return fallback_command
+            return fallback_short_command or fallback_command
         if not confirmed and preferred_requires_confirmation:
-            return preferred_command
-        return preferred_command
+            return preferred_short_command or preferred_command
+        return preferred_short_command or preferred_command
     if "first_requires_confirmation" in summary:
         requires_confirmation = bool(summary.get("first_requires_confirmation"))
     else:
@@ -546,6 +551,35 @@ def compact_command_summary(output):
     ok = bool(payload.get("ok")) if "ok" in payload else bool(payload.get("success"))
     session = str(payload.get("session") or "").strip()
     session_id = str(payload.get("session_id") or "").strip()
+    detail_short_command = str(payload.get("detail_short_command") or "").strip()
+    plan_short_command = str(payload.get("plan_short_command") or "").strip()
+    confirm_short_command = str(payload.get("confirm_short_command") or "").strip()
+    auto_run_command = str(payload.get("auto_run_command") or "").strip()
+    confirm_command = str(payload.get("confirm_command") or "").strip()
+    display_command = str(payload.get("display_command") or "").strip()
+    auto_run_short_command = detail_short_command if detail_short_command and auto_run_command in {"先看详情", "详情"} else ""
+    display_short_command = detail_short_command if detail_short_command and display_command in {"先看详情", "详情"} else ""
+    confirm_command_map = {
+        "执行最佳": confirm_short_command,
+        "确认执行": confirm_short_command,
+        "计划最佳": plan_short_command,
+        "先计划": plan_short_command,
+    }
+    confirm_short_for_explicit = confirm_command_map.get(confirm_command, "")
+    preferred_short_command = ""
+    fallback_short_command = ""
+    if preferred_command in {"先看详情", "详情"}:
+        preferred_short_command = detail_short_command
+    elif preferred_command in {"计划最佳", "先计划", "计划"}:
+        preferred_short_command = plan_short_command
+    elif preferred_command in {"执行最佳", "确认执行", "确认"}:
+        preferred_short_command = confirm_short_command
+    if fallback_command in {"先看详情", "详情"}:
+        fallback_short_command = detail_short_command
+    elif fallback_command in {"计划最佳", "先计划", "计划"}:
+        fallback_short_command = plan_short_command
+    elif fallback_command in {"执行最佳", "确认执行", "确认"}:
+        fallback_short_command = confirm_short_command
     summary = {
         "success": bool(payload.get("success", ok)),
         "ok": ok,
@@ -558,18 +592,22 @@ def compact_command_summary(output):
         "can_auto_run_preferred": bool(payload.get("can_auto_run_preferred")) if "can_auto_run_preferred" in payload else write_effect != "write",
         "preferred_command": preferred_command or (compact_commands[0] if compact_commands else ""),
         "fallback_command": fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""),
+        "preferred_short_command": preferred_short_command,
+        "fallback_short_command": fallback_short_command,
         "compact_commands": compact_commands[:2],
         "preferred_helper_command": helper_route_command(preferred_command or (compact_commands[0] if compact_commands else ""), session=session, session_id=session_id),
         "fallback_helper_command": helper_route_command(fallback_command or (compact_commands[1] if len(compact_commands) > 1 else ""), session=session, session_id=session_id),
         "requires_confirmation": write_effect == "write",
         "message_head": str(payload.get("message") or payload.get("message_head") or "").strip(),
         "recommended_agent_behavior": str(payload.get("recommended_agent_behavior") or "").strip(),
-        "auto_run_command": str(payload.get("auto_run_command") or "").strip(),
-        "confirm_command": str(payload.get("confirm_command") or "").strip(),
-        "display_command": str(payload.get("display_command") or "").strip(),
-        "detail_short_command": str(payload.get("detail_short_command") or "").strip(),
-        "plan_short_command": str(payload.get("plan_short_command") or "").strip(),
-        "confirm_short_command": str(payload.get("confirm_short_command") or "").strip(),
+        "auto_run_command": auto_run_command,
+        "confirm_command": confirm_command,
+        "display_command": display_command,
+        "auto_run_short_command": auto_run_short_command,
+        "display_short_command": display_short_command,
+        "detail_short_command": detail_short_command,
+        "plan_short_command": plan_short_command,
+        "confirm_short_command": confirm_short_for_explicit or confirm_short_command,
     }
     summary.update(command_execution_policy(summary))
     return summary
@@ -1071,9 +1109,12 @@ def selftest_result():
         "auto_run_command": "先看详情",
         "confirm_command": "执行最佳",
         "display_command": "先看详情",
+        "auto_run_short_command": "详情",
+        "confirm_short_command": "确认",
+        "display_short_command": "详情",
     }
-    check("command_only_prefers_explicit_auto_run_command", summary_command(explicit_summary_command) == "先看详情")
-    check("command_only_confirmed_prefers_explicit_confirm_command", summary_command(explicit_summary_command, confirmed=True) == "执行最佳")
+    check("command_only_prefers_explicit_auto_run_command", summary_command(explicit_summary_command) == "详情")
+    check("command_only_confirmed_prefers_explicit_confirm_command", summary_command(explicit_summary_command, confirmed=True) == "确认")
     explicit_top_level_policy = command_execution_policy({
         "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
         "auto_run_command": "先看详情",
@@ -1220,6 +1261,7 @@ def selftest_result():
     explicit_summary = compact_command_summary(compact_explicit_policy_commands)
     check("compact_command_summary_preserves_explicit_auto_run_command", explicit_summary.get("auto_run_command") == "先看详情" and explicit_summary.get("confirm_command") == "执行最佳")
     check("compact_command_summary_preserves_smart_short_commands", explicit_summary.get("detail_short_command") == "详情" and explicit_summary.get("plan_short_command") == "计划" and explicit_summary.get("confirm_short_command") == "确认")
+    check("compact_command_summary_builds_preferred_short_commands", explicit_summary.get("auto_run_short_command") == "详情" and explicit_summary.get("display_short_command") == "详情")
     compact_clear = compact({
         "success": True,
         "data": {
