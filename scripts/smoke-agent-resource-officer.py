@@ -647,6 +647,26 @@ def main() -> int:
                     "blocked_sources": smart_decision_data.get("blocked_sources"),
                 }, ensure_ascii=False)[:320],
             )
+            smart_decision_preferred = str((smart_decision_data.get("decision_summary") or {}).get("preferred_command") or "")
+            assert_ok(
+                "route_smart_decision_command_policy",
+                (
+                    smart_decision_data.get("command_policy") == "wait_user_confirmation"
+                    and smart_decision_data.get("preferred_requires_confirmation") is True
+                    and smart_decision_data.get("can_auto_run_preferred") is False
+                )
+                if smart_decision_preferred in {"计划最佳", "执行最佳"}
+                else (
+                    smart_decision_data.get("command_policy") == "safe_read_only"
+                    and smart_decision_data.get("preferred_requires_confirmation") is False
+                ),
+                json.dumps({
+                    "preferred_command": smart_decision_preferred,
+                    "command_policy": smart_decision_data.get("command_policy"),
+                    "preferred_requires_confirmation": smart_decision_data.get("preferred_requires_confirmation"),
+                    "can_auto_run_preferred": smart_decision_data.get("can_auto_run_preferred"),
+                }, ensure_ascii=False)[:240],
+            )
             smart_decision_switch = route(base_url, api_key, sessions[1], "换影巢")
             smart_decision_switch_data = assert_route_action("route_smart_decision_switch_hdhive", smart_decision_switch, "smart_resource_decision")
             assert_ok(

@@ -4816,6 +4816,7 @@ class AgentResourceOfficer(_PluginBase):
         source_type = self._clean_text(best_candidate.get("source_type")).lower()
         score_value = self._safe_int(best_candidate.get("score"), 0)
         hard_risks = [self._clean_text(value) for value in (best_candidate.get("hard_risk_reasons") or []) if self._clean_text(value)]
+        write_intent_commands = {"计划最佳", "执行最佳", "确认执行", "先计划"}
         decision_mode = "show_detail"
         confirm_required = False
         decision_reason = ""
@@ -4867,6 +4868,16 @@ class AgentResourceOfficer(_PluginBase):
             confirmation_prompt = "先看详情；如果仍要继续，回复：先计划 或 换影巢 / 换盘搜 / 换PT。"
         if title:
             hint = f"{hint} {title}"
+        preferred_requires_confirmation = preferred_command in write_intent_commands
+        fallback_requires_confirmation = fallback_command in write_intent_commands
+        if preferred_requires_confirmation:
+            command_policy = "wait_user_confirmation"
+            can_auto_run_preferred = False
+            recommended_agent_behavior = "wait_user_confirmation"
+        else:
+            command_policy = "safe_read_only"
+            can_auto_run_preferred = bool(preferred_command)
+            recommended_agent_behavior = "show_only" if decision_mode == "not_recommended" else "auto_continue"
         return {
             "checked_sources": [self._clean_text(item.get("source_type")) for item in checked if self._clean_text(item.get("source_type"))],
             "threshold": threshold,
@@ -4888,11 +4899,15 @@ class AgentResourceOfficer(_PluginBase):
                 for command in [preferred_command, fallback_command, detail_command]
                 if command
             ][:2],
+            "command_policy": command_policy,
+            "preferred_requires_confirmation": preferred_requires_confirmation,
+            "fallback_requires_confirmation": fallback_requires_confirmation,
+            "can_auto_run_preferred": can_auto_run_preferred,
             "available_sources": available_sources or [],
             "blocked_sources": blocked_sources or [],
             "confirm_required": confirm_required,
             "decision_profile": self._clean_text(decision_profile),
-            "recommended_agent_behavior": "show_only",
+            "recommended_agent_behavior": recommended_agent_behavior,
         }
 
     def _assistant_smart_decision_entry_message(
