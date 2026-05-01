@@ -560,6 +560,10 @@ class AgentResourceOfficer(_PluginBase):
         compact = re.sub(r"\s+", "", text)
         if not compact:
             return ""
+        if any(token in compact for token in ["smart_decision", "smartdecision", "智能决策", "资源决策", "决策"]):
+            return "smart_decision"
+        if re.search(r"(^|[^a-z])smart($|[^a-z])", text):
+            return "smart_decision"
         if any(token in compact for token in ["hdhive", "影巢", "影潮", "走影巢", "用影巢"]):
             return "hdhive"
         if re.search(r"(^|[^a-z])yc($|[^a-z])", text):
@@ -8354,8 +8358,8 @@ class AgentResourceOfficer(_PluginBase):
                 lines.append(f"注：{source_name} 当前暂无结果，已自动回退 {fallback_source}。")
             for item in items[:10]:
                 lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
-            lines.append("下一步：回复“选择 1”进入 MP 原生搜索。")
-            lines.append("如果想转去别的源，也可以回复“选择 1 影巢”或“选择 1 盘搜”。")
+            lines.append("下一步：回复“选择 1 决策”进入统一资源决策。")
+            lines.append("如果想走单源，也可以回复“选择 1”进入 MP 原生搜索，或“选择 1 影巢”“选择 1 盘搜”。")
             if cache_key:
                 self._save_session(cache_key, {
                     "kind": "assistant_mp_recommend",
@@ -9090,7 +9094,7 @@ class AgentResourceOfficer(_PluginBase):
         elif has_session and kind == "assistant_mp_recommend":
             mode = "continue_mp_recommend"
             reason = "当前会话停留在 MP 热门推荐列表"
-            template = self._assistant_find_action_template(templates, ["pick_recommend_mp_search"])
+            template = self._assistant_find_action_template(templates, ["pick_recommend_smart_decision", "pick_recommend_mp_search"])
         elif has_session and kind == "assistant_mp_download_tasks":
             mode = "continue_mp_download_tasks"
             reason = "当前会话停留在 MP 下载任务列表"
@@ -10098,6 +10102,13 @@ class AgentResourceOfficer(_PluginBase):
             ])
         elif kind == "assistant_mp_recommend":
             templates.extend([
+                self._assistant_action_template(
+                    name="pick_recommend_smart_decision",
+                    description="按编号选择推荐条目并进入统一资源决策",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "smart_decision"},
+                ),
                 self._assistant_action_template(
                     name="pick_recommend_mp_search",
                     description="按编号选择推荐条目并进入 MP 原生搜索",
@@ -13252,7 +13263,7 @@ class AgentResourceOfficer(_PluginBase):
                 "body": {"workflow": "mp_recommend", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
             },
             "mp_recommend_search": {
-                "description": "读取 MP 原生推荐并按编号继续搜索；mode 可选 mp、hdhive、pansou。",
+                "description": "读取 MP 原生推荐并按编号继续搜索；mode 可选 smart_decision、mp、hdhive、pansou。",
                 "side_effect": "read_only",
                 "requires_confirmation": False,
                 "cache_scope": "session_cache",
@@ -13262,6 +13273,18 @@ class AgentResourceOfficer(_PluginBase):
                 "tool": "agent_resource_officer_run_workflow",
                 "tool_args": {"name": "mp_recommend_search", "source": "tmdb_trending", "choice": 1, "mode": "mp", "limit": 20, "session": "assistant", "compact": True},
                 "body": {"workflow": "mp_recommend_search", "source": "tmdb_trending", "choice": 1, "mode": "mp", "limit": 20, "session": "assistant", "compact": True},
+            },
+            "smart_discovery": {
+                "description": "读取 MP 原生热门推荐，并优先引导到统一资源决策链。",
+                "side_effect": "read_only",
+                "requires_confirmation": False,
+                "cache_scope": "short_lived",
+                "cache_ttl_seconds": 300,
+                "method": "POST",
+                "endpoint": "/api/v1/plugin/AgentResourceOfficer/assistant/workflow",
+                "tool": "agent_resource_officer_run_workflow",
+                "tool_args": {"name": "smart_discovery", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
+                "body": {"workflow": "smart_discovery", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
             },
             "saved_plan_execute": {
                 "description": "执行已保存的 dry_run 工作流计划，可按 session 自动选择未执行计划。",
@@ -13434,6 +13457,7 @@ class AgentResourceOfficer(_PluginBase):
                 "saved_plan_execute",
             ],
             "mp_recommendation": [
+                "smart_discovery",
                 "mp_recommend",
                 "mp_recommend_search",
                 "mp_search",
@@ -13543,6 +13567,10 @@ class AgentResourceOfficer(_PluginBase):
             "识别重放": "ai_reingest",
             "recommend": "mp_recommendation",
             "recommendation": "mp_recommendation",
+            "discover": "mp_recommendation",
+            "discovery": "mp_recommendation",
+            "智能发现": "mp_recommendation",
+            "热门发现": "mp_recommendation",
             "mp_recommend": "mp_recommendation",
             "mp-recommend": "mp_recommendation",
             "推荐": "mp_recommendation",
@@ -15474,6 +15502,8 @@ class AgentResourceOfficer(_PluginBase):
                     ("订阅", "mp_subscribe"),
                     ("热门推荐", "mp_recommendations"),
                     ("推荐", "mp_recommendations"),
+                    ("智能发现", "mp_recommendations"),
+                    ("热门发现", "mp_recommendations"),
                 ]:
                     if raw == prefix:
                         options["action"] = action
@@ -19657,6 +19687,17 @@ class AgentResourceOfficer(_PluginBase):
                 })
             ], ""
 
+        if workflow_name == "smart_discovery":
+            source_name, inferred_media_type = self._normalize_mp_recommend_request(source)
+            return [
+                base({
+                    "name": "start_mp_recommendations",
+                    "source": source_name,
+                    "media_type": self._clean_text(body.get("media_type")) or inferred_media_type or "all",
+                    "limit": max(1, min(50, limit)),
+                })
+            ], ""
+
         if workflow_name == "mp_recommend_search":
             if keyword:
                 return [base({"name": "start_mp_media_search", "keyword": keyword})], ""
@@ -20296,10 +20337,15 @@ class AgentResourceOfficer(_PluginBase):
                 "yc": "hdhive",
                 "盘搜": "pansou",
                 "ps": "pansou",
+                "决策": "smart_decision",
+                "资源决策": "smart_decision",
+                "智能决策": "smart_decision",
+                "smart": "smart_decision",
+                "smart_decision": "smart_decision",
             }
             next_mode = mode_aliases.get(next_mode, next_mode)
-            if next_mode not in {"mp", "hdhive", "pansou"}:
-                return {"success": False, "message": "推荐选择只支持 mode=mp、mode=hdhive 或 mode=pansou。"}
+            if next_mode not in {"mp", "hdhive", "pansou", "smart_decision"}:
+                return {"success": False, "message": "推荐选择只支持 mode=smart_decision、mode=mp、mode=hdhive 或 mode=pansou。"}
             selected_media_type = self._clean_text(selected.get("type") or state.get("media_type") or "auto").lower()
             media_type_aliases = {
                 "电影": "movie",

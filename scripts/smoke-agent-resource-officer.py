@@ -242,6 +242,7 @@ def main() -> int:
             f"smoke-aro-recommend-movie-{stamp}",
             f"smoke-aro-recommend-pansou-{stamp}",
             f"smoke-aro-recommend-tv-{stamp}",
+            f"smoke-aro-smart-discovery-{stamp}",
         ])
 
     try:
@@ -1254,6 +1255,17 @@ def main() -> int:
                 bool((movie_to_pansou_data.get("score_summary") or {}).get("best"))
                 and isinstance(((movie_to_pansou_data.get("score_summary") or {}).get("decision") or {}).get("recommended_commands"), list),
                 json.dumps(movie_to_pansou_data.get("score_summary") or {}, ensure_ascii=False)[:240],
+            )
+            smart_discovery = route(base_url, api_key, sessions[8], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery", smart_discovery, "mp_recommendations")
+            recommend_to_decision = route(base_url, api_key, sessions[8], "选择 1 决策")
+            recommend_to_decision_data = assert_route_action("route_recommend_to_decision", recommend_to_decision, "smart_resource_decision", require_success=False)
+            assert_ok(
+                "route_recommend_to_decision_payload",
+                bool(recommend_to_decision_data.get("decision_mode"))
+                and isinstance(recommend_to_decision_data.get("available_sources"), list)
+                and isinstance(recommend_to_decision_data.get("blocked_sources"), list),
+                json.dumps(recommend_to_decision_data, ensure_ascii=False)[:240],
             )
 
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
