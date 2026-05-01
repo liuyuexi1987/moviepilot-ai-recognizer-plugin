@@ -80,6 +80,11 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
     - `route "盘搜" --summary-only`
     - `route "影巢" --summary-only`
     - `route "原生" --summary-only`
+  - 在 `盘搜 / 原生` handoff 会话里，也支持：
+    - `route "详情" --summary-only`
+    - `route "计划" --summary-only`
+    - `route "确认" --summary-only`
+    - `route "决策" --summary-only`
   - 也支持直接对当前榜单首项继续发：
     - `route "详情" --summary-only`
     - `route "计划" --summary-only`

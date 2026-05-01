@@ -693,6 +693,32 @@ class AgentResourceOfficer(_PluginBase):
         return {"action": "return_to_recommend"}
 
     @classmethod
+    def _normalize_recommend_handoff_short_action(
+        cls,
+        value: Any,
+        *,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        current_state = dict(state or {})
+        kind = cls._clean_text(current_state.get("kind"))
+        if kind not in {"assistant_pansou", "assistant_mp", "assistant_hdhive"}:
+            return {}
+        handoff = current_state.get("recommend_handoff")
+        if not isinstance(handoff, dict) or not handoff:
+            return {}
+        compact = re.sub(r"[\s，。？！!?,、:：]+", "", cls._clean_text(value)).lower()
+        if compact in {"决策", "资源决策", "智能决策"}:
+            return {"action": "return_to_smart_decision"}
+        if kind in {"assistant_pansou", "assistant_mp"}:
+            if compact in {"详情", "看详情", "看看", "看一下", "detail", "details"}:
+                return {"route_action": "best"}
+            if compact in {"计划", "做计划", "plan"}:
+                return {"route_action": "best_plan"}
+        if compact in {"确认", "确认吧", "确认执行", "执行", "执行吧", "确定执行", "run", "execute"}:
+            return {"action": "confirm_recommend_handoff"}
+        return {}
+
+    @classmethod
     def _normalize_mp_recommend_direct_intent(cls, value: Any) -> Dict[str, Any]:
         raw = cls._clean_text(value)
         if not raw:
@@ -4744,13 +4770,15 @@ class AgentResourceOfficer(_PluginBase):
         if torrent.get("page_url"):
             lines.append(f"详情页：{torrent.get('page_url')}")
         lines.extend(self._format_score_summary_decision_lines(score_summary))
+        current_state = self._load_session(cache_key) or {}
         self._save_session(cache_key, {
             "kind": "assistant_mp",
             "stage": "search_result",
-            "keyword": (cache or {}).get("keyword") or "",
+            "keyword": (cache or {}).get("keyword") or current_state.get("keyword") or "",
             "items": self._mp_search_cache_preview(cache_key, preferences=preferences, limit=10),
             "selected_index": choice,
-            "target_path": "",
+            "target_path": current_state.get("target_path") or "",
+            **({"recommend_handoff": dict(current_state.get("recommend_handoff") or {})} if current_state.get("recommend_handoff") else {}),
         })
         return {
             "success": True,
@@ -8813,6 +8841,94 @@ class AgentResourceOfficer(_PluginBase):
             "apikey": self._extract_apikey(request, {}),
         }))
 
+    async def _assistant_route_recommend_handoff_to_smart_decision(
+        self,
+        request,
+        *,
+        session: str,
+        cache_key: str,
+        state: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        handoff = state.get("recommend_handoff")
+        if not isinstance(handoff, dict) or not handoff:
+            return {
+                "success": False,
+                "message": "当前会话没有可恢复的推荐上下文，请重新发送：智能发现 热门电影。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "smart_resource_decision",
+                    "ok": False,
+                    "error_code": "recommend_handoff_missing",
+                }),
+            }
+        selected_item = dict(handoff.get("selected_item") or {}) if isinstance(handoff.get("selected_item"), dict) else {}
+        keyword = self._clean_text(selected_item.get("title"))
+        if not keyword:
+            return {
+                "success": False,
+                "message": "当前推荐上下文缺少标题，无法回到统一资源决策。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "smart_resource_decision",
+                    "ok": False,
+                    "error_code": "recommend_handoff_title_missing",
+                }),
+            }
+        media_type = self._clean_text(handoff.get("media_type") or "auto")
+        return await self.api_assistant_route(_JsonRequestShim(request, {
+            "session": session,
+            "session_id": cache_key,
+            "mode": "smart_decision",
+            "keyword": keyword,
+            "media_type": media_type,
+            "origin": "mp_recommend",
+            "apikey": self._extract_apikey(request, {}),
+        }))
+
+    async def _assistant_confirm_recommend_handoff(
+        self,
+        request,
+        *,
+        session: str,
+        cache_key: str,
+        state: Dict[str, Any],
+        compact: bool,
+        target_path: str,
+    ) -> Dict[str, Any]:
+        pending_plan = self._find_workflow_plan(
+            session=session,
+            session_id=cache_key,
+            executed=False,
+        )
+        if pending_plan:
+            return await self.api_assistant_plan_execute(_JsonRequestShim(request, {
+                "session": session,
+                "session_id": cache_key,
+                "prefer_unexecuted": True,
+                "compact": compact,
+                "apikey": self._extract_apikey(request, {}),
+            }))
+        kind = self._clean_text(state.get("kind"))
+        if kind in {"assistant_pansou", "assistant_mp"}:
+            return await self.api_assistant_pick(_JsonRequestShim(request, {
+                "session": session,
+                "session_id": cache_key,
+                "choice": 0,
+                "action": "best_execute",
+                "path": target_path,
+                "compact": compact,
+                "apikey": self._extract_apikey(request, {}),
+            }))
+        return {
+            "success": False,
+            "message": "当前会话没有待确认计划。影巢候选阶段请先选择编号；如果想回统一搜索决策，请回复：决策。",
+            "data": self._assistant_response_data(session=session, data={
+                "action": "confirm_recommend_handoff",
+                "ok": False,
+                "error_code": "recommend_handoff_pending_plan_missing",
+                "preferred_command": "决策",
+                "fallback_command": "回推荐",
+            }),
+        }
+
     def _persist_workflow_plans(self) -> None:
         try:
             items = sorted(
@@ -9669,6 +9785,10 @@ class AgentResourceOfficer(_PluginBase):
             if payload.get("recommend_handoff"):
                 payload["suggested_actions"] = [
                     "smart_entry.text=回推荐",
+                    "smart_entry.text=决策",
+                    "smart_entry.text=详情",
+                    "smart_entry.text=计划",
+                    "smart_entry.text=确认",
                     "smart_entry.text=影巢",
                     "smart_entry.text=原生",
                     *list(payload.get("suggested_actions") or []),
@@ -9699,6 +9819,10 @@ class AgentResourceOfficer(_PluginBase):
             if payload.get("recommend_handoff"):
                 payload["suggested_actions"] = [
                     "smart_entry.text=回推荐",
+                    "smart_entry.text=决策",
+                    "smart_entry.text=详情",
+                    "smart_entry.text=计划",
+                    "smart_entry.text=确认",
                     "smart_entry.text=盘搜",
                     "smart_entry.text=影巢",
                     *list(payload.get("suggested_actions") or []),
@@ -9915,6 +10039,7 @@ class AgentResourceOfficer(_PluginBase):
                 if payload.get("recommend_handoff"):
                     payload["suggested_actions"] = [
                         "smart_entry.text=回推荐",
+                        "smart_entry.text=决策",
                         "smart_entry.text=盘搜",
                         "smart_entry.text=原生",
                         *list(payload.get("suggested_actions") or []),
@@ -9960,6 +10085,7 @@ class AgentResourceOfficer(_PluginBase):
                 if payload.get("recommend_handoff"):
                     payload["suggested_actions"] = [
                         "smart_entry.text=回推荐",
+                        "smart_entry.text=决策",
                         "smart_entry.text=盘搜",
                         "smart_entry.text=原生",
                         *list(payload.get("suggested_actions") or []),
@@ -10392,6 +10518,34 @@ class AgentResourceOfficer(_PluginBase):
                         body={**base_route, "text": "影巢"},
                     ),
                     self._assistant_action_template(
+                        name="handoff_pansou_decision",
+                        description="基于当前推荐条目回到统一资源决策",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "决策"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_pansou_best_detail",
+                        description="查看当前盘搜首选详情",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "详情"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_pansou_best_plan",
+                        description="为当前盘搜首选生成待确认计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "计划"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_pansou_confirm",
+                        description="优先执行当前待确认计划；如无待计划则直接执行当前盘搜首选",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "确认"},
+                    ),
+                    self._assistant_action_template(
                         name="switch_pansou_to_mp",
                         description="基于当前推荐条目切到 MP 原生搜索结果",
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
@@ -10459,6 +10613,34 @@ class AgentResourceOfficer(_PluginBase):
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                         tool="agent_resource_officer_smart_entry",
                         body={**base_route, "text": "盘搜"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_mp_decision",
+                        description="基于当前推荐条目回到统一资源决策",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "决策"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_mp_best_detail",
+                        description="查看当前 MP 搜索里评分最高的候选详情",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "详情"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_mp_best_plan",
+                        description="为当前 MP 搜索里评分最高的候选生成待确认计划",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "计划"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_mp_confirm",
+                        description="优先执行当前待确认计划；如无待计划则直接执行当前 MP 首选",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "确认"},
                     ),
                     self._assistant_action_template(
                         name="switch_mp_to_hdhive",
@@ -10715,6 +10897,13 @@ class AgentResourceOfficer(_PluginBase):
                         body={**base_route, "text": "盘搜"},
                     ),
                     self._assistant_action_template(
+                        name="handoff_hdhive_decision",
+                        description="基于当前推荐条目回到统一资源决策",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "决策"},
+                    ),
+                    self._assistant_action_template(
                         name="switch_hdhive_to_mp",
                         description="基于当前推荐条目切到 MP 原生搜索结果",
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
@@ -10754,6 +10943,13 @@ class AgentResourceOfficer(_PluginBase):
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                         tool="agent_resource_officer_smart_entry",
                         body={**base_route, "text": "盘搜"},
+                    ),
+                    self._assistant_action_template(
+                        name="handoff_hdhive_decision",
+                        description="基于当前推荐条目回到统一资源决策",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "决策"},
                     ),
                     self._assistant_action_template(
                         name="switch_hdhive_to_mp",
@@ -18039,6 +18235,7 @@ class AgentResourceOfficer(_PluginBase):
                 if value not in {None, ""}:
                     parsed[key] = str(value)
         preparsed_action = self._clean_text(parsed.get("action"))
+        recommend_handoff_short = self._normalize_recommend_handoff_short_action(text, state=state)
         recommend_short = self._normalize_mp_recommend_short_action(text, state=state)
         if preparsed_action not in {"ai_replay_failed_sample"} and recommend_short:
             pick_result = await self.api_assistant_pick(
@@ -18054,6 +18251,9 @@ class AgentResourceOfficer(_PluginBase):
             )
             return pick_result
         pick_index, pick_path, pick_action, pick_mode = self._parse_pick_text(text)
+        handoff_route_action = self._clean_text(recommend_handoff_short.get("route_action"))
+        if not pick_index and handoff_route_action:
+            pick_action = handoff_route_action
         if not has_recommend_followup and preparsed_action not in {"ai_replay_failed_sample"} and (pick_index > 0 or pick_action):
             pick_result = await self.api_assistant_pick(
                 _JsonRequestShim(request, {
@@ -18073,6 +18273,8 @@ class AgentResourceOfficer(_PluginBase):
             smart_route_action = self._normalize_smart_search_short_action(text, state_kind=state.get("kind"))
             if smart_route_action:
                 route_action = smart_route_action
+            if handoff_route_action:
+                route_action = handoff_route_action
             if route_action:
                 pick_result = await self.api_assistant_pick(
                     _JsonRequestShim(request, {
@@ -18108,6 +18310,11 @@ class AgentResourceOfficer(_PluginBase):
         recommend_handoff_action = self._normalize_recommend_handoff_action(text, state=state)
         if not assistant_action and recommend_handoff_action:
             for key, value in recommend_handoff_action.items():
+                if value not in {None, ""}:
+                    parsed[key] = value
+            assistant_action = self._clean_text(parsed.get("action"))
+        if not assistant_action and self._clean_text(recommend_handoff_short.get("action")):
+            for key, value in recommend_handoff_short.items():
                 if value not in {None, ""}:
                     parsed[key] = value
             assistant_action = self._clean_text(parsed.get("action"))
@@ -18610,6 +18817,22 @@ class AgentResourceOfficer(_PluginBase):
                 cache_key=cache_key,
                 state=state,
                 mode=self._clean_text(parsed.get("mode")),
+            ))
+        if assistant_action == "return_to_smart_decision":
+            return finish(await self._assistant_route_recommend_handoff_to_smart_decision(
+                request,
+                session=session,
+                cache_key=cache_key,
+                state=state,
+            ))
+        if assistant_action == "confirm_recommend_handoff":
+            return finish(await self._assistant_confirm_recommend_handoff(
+                request,
+                session=session,
+                cache_key=cache_key,
+                state=state,
+                compact=compact,
+                target_path=target_path,
             ))
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()

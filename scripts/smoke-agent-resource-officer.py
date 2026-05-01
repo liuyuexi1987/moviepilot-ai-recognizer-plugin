@@ -261,6 +261,8 @@ def main() -> int:
             f"smoke-aro-smart-discovery-return-mp-{stamp}",
             f"smoke-aro-smart-discovery-switch-pansou-{stamp}",
             f"smoke-aro-smart-discovery-switch-mp-{stamp}",
+            f"smoke-aro-smart-discovery-handoff-pansou-flow-{stamp}",
+            f"smoke-aro-smart-discovery-handoff-mp-flow-{stamp}",
         ])
 
     try:
@@ -1552,6 +1554,66 @@ def main() -> int:
                 "route_smart_discovery_switch_mp_to_pansou_payload",
                 switch_mp_to_pansou_data.get("return_short_command") == "回推荐",
                 json.dumps(switch_mp_to_pansou_data, ensure_ascii=False)[:260],
+            )
+            handoff_pansou_recommend = route(base_url, api_key, sessions[27], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_handoff_pansou_recommend", handoff_pansou_recommend, "mp_recommendations")
+            handoff_pansou_start = route(base_url, api_key, sessions[27], "盘搜")
+            handoff_pansou_start_data = assert_route_action("route_smart_discovery_handoff_pansou_start", handoff_pansou_start, "pansou_search")
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_start_payload",
+                handoff_pansou_start_data.get("return_short_command") == "回推荐",
+                json.dumps(handoff_pansou_start_data, ensure_ascii=False)[:260],
+            )
+            handoff_pansou_detail = route(base_url, api_key, sessions[27], "详情")
+            handoff_pansou_detail_data = assert_route_action("route_smart_discovery_handoff_pansou_detail", handoff_pansou_detail, "pansou_best_detail")
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_detail_payload",
+                isinstance(handoff_pansou_detail_data.get("score_summary"), dict),
+                json.dumps(handoff_pansou_detail_data, ensure_ascii=False)[:260],
+            )
+            handoff_pansou_plan = route(base_url, api_key, sessions[27], "计划")
+            handoff_pansou_plan_data = assert_route_action("route_smart_discovery_handoff_pansou_plan", handoff_pansou_plan, "workflow_plan")
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_plan_payload",
+                bool(handoff_pansou_plan_data.get("plan_id")),
+                json.dumps(handoff_pansou_plan_data, ensure_ascii=False)[:260],
+            )
+            handoff_pansou_confirm = route(base_url, api_key, sessions[27], "确认")
+            handoff_pansou_confirm_data = assert_route_action("route_smart_discovery_handoff_pansou_confirm", handoff_pansou_confirm, "execute_plan", require_success=False)
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_confirm_payload",
+                handoff_pansou_confirm_data.get("write_effect") == "write",
+                json.dumps(handoff_pansou_confirm_data, ensure_ascii=False)[:260],
+            )
+            handoff_mp_recommend = route(base_url, api_key, sessions[28], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_handoff_mp_recommend", handoff_mp_recommend, "mp_recommendations")
+            handoff_mp_start = route(base_url, api_key, sessions[28], "原生")
+            handoff_mp_start_data = assert_route_action("route_smart_discovery_handoff_mp_start", handoff_mp_start, "mp_media_search")
+            assert_ok(
+                "route_smart_discovery_handoff_mp_start_payload",
+                handoff_mp_start_data.get("return_short_command") == "回推荐",
+                json.dumps(handoff_mp_start_data, ensure_ascii=False)[:260],
+            )
+            handoff_mp_detail = route(base_url, api_key, sessions[28], "详情")
+            handoff_mp_detail_data = assert_route_action("route_smart_discovery_handoff_mp_detail", handoff_mp_detail, "mp_search_best_detail")
+            assert_ok(
+                "route_smart_discovery_handoff_mp_detail_payload",
+                isinstance(handoff_mp_detail_data.get("score_summary"), dict),
+                json.dumps(handoff_mp_detail_data, ensure_ascii=False)[:260],
+            )
+            handoff_mp_plan = route(base_url, api_key, sessions[28], "计划")
+            handoff_mp_plan_data = assert_route_action("route_smart_discovery_handoff_mp_plan", handoff_mp_plan, "workflow_plan")
+            assert_ok(
+                "route_smart_discovery_handoff_mp_plan_payload",
+                bool(handoff_mp_plan_data.get("plan_id")),
+                json.dumps(handoff_mp_plan_data, ensure_ascii=False)[:260],
+            )
+            handoff_mp_decision = route(base_url, api_key, sessions[28], "决策")
+            handoff_mp_decision_data = assert_route_action("route_smart_discovery_handoff_mp_decision", handoff_mp_decision, "smart_resource_decision", require_success=False)
+            assert_ok(
+                "route_smart_discovery_handoff_mp_decision_payload",
+                bool(handoff_mp_decision_data.get("decision_mode")),
+                json.dumps(handoff_mp_decision_data, ensure_ascii=False)[:260],
             )
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")

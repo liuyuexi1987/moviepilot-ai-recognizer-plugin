@@ -283,6 +283,8 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 - 如果已经切到 `盘搜 / 影巢 / 原生`，也支持：
   - `回推荐`
   - `盘搜 / 影巢 / 原生`
+  - 在 `盘搜 / 原生` handoff 会话里，也支持：
+    - `详情 / 计划 / 确认 / 决策`
 - 也支持直接对当前榜单首项继续发：
   - `详情`
   - `计划`
