@@ -77,6 +77,9 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
     - `route "智能发现 热门电影 原生" --summary-only`
   - 如果已经切到 `盘搜 / 影巢 / 原生`，也支持：
     - `route "回推荐" --summary-only`
+    - `route "盘搜" --summary-only`
+    - `route "影巢" --summary-only`
+    - `route "原生" --summary-only`
   - 也支持直接对当前榜单首项继续发：
     - `route "详情" --summary-only`
     - `route "计划" --summary-only`

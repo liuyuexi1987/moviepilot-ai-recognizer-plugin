@@ -678,7 +678,18 @@ class AgentResourceOfficer(_PluginBase):
             return {}
         compact = re.sub(r"[\s，。？！!?,、:：]+", "", cls._clean_text(value)).lower()
         if compact not in {"回推荐", "回榜单", "返回推荐", "返回榜单", "推荐", "榜单"}:
-            return {}
+            switch_mode_aliases = {
+                "盘搜": "pansou",
+                "ps": "pansou",
+                "影巢": "hdhive",
+                "yc": "hdhive",
+                "原生": "mp",
+                "mp": "mp",
+            }
+            switch_mode = switch_mode_aliases.get(compact)
+            if not switch_mode:
+                return {}
+            return {"action": "switch_recommend_handoff_source", "mode": switch_mode}
         return {"action": "return_to_recommend"}
 
     @classmethod
@@ -8683,6 +8694,11 @@ class AgentResourceOfficer(_PluginBase):
             "selected_index": selected_index if selected_index > 0 else None,
             "selected_title": self._clean_text(selected_item.get("title")),
             "return_short_command": "回推荐",
+            "source_short_commands": {
+                "pansou": "盘搜",
+                "hdhive": "影巢",
+                "mp": "原生",
+            },
         }
 
     def _assistant_recommend_handoff_state(
@@ -8753,6 +8769,49 @@ class AgentResourceOfficer(_PluginBase):
         payload["return_short_command"] = ""
         result["data"] = self._assistant_response_data(session=session, data=payload)
         return result
+
+    async def _assistant_switch_recommend_handoff_source(
+        self,
+        request,
+        *,
+        session: str,
+        cache_key: str,
+        state: Dict[str, Any],
+        mode: str,
+    ) -> Dict[str, Any]:
+        handoff = state.get("recommend_handoff")
+        if not isinstance(handoff, dict) or not handoff:
+            return {
+                "success": False,
+                "message": "当前会话没有可切换的推荐上下文，请重新发送：智能发现 热门电影。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "switch_recommend_handoff_source",
+                    "ok": False,
+                    "error_code": "recommend_handoff_missing",
+                }),
+            }
+        selected_item = dict(handoff.get("selected_item") or {}) if isinstance(handoff.get("selected_item"), dict) else {}
+        keyword = self._clean_text(selected_item.get("title"))
+        if not keyword:
+            return {
+                "success": False,
+                "message": "当前推荐上下文缺少标题，无法切换源。请先发送：回推荐。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "switch_recommend_handoff_source",
+                    "ok": False,
+                    "error_code": "recommend_handoff_title_missing",
+                }),
+            }
+        media_type = self._clean_text(handoff.get("media_type") or "auto")
+        return await self.api_assistant_route(_JsonRequestShim(request, {
+            "session": session,
+            "session_id": cache_key,
+            "mode": self._clean_text(mode),
+            "keyword": keyword,
+            "media_type": media_type,
+            "recommend_handoff": dict(handoff),
+            "apikey": self._extract_apikey(request, {}),
+        }))
 
     def _persist_workflow_plans(self) -> None:
         try:
@@ -9608,7 +9667,12 @@ class AgentResourceOfficer(_PluginBase):
                 "suggested_actions": ["smart_pick.choice", "session_clear"],
             })
             if payload.get("recommend_handoff"):
-                payload["suggested_actions"] = ["smart_entry.text=回推荐", *list(payload.get("suggested_actions") or [])]
+                payload["suggested_actions"] = [
+                    "smart_entry.text=回推荐",
+                    "smart_entry.text=影巢",
+                    "smart_entry.text=原生",
+                    *list(payload.get("suggested_actions") or []),
+                ]
         elif kind == "assistant_mp":
             items = state.get("items") or []
             payload.update({
@@ -9633,7 +9697,12 @@ class AgentResourceOfficer(_PluginBase):
                 "suggested_actions": ["mp_download.choice", "mp_subscribe.keyword", "session_clear"],
             })
             if payload.get("recommend_handoff"):
-                payload["suggested_actions"] = ["smart_entry.text=回推荐", *list(payload.get("suggested_actions") or [])]
+                payload["suggested_actions"] = [
+                    "smart_entry.text=回推荐",
+                    "smart_entry.text=盘搜",
+                    "smart_entry.text=影巢",
+                    *list(payload.get("suggested_actions") or []),
+                ]
         elif kind == "assistant_mp_download_tasks":
             items = state.get("items") or []
             payload.update({
@@ -9844,7 +9913,12 @@ class AgentResourceOfficer(_PluginBase):
                     "suggested_actions": ["smart_pick.choice", "smart_pick.action=详情", "smart_pick.action=下一页", "session_clear"],
                 })
                 if payload.get("recommend_handoff"):
-                    payload["suggested_actions"] = ["smart_entry.text=回推荐", *list(payload.get("suggested_actions") or [])]
+                    payload["suggested_actions"] = [
+                        "smart_entry.text=回推荐",
+                        "smart_entry.text=盘搜",
+                        "smart_entry.text=原生",
+                        *list(payload.get("suggested_actions") or []),
+                    ]
             elif stage == "resource":
                 resources = state.get("resources") or []
                 selected_candidate = dict(state.get("selected_candidate") or {})
@@ -9884,7 +9958,12 @@ class AgentResourceOfficer(_PluginBase):
                     "suggested_actions": ["smart_pick.choice", "session_clear"],
                 })
                 if payload.get("recommend_handoff"):
-                    payload["suggested_actions"] = ["smart_entry.text=回推荐", *list(payload.get("suggested_actions") or [])]
+                    payload["suggested_actions"] = [
+                        "smart_entry.text=回推荐",
+                        "smart_entry.text=盘搜",
+                        "smart_entry.text=原生",
+                        *list(payload.get("suggested_actions") or []),
+                    ]
         elif kind == "assistant_p115_login":
             payload.update({
                 "client_type": self._clean_text(state.get("client_type")) or self._p115_client_type,
@@ -10297,15 +10376,29 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ])
             if isinstance(data.get("recommend_handoff"), dict) and data.get("recommend_handoff"):
-                templates.append(
+                templates.extend([
                     self._assistant_action_template(
                         name="return_to_recommendations",
                         description="返回当前盘搜结果对应的推荐榜单会话",
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                         tool="agent_resource_officer_smart_entry",
                         body={**base_route, "text": "回推荐"},
-                    )
-                )
+                    ),
+                    self._assistant_action_template(
+                        name="switch_pansou_to_hdhive",
+                        description="基于当前推荐条目切到影巢结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "影巢"},
+                    ),
+                    self._assistant_action_template(
+                        name="switch_pansou_to_mp",
+                        description="基于当前推荐条目切到 MP 原生搜索结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "原生"},
+                    ),
+                ])
         elif kind == "assistant_mp":
             templates.extend([
                 self._assistant_action_template(
@@ -10352,15 +10445,29 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ])
             if isinstance(data.get("recommend_handoff"), dict) and data.get("recommend_handoff"):
-                templates.append(
+                templates.extend([
                     self._assistant_action_template(
                         name="return_to_recommendations",
                         description="返回当前原生搜索结果对应的推荐榜单会话",
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                         tool="agent_resource_officer_smart_entry",
                         body={**base_route, "text": "回推荐"},
-                    )
-                )
+                    ),
+                    self._assistant_action_template(
+                        name="switch_mp_to_pansou",
+                        description="基于当前推荐条目切到盘搜结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "盘搜"},
+                    ),
+                    self._assistant_action_template(
+                        name="switch_mp_to_hdhive",
+                        description="基于当前推荐条目切到影巢结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "影巢"},
+                    ),
+                ])
         elif kind == "assistant_mp_download_tasks":
             has_items = bool(data.get("items")) or self._safe_int(data.get("result_count"), 0) > 0
             if has_items:
@@ -10592,15 +10699,29 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ])
             if isinstance(data.get("recommend_handoff"), dict) and data.get("recommend_handoff"):
-                templates.append(
+                templates.extend([
                     self._assistant_action_template(
                         name="return_to_recommendations",
                         description="返回当前影巢候选对应的推荐榜单会话",
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                         tool="agent_resource_officer_smart_entry",
                         body={**base_route, "text": "回推荐"},
-                    )
-                )
+                    ),
+                    self._assistant_action_template(
+                        name="switch_hdhive_to_pansou",
+                        description="基于当前推荐条目切到盘搜结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "盘搜"},
+                    ),
+                    self._assistant_action_template(
+                        name="switch_hdhive_to_mp",
+                        description="基于当前推荐条目切到 MP 原生搜索结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "原生"},
+                    ),
+                ])
         elif kind == "assistant_hdhive" and stage == "resource":
             templates.extend([
                 self._assistant_action_template(
@@ -10619,15 +10740,29 @@ class AgentResourceOfficer(_PluginBase):
                 ),
             ])
             if isinstance(data.get("recommend_handoff"), dict) and data.get("recommend_handoff"):
-                templates.append(
+                templates.extend([
                     self._assistant_action_template(
                         name="return_to_recommendations",
                         description="返回当前影巢资源列表对应的推荐榜单会话",
                         endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
                         tool="agent_resource_officer_smart_entry",
                         body={**base_route, "text": "回推荐"},
-                    )
-                )
+                    ),
+                    self._assistant_action_template(
+                        name="switch_hdhive_to_pansou",
+                        description="基于当前推荐条目切到盘搜结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "盘搜"},
+                    ),
+                    self._assistant_action_template(
+                        name="switch_hdhive_to_mp",
+                        description="基于当前推荐条目切到 MP 原生搜索结果",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/route",
+                        tool="agent_resource_officer_smart_entry",
+                        body={**base_route, "text": "原生"},
+                    ),
+                ])
         elif kind == "assistant_p115_login":
             templates.extend([
                 self._assistant_action_template(
@@ -18467,6 +18602,14 @@ class AgentResourceOfficer(_PluginBase):
                 cache_key=cache_key,
                 state=state,
                 limit=self._safe_int(body.get("limit"), 20),
+            ))
+        if assistant_action == "switch_recommend_handoff_source":
+            return finish(await self._assistant_switch_recommend_handoff_source(
+                request,
+                session=session,
+                cache_key=cache_key,
+                state=state,
+                mode=self._clean_text(parsed.get("mode")),
             ))
         if assistant_action == "p115_help":
             summary = self._format_p115_help_text()

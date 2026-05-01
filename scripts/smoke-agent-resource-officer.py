@@ -259,6 +259,8 @@ def main() -> int:
             f"smoke-aro-smart-discovery-direct-mp-{stamp}",
             f"smoke-aro-smart-discovery-return-pansou-{stamp}",
             f"smoke-aro-smart-discovery-return-mp-{stamp}",
+            f"smoke-aro-smart-discovery-switch-pansou-{stamp}",
+            f"smoke-aro-smart-discovery-switch-mp-{stamp}",
         ])
 
     try:
@@ -1520,6 +1522,36 @@ def main() -> int:
                 "route_smart_discovery_return_mp_payload",
                 recommend_return_from_mp_data.get("selected_index") == 1,
                 json.dumps(recommend_return_from_mp_data, ensure_ascii=False)[:260],
+            )
+            smart_discovery_switch_pansou = route(base_url, api_key, sessions[25], "智能发现 热门电影 盘搜")
+            smart_discovery_switch_pansou_data = assert_route_action("route_smart_discovery_switch_pansou_entry", smart_discovery_switch_pansou, "pansou_search")
+            assert_ok(
+                "route_smart_discovery_switch_pansou_entry_payload",
+                isinstance((smart_discovery_switch_pansou_data.get("recommend_handoff") or {}).get("source_short_commands"), dict),
+                json.dumps(smart_discovery_switch_pansou_data, ensure_ascii=False)[:260],
+            )
+            switch_pansou_to_hdhive = route(base_url, api_key, sessions[25], "影巢")
+            switch_pansou_to_hdhive_data = assert_route_action("route_smart_discovery_switch_pansou_to_hdhive", switch_pansou_to_hdhive, "hdhive_candidates", require_success=False)
+            assert_ok(
+                "route_smart_discovery_switch_pansou_to_hdhive_payload",
+                switch_pansou_to_hdhive_data.get("return_short_command") == "回推荐",
+                json.dumps(switch_pansou_to_hdhive_data, ensure_ascii=False)[:260],
+            )
+            return_after_switch_pansou = route(base_url, api_key, sessions[25], "回推荐")
+            return_after_switch_pansou_data = assert_route_action("route_smart_discovery_switch_pansou_return", return_after_switch_pansou, "mp_recommendations")
+            assert_ok(
+                "route_smart_discovery_switch_pansou_return_payload",
+                return_after_switch_pansou_data.get("selected_index") == 1,
+                json.dumps(return_after_switch_pansou_data, ensure_ascii=False)[:260],
+            )
+            smart_discovery_switch_mp = route(base_url, api_key, sessions[26], "智能发现 热门电影 原生")
+            assert_route_action("route_smart_discovery_switch_mp_entry", smart_discovery_switch_mp, "mp_media_search")
+            switch_mp_to_pansou = route(base_url, api_key, sessions[26], "盘搜")
+            switch_mp_to_pansou_data = assert_route_action("route_smart_discovery_switch_mp_to_pansou", switch_mp_to_pansou, "pansou_search")
+            assert_ok(
+                "route_smart_discovery_switch_mp_to_pansou_payload",
+                switch_mp_to_pansou_data.get("return_short_command") == "回推荐",
+                json.dumps(switch_mp_to_pansou_data, ensure_ascii=False)[:260],
             )
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")
