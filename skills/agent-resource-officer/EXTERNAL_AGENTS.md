@@ -61,6 +61,7 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
   - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "先计划" --summary-only`
   - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "确认执行" --summary-only`
   - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "先看详情" --summary-only`
+  - 也支持更短的会话内命令：`计划`、`详情`、`确认`
 - 或先读模板：`python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py templates --recipe smart_search --compact`
 - 或先读模板：`python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py templates --recipe smart_decision --compact`
 - 如果你希望一步拿到待确认计划，用：`python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "智能计划 <片名>" --summary-only`

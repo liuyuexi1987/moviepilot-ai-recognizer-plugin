@@ -61,6 +61,7 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
   - `route "先计划" --summary-only`
   - `route "确认执行" --summary-only`
   - `route "先看详情" --summary-only`
+  - 也支持更短的会话内命令：`计划`、`详情`、`确认`
 - 或者先读模板：`templates --recipe smart_search --compact`
 - 或先读模板：`templates --recipe smart_decision --compact`
 - 如果希望一步拿到待确认计划，用：`route "智能计划 <片名>" --summary-only`

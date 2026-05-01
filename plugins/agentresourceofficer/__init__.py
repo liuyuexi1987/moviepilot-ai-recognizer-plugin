@@ -440,6 +440,19 @@ class AgentResourceOfficer(_PluginBase):
         return ""
 
     @staticmethod
+    def _normalize_smart_search_short_action(value: Any, *, state_kind: str = "") -> str:
+        if str(state_kind or "").strip() != "assistant_smart_search":
+            return ""
+        compact = re.sub(r"\s+", "", str(value or "").strip().lower())
+        if compact in {"详情", "看详情", "看看", "看一下", "detail", "details"}:
+            return "best"
+        if compact in {"计划", "做计划", "plan"}:
+            return "best_plan"
+        if compact in {"确认", "执行", "确认吧", "执行吧", "确定执行", "execute", "run"}:
+            return "best_execute"
+        return ""
+
+    @staticmethod
     def _normalize_pick_mode(value: Any) -> str:
         text = str(value or "").strip().lower()
         compact = re.sub(r"\s+", "", text)
@@ -16047,6 +16060,9 @@ class AgentResourceOfficer(_PluginBase):
             return pick_result
 
         route_action = self._normalize_pick_action(text)
+        smart_route_action = self._normalize_smart_search_short_action(text, state_kind=state.get("kind"))
+        if smart_route_action:
+            route_action = smart_route_action
         if route_action:
             pick_result = await self.api_assistant_pick(
                 _JsonRequestShim(request, {
@@ -18574,7 +18590,8 @@ class AgentResourceOfficer(_PluginBase):
             or body.get("number"),
             0,
         )
-        action = self._normalize_pick_action(body.get("action") or body.get("pick_action"))
+        raw_action_text = self._clean_text(body.get("action") or body.get("pick_action"))
+        action = self._normalize_pick_action(raw_action_text)
         target_path = self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path")))
         compact = self._parse_bool_value(body.get("compact"), False)
 
@@ -18588,6 +18605,9 @@ class AgentResourceOfficer(_PluginBase):
             return {"success": False, "message": "请选择有效序号，例如：选择 1"}
 
         kind = str(state.get("kind") or "").strip()
+        smart_short_action = self._normalize_smart_search_short_action(raw_action_text, state_kind=kind)
+        if smart_short_action:
+            action = smart_short_action
         if kind == "assistant_pansou":
             items = state.get("items") or []
             if action == "best":

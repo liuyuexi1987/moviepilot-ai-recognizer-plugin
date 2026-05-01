@@ -766,6 +766,32 @@ def main() -> int:
                 isinstance(smart_decision_best_detail_data.get("score_summary"), dict),
                 json.dumps(smart_decision_best_detail_data, ensure_ascii=False)[:240],
             )
+            smart_shortcut_session = f"{sessions[1]}-shortcuts"
+            assert_route_action(
+                "route_smart_decision_shortcuts_start",
+                route(base_url, api_key, smart_shortcut_session, f"资源决策 {args.keyword}"),
+                "smart_resource_decision",
+            )
+            smart_decision_short_detail = route(base_url, api_key, smart_shortcut_session, "详情")
+            smart_decision_short_detail_data = assert_route_action("route_smart_decision_short_detail", smart_decision_short_detail, "pansou_best_detail")
+            assert_ok(
+                "route_smart_decision_short_detail_score_summary",
+                isinstance(smart_decision_short_detail_data.get("score_summary"), dict),
+                json.dumps(smart_decision_short_detail_data, ensure_ascii=False)[:240],
+            )
+            assert_route_action(
+                "route_smart_decision_short_plan_start",
+                route(base_url, api_key, smart_shortcut_session, f"资源决策 {args.keyword}"),
+                "smart_resource_decision",
+            )
+            smart_decision_short_plan = route(base_url, api_key, smart_shortcut_session, "计划")
+            smart_decision_short_plan_data = assert_route_action("route_smart_decision_short_plan", smart_decision_short_plan, "workflow_plan")
+            assert_ok(
+                "route_smart_decision_short_plan_has_plan",
+                bool(smart_decision_short_plan_data.get("plan_id"))
+                and smart_decision_short_plan_data.get("workflow") == "smart_resource_plan",
+                json.dumps(smart_decision_short_plan_data, ensure_ascii=False)[:240],
+            )
             smart_search_best_plan = route(base_url, api_key, sessions[1], "计划最佳")
             smart_search_best_plan_data = assert_route_action("route_smart_search_best_plan", smart_search_best_plan, "workflow_plan")
             assert_ok(
