@@ -272,6 +272,10 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 - `选择 1 决策`
 - `选择 1 计划`
 - `选择 1 确认`
+- 进入推荐会话后，也支持：
+  - `决策 1`
+  - `计划 1`
+  - `确认 1`
 
 统一入口：
 POST /api/v1/plugin/AgentResourceOfficer/assistant/route?apikey={MP_API_TOKEN}

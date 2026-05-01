@@ -554,6 +554,32 @@ class AgentResourceOfficer(_PluginBase):
             return result
         return {}
 
+    @classmethod
+    def _normalize_mp_recommend_short_action(
+        cls,
+        value: Any,
+        *,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        current_state = dict(state or {})
+        if cls._clean_text(current_state.get("kind")) != "assistant_mp_recommend":
+            return {}
+        raw = cls._clean_text(value)
+        patterns = [
+            (r"^\s*(?:决策|资源决策|智能决策)\s*(\d+)\s*$", {"mode": "smart_decision"}),
+            (r"^\s*(?:详情|查看详情|看详情)\s*(\d+)\s*$", {"action": "detail"}),
+            (r"^\s*(?:计划|生成计划|先计划)\s*(\d+)\s*$", {"action": "plan"}),
+            (r"^\s*(?:确认|执行|直接执行)\s*(\d+)\s*$", {"mode": "smart_execute"}),
+            (r"^\s*(?:盘搜|ps)\s*(\d+)\s*$", {"mode": "pansou"}),
+            (r"^\s*(?:影巢|yc)\s*(\d+)\s*$", {"mode": "hdhive"}),
+            (r"^\s*(?:原生|mp|pt)\s*(\d+)\s*$", {"mode": "mp"}),
+        ]
+        for pattern, base in patterns:
+            match = re.match(pattern, raw, flags=re.IGNORECASE)
+            if match:
+                return {"index": match.group(1), **base}
+        return {}
+
     @staticmethod
     def _normalize_pick_mode(value: Any) -> str:
         text = str(value or "").strip().lower()
@@ -17328,6 +17354,20 @@ class AgentResourceOfficer(_PluginBase):
             return result
 
         preparsed_action = self._clean_text(parsed.get("action"))
+        recommend_short = self._normalize_mp_recommend_short_action(text, state=state)
+        if preparsed_action not in {"ai_replay_failed_sample"} and recommend_short:
+            pick_result = await self.api_assistant_pick(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "index": recommend_short.get("index"),
+                    "action": recommend_short.get("action"),
+                    "mode": recommend_short.get("mode"),
+                    "path": target_path,
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            )
+            return pick_result
         pick_index, pick_path, pick_action, pick_mode = self._parse_pick_text(text)
         if preparsed_action not in {"ai_replay_failed_sample"} and (pick_index > 0 or pick_action):
             pick_result = await self.api_assistant_pick(

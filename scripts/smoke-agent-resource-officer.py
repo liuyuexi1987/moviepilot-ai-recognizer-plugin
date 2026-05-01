@@ -245,6 +245,9 @@ def main() -> int:
             f"smoke-aro-smart-discovery-{stamp}",
             f"smoke-aro-smart-discovery-plan-{stamp}",
             f"smoke-aro-smart-discovery-execute-{stamp}",
+            f"smoke-aro-smart-discovery-short-decision-{stamp}",
+            f"smoke-aro-smart-discovery-short-plan-{stamp}",
+            f"smoke-aro-smart-discovery-short-execute-{stamp}",
         ])
 
     try:
@@ -1298,6 +1301,40 @@ def main() -> int:
                 "route_recommend_to_execute_payload",
                 recommend_to_execute_data.get("write_effect") == "write",
                 json.dumps(recommend_to_execute_data, ensure_ascii=False)[:240],
+            )
+            smart_discovery_short_decision = route(base_url, api_key, sessions[11], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_short_decision", smart_discovery_short_decision, "mp_recommendations")
+            recommend_short_decision = route(base_url, api_key, sessions[11], "决策 1")
+            recommend_short_decision_data = assert_route_action("route_recommend_short_decision", recommend_short_decision, "smart_resource_decision", require_success=False)
+            assert_ok(
+                "route_recommend_short_decision_payload",
+                bool(recommend_short_decision_data.get("decision_mode")),
+                json.dumps(recommend_short_decision_data, ensure_ascii=False)[:240],
+            )
+            smart_discovery_short_plan = route(base_url, api_key, sessions[12], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_short_plan", smart_discovery_short_plan, "mp_recommendations")
+            recommend_short_plan = route(base_url, api_key, sessions[12], "计划 1")
+            recommend_short_plan_data = data(recommend_short_plan)
+            assert_ok(
+                "route_recommend_short_plan",
+                recommend_short_plan.get("success")
+                and recommend_short_plan_data.get("action") in {"workflow_plan", "smart_resource_plan"},
+                json.dumps(recommend_short_plan, ensure_ascii=False)[:240],
+            )
+            assert_ok(
+                "route_recommend_short_plan_payload",
+                bool(recommend_short_plan_data.get("plan_id")) and recommend_short_plan_data.get("workflow") == "smart_resource_plan",
+                json.dumps(recommend_short_plan_data, ensure_ascii=False)[:240],
+            )
+            smart_discovery_short_execute = route(base_url, api_key, sessions[13], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_short_execute", smart_discovery_short_execute, "mp_recommendations")
+            recommend_short_execute = route(base_url, api_key, sessions[13], "确认 1")
+            recommend_short_execute_data = data(recommend_short_execute)
+            assert_ok(
+                "route_recommend_short_execute",
+                recommend_short_execute_data.get("action") in {"smart_resource_execute", "execute_plan"}
+                and recommend_short_execute_data.get("write_effect") == "write",
+                json.dumps(recommend_short_execute, ensure_ascii=False)[:240],
             )
 
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")

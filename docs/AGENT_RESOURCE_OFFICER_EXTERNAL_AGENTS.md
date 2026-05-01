@@ -66,6 +66,10 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
   - `route "选择 1 决策" --summary-only`
   - `route "选择 1 计划" --summary-only`
   - `route "选择 1 确认" --summary-only`
+  - 进入推荐会话后，也支持：
+    - `route "决策 1" --summary-only`
+    - `route "计划 1" --summary-only`
+    - `route "确认 1" --summary-only`
 - 如果用户已经明确要计划或直接执行，也可以直接发：
   - `route "资源决策 <片名> 详情" --summary-only`
   - `route "资源决策 <片名> 计划" --summary-only`
