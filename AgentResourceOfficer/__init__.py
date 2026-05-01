@@ -7015,6 +7015,10 @@ class AgentResourceOfficer(_PluginBase):
                 "compact_commands": ["诊断", "入库状态"],
                 "recommended_commands": ["诊断", "入库状态", "工作清单"],
                 "can_auto_run_preferred": True,
+                "recommended_agent_behavior": "auto_continue",
+                "auto_run_command": "诊断",
+                "confirm_command": "",
+                "display_command": "诊断",
             })
         return summary
 
@@ -14417,6 +14421,7 @@ class AgentResourceOfficer(_PluginBase):
                 ("mp_best_download", "蜘蛛侠"),
                 ("mp_subscribe", "钢铁侠"),
                 ("hdhive_unlock_selected", "复仇者联盟"),
+                ("ai_replay_failed_sample", "地狱乐"),
             ]
         }
         execute_plan_followups_ok = (
@@ -14435,6 +14440,12 @@ class AgentResourceOfficer(_PluginBase):
             and (execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("recommended_action") == "query_execution_followup"
             and bool(self._clean_text((execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("follow_up_hint")))
             and bool(self._clean_text(((execute_plan_followup_samples.get("hdhive_unlock_selected") or {}).get("followup_summary") or {}).get("label")))
+            and [item.get("name") for item in (execute_plan_followup_samples.get("ai_replay_failed_sample") or {}).get("action_templates") or []]
+            == ["query_mp_local_diagnose", "query_mp_ingest_status", "query_ai_sample_worklist", "query_ai_failed_samples", "query_ai_sample_insights"]
+            and (execute_plan_followup_samples.get("ai_replay_failed_sample") or {}).get("recommended_action") == "query_mp_local_diagnose"
+            and ((execute_plan_followup_samples.get("ai_replay_failed_sample") or {}).get("followup_summary") or {}).get("preferred_command") == "诊断"
+            and ((execute_plan_followup_samples.get("ai_replay_failed_sample") or {}).get("followup_summary") or {}).get("fallback_command") == "入库状态"
+            and ((execute_plan_followup_samples.get("ai_replay_failed_sample") or {}).get("followup_summary") or {}).get("recommended_agent_behavior") == "auto_continue"
         )
         checks = {
             "compact_templates": compact_templates_ok,
