@@ -167,6 +167,7 @@ def external_agent_payload():
         "recipe_command": "python3 scripts/aro_request.py templates --recipe external_agent --compact",
         "preferences_recipe_command": "python3 scripts/aro_request.py templates --recipe preferences --compact",
         "smart_search_recipe_command": "python3 scripts/aro_request.py templates --recipe smart_search --compact",
+        "smart_search_plan_recipe_command": "python3 scripts/aro_request.py templates --recipe smart_search_plan --compact",
         "mp_pt_recipe_command": "python3 scripts/aro_request.py templates --recipe mp_pt --compact",
         "mp_recommend_recipe_command": "python3 scripts/aro_request.py templates --recipe recommend --compact",
         "post_execute_recipe_command": "python3 scripts/aro_request.py templates --recipe followup --compact",
@@ -409,6 +410,10 @@ def compact(data):
             "scoring_policy",
             "preference_status",
             "score_summary",
+            "decision_summary",
+            "best_candidate",
+            "sources_checked",
+            "smart_plan_auto_selected",
             "error_summary",
             "diagnosis_summary",
             "followup_summary",
@@ -823,6 +828,8 @@ def recipe_helper_commands(recipe_summary, recipe_request):
         execute = "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>"
     elif first_template == "smart_search":
         execute = "python3 scripts/aro_request.py workflow --workflow smart_resource_search --keyword <keyword>"
+    elif first_template == "smart_search_plan":
+        execute = "python3 scripts/aro_request.py workflow --workflow smart_resource_plan --keyword <keyword>"
     elif first_template == "mp_media_detail":
         execute = "python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword <keyword>"
     elif first_template == "mp_search":
@@ -897,6 +904,8 @@ def selftest_result():
     check("workflow_dry_run_command", workflow_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow <workflow> --keyword <keyword>")
     smart_search_commands = recipe_helper_commands({"first_template": "smart_search"}, "smart_search")
     check("smart_search_recipe_execute_command", smart_search_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow smart_resource_search --keyword <keyword>")
+    smart_search_plan_commands = recipe_helper_commands({"first_template": "smart_search_plan"}, "smart_search_plan")
+    check("smart_search_plan_recipe_execute_command", smart_search_plan_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow smart_resource_plan --keyword <keyword>")
     mp_pt_commands = recipe_helper_commands({"first_template": "mp_media_detail"}, "mp_pt")
     check("mp_pt_recipe_execute_command", mp_pt_commands.get("execute_helper_command") == "python3 scripts/aro_request.py workflow --workflow mp_media_detail --keyword <keyword>")
     mp_recommend_commands = recipe_helper_commands({"first_template": "mp_recommend"}, "recommend")
@@ -1140,6 +1149,7 @@ def selftest_result():
     check("external_agent_payload_has_followup", bool(external_agent.get("followup_command")))
     check("external_agent_payload_has_preferences_recipe", bool(external_agent.get("preferences_recipe_command")))
     check("external_agent_payload_has_smart_search_recipe", bool(external_agent.get("smart_search_recipe_command")))
+    check("external_agent_payload_has_smart_search_plan_recipe", bool(external_agent.get("smart_search_plan_recipe_command")))
     check("external_agent_payload_has_mp_pt_recipe", bool(external_agent.get("mp_pt_recipe_command")))
     check("external_agent_payload_has_mp_recommend_recipe", bool(external_agent.get("mp_recommend_recipe_command")))
     check("external_agent_payload_has_post_execute_recipe", bool(external_agent.get("post_execute_recipe_command")))

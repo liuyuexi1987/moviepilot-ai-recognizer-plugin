@@ -392,6 +392,19 @@ def main() -> int:
             ),
             str(smart_search_templates.get("message") or ""),
         )
+        smart_search_plan_templates = request_templates(base_url, api_key, "smart_search_plan")
+        smart_search_plan_templates_data = data(smart_search_plan_templates)
+        smart_search_plan_names = smart_search_plan_templates_data.get("selected_names") or []
+        assert_ok(
+            "smart_search_plan_request_templates",
+            bool(
+                smart_search_plan_templates.get("success")
+                and smart_search_plan_templates_data.get("ok")
+                and smart_search_plan_templates_data.get("selected_recipe") == "smart_search_plan"
+                and smart_search_plan_names == ["smart_search_plan", "preferences_get", "scoring_policy", "saved_plan_execute"]
+            ),
+            str(smart_search_plan_templates.get("message") or ""),
+        )
         preferences_view = route(base_url, api_key, sessions[0], "偏好")
         preferences_view_data = assert_route_action("route_preferences_get", preferences_view, "preferences")
         assert_ok(
@@ -592,6 +605,36 @@ def main() -> int:
                     and "has_quark" in ((smart_search_data.get("preference_status") or {}).get("summary") or {})
                 ),
                 json.dumps(smart_search_data.get("preference_status") or {}, ensure_ascii=False)[:240],
+            )
+            smart_search_best_plan = route(base_url, api_key, sessions[1], "计划最佳")
+            smart_search_best_plan_data = assert_route_action("route_smart_search_best_plan", smart_search_best_plan, "workflow_plan")
+            assert_ok(
+                "route_smart_search_best_plan_has_plan",
+                bool(smart_search_best_plan_data.get("plan_id"))
+                and smart_search_best_plan_data.get("workflow") in {"smart_resource_plan", "pansou_best_plan", "hdhive_best_plan"},
+                json.dumps(smart_search_best_plan_data, ensure_ascii=False)[:240],
+            )
+            smart_search_plan_recover = recover(base_url, api_key, sessions[1])
+            smart_search_plan_recover_data = data(smart_search_plan_recover)
+            assert_ok(
+                "route_smart_search_plan_recover_priority",
+                (smart_search_plan_recover_data.get("recovery") or {}).get("mode") == "resume_saved_plan"
+                and (smart_search_plan_recover_data.get("recovery") or {}).get("recommended_action") == "execute_latest_plan",
+                json.dumps(smart_search_plan_recover_data.get("recovery") or {}, ensure_ascii=False),
+            )
+            smart_plan = route(base_url, api_key, sessions[2], f"智能计划 {args.keyword}")
+            smart_plan_data = assert_route_action("route_smart_plan", smart_plan, "workflow_plan")
+            assert_ok(
+                "route_smart_plan_has_plan",
+                bool(smart_plan_data.get("plan_id")) and smart_plan_data.get("workflow") == "smart_resource_plan",
+                json.dumps(smart_plan_data, ensure_ascii=False)[:240],
+            )
+            assert_ok(
+                "route_smart_plan_best_candidate",
+                isinstance(smart_plan_data.get("best_candidate"), dict)
+                and bool((smart_plan_data.get("best_candidate") or {}).get("source_type"))
+                and smart_plan_data.get("smart_plan_auto_selected") is True,
+                json.dumps(smart_plan_data, ensure_ascii=False)[:240],
             )
 
             mp_search = route(base_url, api_key, sessions[1], f"MP搜索 {args.keyword}")
