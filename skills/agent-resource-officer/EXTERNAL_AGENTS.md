@@ -14,6 +14,11 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 当前 helper 版本：`agent-resource-officer 0.1.40`
 - 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
+- 当前 AI 识别失败诊断入口：
+  - `route "失败样本 <片名>" --summary-only`
+  - `route "工作清单 <片名>" --summary-only`
+  - `route "样本洞察 <片名>" --summary-only`
+  - `templates --recipe ai_reingest --compact`
 
 给外部智能体学习时，建议让它先读仓库中的：
 
@@ -96,6 +101,16 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 这会按当前首选自动生成待确认 `plan_id`，仍然需要后续 `执行计划` 才会真正写入。
 而 `执行最佳` / `智能执行` 会直接走写入链，只适用于用户已经明确要求立即执行的场景。
+
+如果当前问题是“整理为什么失败、有没有 AI 失败样本可以继续分析”，优先走只读诊断链：
+
+- `route "本地诊断 <片名>" --summary-only`
+- `route "失败样本 <片名>" --summary-only`
+- `route "工作清单 <片名>" --summary-only`
+- `route "样本洞察 <片名>" --summary-only`
+- 或先读模板：`templates --recipe ai_reingest --compact`
+
+这条链当前只做读取、筛选和洞察，不直接触发样本重放或重新整理。
 
 三类入口都复用同一套 assistant 协议：
 

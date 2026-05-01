@@ -9,6 +9,11 @@
 - 当前插件版本：`Agent影视助手 0.2.67`
 - 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
+- 当前 AI 失败样本只读诊断入口：
+  - `python3 scripts/aro_request.py route --text "失败样本 蜘蛛侠" --summary-only`
+  - `python3 scripts/aro_request.py route --text "工作清单 蜘蛛侠" --summary-only`
+  - `python3 scripts/aro_request.py route --text "样本洞察 蜘蛛侠" --summary-only`
+  - `python3 scripts/aro_request.py templates --recipe ai_reingest --compact`
 - 当前最低成本入口：
   - `python3 scripts/aro_request.py readiness`
   - `python3 scripts/aro_request.py external-agent`
@@ -105,6 +110,7 @@ python3 scripts/aro_request.py feishu-health
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py followup --session agent:<用户ID>
 python3 scripts/aro_request.py templates --recipe followup --compact
+python3 scripts/aro_request.py templates --recipe ai_reingest --compact
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands
@@ -129,6 +135,9 @@ python3 scripts/aro_request.py route "资源决策 蜘蛛侠 详情"
 python3 scripts/aro_request.py route "资源决策 蜘蛛侠 计划"
 python3 scripts/aro_request.py route "资源决策 蜘蛛侠 确认"
 python3 scripts/aro_request.py route "资源决策 蜘蛛侠 直接执行"
+python3 scripts/aro_request.py route "失败样本 蜘蛛侠"
+python3 scripts/aro_request.py route "工作清单 蜘蛛侠"
+python3 scripts/aro_request.py route "样本洞察 蜘蛛侠"
 python3 scripts/aro_request.py route "先计划"
 python3 scripts/aro_request.py route "确认执行"
 python3 scripts/aro_request.py route "先看详情"

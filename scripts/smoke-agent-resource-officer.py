@@ -1120,6 +1120,35 @@ def main() -> int:
                 isinstance(local_diagnose_data.get("diagnosis_summary"), dict),
                 json.dumps(local_diagnose_data.get("diagnosis_summary") or {}, ensure_ascii=False)[:240],
             )
+            assert_ok(
+                "route_local_diagnose_ai_sample_worklist",
+                isinstance((local_diagnose_data.get("ai_sample_worklist") or {}).get("items"), list),
+                json.dumps(local_diagnose_data.get("ai_sample_worklist") or {}, ensure_ascii=False)[:240],
+            )
+
+            ai_failed_samples = route(base_url, api_key, sessions[4], f"失败样本 {args.keyword}")
+            ai_failed_samples_data = assert_route_action("route_ai_failed_samples", ai_failed_samples, "ai_failed_samples", require_success=False)
+            assert_ok(
+                "route_ai_failed_samples_payload",
+                isinstance(ai_failed_samples_data.get("items"), list),
+                json.dumps(ai_failed_samples_data, ensure_ascii=False)[:240],
+            )
+
+            ai_worklist = route(base_url, api_key, sessions[4], f"工作清单 {args.keyword}")
+            ai_worklist_data = assert_route_action("route_ai_sample_worklist", ai_worklist, "ai_sample_worklist", require_success=False)
+            assert_ok(
+                "route_ai_sample_worklist_payload",
+                isinstance(ai_worklist_data.get("items"), list),
+                json.dumps(ai_worklist_data, ensure_ascii=False)[:240],
+            )
+
+            ai_insights = route(base_url, api_key, sessions[4], f"样本洞察 {args.keyword}")
+            ai_insights_data = assert_route_action("route_ai_sample_insights", ai_insights, "ai_sample_insights", require_success=False)
+            assert_ok(
+                "route_ai_sample_insights_payload",
+                isinstance(ai_insights_data.get("insights"), dict),
+                json.dumps(ai_insights_data, ensure_ascii=False)[:240],
+            )
 
             smart_followup_idle = route(base_url, api_key, sessions[4], "跟进")
             smart_followup_idle_data = assert_route_action("route_smart_followup_idle", smart_followup_idle, "smart_followup")
