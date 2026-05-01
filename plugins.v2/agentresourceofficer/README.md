@@ -68,6 +68,9 @@
 - 当前最小智能体循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
 - 当前智能搜索主线：先按用户偏好过滤可用源/可用云盘，再按 `盘搜 -> 影巢 -> MP/PT` 做统一搜索决策
+- 当前统一决策入口：`资源决策 片名` 或 `智能决策 片名`，会返回查看详情、生成计划或直接执行的首选建议
+- 当前统一计划入口：`智能计划 片名` 或当前会话中的 `计划最佳`，只生成待确认 `plan_id`
+- 当前统一执行入口：`智能执行 片名` 或当前会话中的 `执行最佳`，仅用于用户已明确要求立即执行的场景
 - 已进入第一阶段可用状态
 - 已验证 `影巢健康检查 / 夸克健康检查 / 影巢候选搜索 / 选片进入资源列表`
 - 已接入第一批原生 `Agent Tool`

@@ -53,7 +53,23 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 如果场景是“只给片名，让智能体自己比较多个来源”，优先使用统一搜索决策入口：
 
 - `route "智能搜索 <片名>" --summary-only`
+- `route "资源决策 <片名>" --summary-only`
+- 如果用户已经明确要计划或直接执行，也可以直接发：
+  - `route "资源决策 <片名> 详情" --summary-only`
+  - `route "资源决策 <片名> 计划" --summary-only`
+  - `route "资源决策 <片名> 确认" --summary-only`
+  - `route "资源决策 <片名> 直接执行" --summary-only`
+- 如果已经进入同一资源决策会话，还可以直接发：
+  - `route "先计划" --summary-only`
+  - `route "确认执行" --summary-only`
+  - `route "先看详情" --summary-only`
+  - 也支持更短的会话内命令：`计划`、`详情`、`确认`
 - 或者先读模板：`templates --recipe smart_search --compact`
+- 或先读模板：`templates --recipe smart_decision --compact`
+- 如果希望一步拿到待确认计划，用：`route "智能计划 <片名>" --summary-only`
+- 或先读模板：`templates --recipe smart_search_plan --compact`
+- 如果用户已经明确要求立即执行，用：`route "智能执行 <片名>" --summary-only`
+- 或先读模板：`templates --recipe smart_search_execute --compact`
 
 这条入口会统一按 `盘搜 -> 影巢 -> MP/PT` 搜索，并自动读取当前会话偏好中的：
 
@@ -61,6 +77,25 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 可用云盘：`has_115 / has_quark`
 
 所以如果用户提前说明“只有夸克”“没有 115”“不用盘搜”“只用 MP/PT”，外部智能体无需自己再维护一套分支判断，直接先保存偏好，再调用 `智能搜索` 即可。
+
+如果已经跑过一次 `智能搜索`，还可以在同一 session 里直接发：
+
+- `计划最佳`
+- `执行最佳`
+- `继续推荐`
+- `换影巢`
+- `换盘搜`
+- `换PT`
+- `保守一点`
+- `激进一点`
+- `只用夸克`
+- `只用115`
+- `只走PT`
+- `不用影巢`
+- `按保存偏好`
+
+这会按当前首选自动生成待确认 `plan_id`，但仍然需要后续 `执行计划` 才会真正写入。
+而 `执行最佳` / `智能执行` 会直接走写入链，只适用于用户已经明确要求立即执行的场景。
 
 三类入口都复用这一套 assistant 协议：
 
