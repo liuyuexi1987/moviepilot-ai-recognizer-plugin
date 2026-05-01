@@ -170,7 +170,10 @@ python3 scripts/aro_request.py pick 1
 
 从 `0.2.66` 开始，`request_templates` 还会直接给出 `entry_playbooks`，把外部智能体、MP 内置智能体、飞书入口各自该调什么 helper / HTTP / Tool 以及优先读取哪些字段直接列出来。新接入方优先读这个结构，不要再自己拼第二套启动脚手架。
 
-如果外部智能体已经确定是 MP 原生 PT 搜索/下载/订阅任务，优先拉 `mp_pt` recipe；如果是热门推荐、豆瓣热映、Bangumi 番剧续接，优先拉 `recommend` recipe。推荐列表里的条目现在也支持直接接统一资源决策：`选择 1 决策`。
+如果外部智能体已经确定是 MP 原生 PT 搜索/下载/订阅任务，优先拉 `mp_pt` recipe；如果是热门推荐、豆瓣热映、Bangumi 番剧续接，优先拉 `recommend` recipe。推荐列表里的条目现在支持：
+- `选择 1 决策`
+- `选择 1 计划`
+- `选择 1 确认`
 
 注意：`workflow` 会直接执行只读工作流；涉及下载、订阅、解锁或转存的写入工作流会默认保存待确认执行的 `plan_id`。
 

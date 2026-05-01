@@ -62,6 +62,10 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 - `route "智能搜索 <片名>" --summary-only`
 - `route "资源决策 <片名>" --summary-only`
+- 如果是 MP 推荐列表续接，也支持直接发：
+  - `route "选择 1 决策" --summary-only`
+  - `route "选择 1 计划" --summary-only`
+  - `route "选择 1 确认" --summary-only`
 - 如果用户已经明确要计划或直接执行，也可以直接发：
   - `route "资源决策 <片名> 详情" --summary-only`
   - `route "资源决策 <片名> 计划" --summary-only`

@@ -267,7 +267,11 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 每次新会话先调用 startup。需要低 token 调用说明时，默认调用 request_templates，recipe=external_agent。
 如果当前会话还没有完成偏好初始化，优先调用 request_templates，recipe=preferences。
 如果当前任务已经明确是 MP 原生 PT 搜索、下载、订阅、任务追踪，优先调用 request_templates，recipe=mp_pt。
-如果当前任务已经明确是热门推荐、豆瓣热映、Bangumi 番剧续接，优先调用 request_templates，recipe=recommend。推荐列表里可直接发 `选择 1 决策`，把条目接到统一资源决策链。
+如果当前任务已经明确是热门推荐、豆瓣热映、Bangumi 番剧续接，优先调用 request_templates，recipe=recommend。推荐列表里可直接发：
+
+- `选择 1 决策`
+- `选择 1 计划`
+- `选择 1 确认`
 
 统一入口：
 POST /api/v1/plugin/AgentResourceOfficer/assistant/route?apikey={MP_API_TOKEN}

@@ -243,6 +243,8 @@ def main() -> int:
             f"smoke-aro-recommend-pansou-{stamp}",
             f"smoke-aro-recommend-tv-{stamp}",
             f"smoke-aro-smart-discovery-{stamp}",
+            f"smoke-aro-smart-discovery-plan-{stamp}",
+            f"smoke-aro-smart-discovery-execute-{stamp}",
         ])
 
     try:
@@ -1266,6 +1268,36 @@ def main() -> int:
                 and isinstance(recommend_to_decision_data.get("available_sources"), list)
                 and isinstance(recommend_to_decision_data.get("blocked_sources"), list),
                 json.dumps(recommend_to_decision_data, ensure_ascii=False)[:240],
+            )
+            smart_discovery_plan = route(base_url, api_key, sessions[9], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_plan", smart_discovery_plan, "mp_recommendations")
+            recommend_to_plan = route(base_url, api_key, sessions[9], "选择 1 计划")
+            recommend_to_plan_data = data(recommend_to_plan)
+            assert_ok(
+                "route_recommend_to_plan",
+                recommend_to_plan.get("success")
+                and recommend_to_plan_data.get("action") in {"workflow_plan", "smart_resource_plan"},
+                json.dumps(recommend_to_plan, ensure_ascii=False)[:240],
+            )
+            assert_ok(
+                "route_recommend_to_plan_payload",
+                bool(recommend_to_plan_data.get("plan_id")) and recommend_to_plan_data.get("workflow") == "smart_resource_plan",
+                json.dumps(recommend_to_plan_data, ensure_ascii=False)[:240],
+            )
+            smart_discovery_execute = route(base_url, api_key, sessions[10], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_execute", smart_discovery_execute, "mp_recommendations")
+            recommend_to_execute = route(base_url, api_key, sessions[10], "选择 1 确认")
+            recommend_to_execute_data = data(recommend_to_execute)
+            assert_ok(
+                "route_recommend_to_execute",
+                recommend_to_execute_data.get("action") in {"smart_resource_execute", "execute_plan"}
+                and recommend_to_execute_data.get("write_effect") == "write",
+                json.dumps(recommend_to_execute, ensure_ascii=False)[:240],
+            )
+            assert_ok(
+                "route_recommend_to_execute_payload",
+                recommend_to_execute_data.get("write_effect") == "write",
+                json.dumps(recommend_to_execute_data, ensure_ascii=False)[:240],
             )
 
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
