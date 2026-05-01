@@ -578,6 +578,32 @@ class AgentResourceOfficer(_PluginBase):
             match = re.match(pattern, raw, flags=re.IGNORECASE)
             if match:
                 return {"index": match.group(1), **base}
+        selected_index = cls._safe_int(current_state.get("selected_index"), 0)
+        if selected_index > 0:
+            no_index_aliases = {
+                "详情": {"action": "detail"},
+                "查看详情": {"action": "detail"},
+                "看详情": {"action": "detail"},
+                "决策": {"mode": "smart_decision"},
+                "资源决策": {"mode": "smart_decision"},
+                "智能决策": {"mode": "smart_decision"},
+                "计划": {"action": "plan"},
+                "生成计划": {"action": "plan"},
+                "先计划": {"action": "plan"},
+                "确认": {"mode": "smart_execute"},
+                "执行": {"mode": "smart_execute"},
+                "直接执行": {"mode": "smart_execute"},
+                "盘搜": {"mode": "pansou"},
+                "ps": {"mode": "pansou"},
+                "影巢": {"mode": "hdhive"},
+                "yc": {"mode": "hdhive"},
+                "原生": {"mode": "mp"},
+                "mp": {"mode": "mp"},
+                "pt": {"mode": "mp"},
+            }
+            shortcut = no_index_aliases.get(raw)
+            if shortcut:
+                return {"index": selected_index, **shortcut}
         return {}
 
     @classmethod
@@ -8455,6 +8481,25 @@ class AgentResourceOfficer(_PluginBase):
                 "data": self._assistant_response_data(session=session, data={"action": "mp_recommendations", "ok": False}),
             }
 
+    def _format_mp_recommend_item_detail_text(self, item: Dict[str, Any]) -> str:
+        title = self._clean_text(item.get("title")) or "-"
+        year = self._clean_text(item.get("year")) or "-"
+        media_type = self._clean_text(item.get("type")) or "-"
+        tmdb_id = self._clean_text(item.get("tmdb_id")) or "-"
+        douban_id = self._clean_text(item.get("douban_id")) or "-"
+        vote = self._clean_text(item.get("vote_average")) or "-"
+        lines = [
+            "MP 推荐条目详情",
+            f"标题：{title}",
+            f"年份：{year}",
+            f"类型：{media_type}",
+            f"评分：{vote}",
+            f"TMDB：{tmdb_id}",
+            f"豆瓣：{douban_id}",
+            "下一步：回复“决策”“计划”“确认”，或“盘搜”“影巢”“原生”。",
+        ]
+        return "\n".join(lines)
+
     def _persist_workflow_plans(self) -> None:
         try:
             items = sorted(
@@ -9461,9 +9506,11 @@ class AgentResourceOfficer(_PluginBase):
             })
         elif kind == "assistant_mp_recommend":
             items = state.get("items") or []
+            selected_index = self._safe_int(state.get("selected_index"), 0)
             payload.update({
                 "source": self._clean_text(state.get("source")),
                 "result_count": len(items),
+                "selected_index": selected_index if selected_index > 0 else None,
                 "items_preview": [
                     {
                         "index": self._safe_int(item.get("index"), idx + 1),
@@ -9489,6 +9536,18 @@ class AgentResourceOfficer(_PluginBase):
                     "session_clear",
                 ],
             })
+            if selected_index > 0:
+                payload["selected_item"] = dict(state.get("selected_item") or {})
+                payload["suggested_actions"] = [
+                    *list(payload.get("suggested_actions") or []),
+                    "smart_entry.text=详情",
+                    "smart_entry.text=决策",
+                    "smart_entry.text=计划",
+                    "smart_entry.text=确认",
+                    "smart_entry.text=原生",
+                    "smart_entry.text=影巢",
+                    "smart_entry.text=盘搜",
+                ]
         elif kind == "assistant_hdhive":
             if stage == "candidate":
                 candidates = state.get("candidates") or []
@@ -17395,6 +17454,21 @@ class AgentResourceOfficer(_PluginBase):
         def immediate(result: Dict[str, Any]) -> Dict[str, Any]:
             return result
 
+        recommend_short_direct = self._normalize_mp_recommend_short_action(text, state=state)
+        if recommend_short_direct:
+            return finish(await self.api_assistant_pick(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "session_id": cache_key,
+                    "index": recommend_short_direct.get("index"),
+                    "action": recommend_short_direct.get("action"),
+                    "mode": recommend_short_direct.get("mode"),
+                    "path": self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path"))),
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            ))
+
         parsed = self._merge_assistant_structured_input(body, self._parse_assistant_text(text))
         target_path = parsed.get("path") or ""
 
@@ -20440,6 +20514,11 @@ class AgentResourceOfficer(_PluginBase):
 
         if kind == "assistant_mp_recommend":
             items = state.get("items") or []
+            selected_index = self._safe_int(state.get("selected_index"), 0)
+            if index <= 0:
+                index = selected_index
+            if index <= 0:
+                return {"success": False, "message": "推荐结果需要先指定编号，例如：选择 1 决策，或先发：详情 1。"}
             if index > len(items):
                 return {"success": False, "message": f"序号超出范围，请输入 1 到 {len(items)} 之间的数字。"}
             selected = dict(items[index - 1])
@@ -20447,6 +20526,27 @@ class AgentResourceOfficer(_PluginBase):
             if not title:
                 return {"success": False, "message": "选中的推荐条目缺少标题，无法继续搜索。"}
             pick_action = self._normalize_pick_action(body.get("action"))
+            if pick_action == "detail":
+                self._save_session(cache_key, {
+                    **state,
+                    "selected_index": index,
+                    "selected_item": selected,
+                })
+                return finish({
+                    "success": True,
+                    "message": self._format_mp_recommend_item_detail_text(selected),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "mp_recommendation_detail",
+                        "ok": True,
+                        "choice": index,
+                        "selected_index": index,
+                        "item": selected,
+                        "detail_short_command": "详情",
+                        "decision_short_command": "决策",
+                        "plan_short_command": "计划",
+                        "confirm_short_command": "确认",
+                    }),
+                })
             next_mode = self._clean_text(
                 body.get("mode")
                 or body.get("search_mode")

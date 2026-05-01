@@ -249,6 +249,7 @@ def main() -> int:
             f"smoke-aro-smart-discovery-short-plan-{stamp}",
             f"smoke-aro-smart-discovery-short-execute-{stamp}",
             f"smoke-aro-smart-discovery-followups-{stamp}",
+            f"smoke-aro-smart-discovery-detail-flow-{stamp}",
         ])
 
     try:
@@ -1358,6 +1359,22 @@ def main() -> int:
                     and "bangumi_calendar" in str(recommend_followup_bangumi_data.get("message_head") or "")
                 ),
                 json.dumps(recommend_followup_bangumi_data, ensure_ascii=False)[:240],
+            )
+            smart_discovery_detail_flow = route(base_url, api_key, sessions[15], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_detail_flow", smart_discovery_detail_flow, "mp_recommendations")
+            recommend_detail = route(base_url, api_key, sessions[15], "详情 1")
+            recommend_detail_data = assert_route_action("route_recommend_detail", recommend_detail, "mp_recommendation_detail")
+            assert_ok(
+                "route_recommend_detail_message_ok",
+                "MP 推荐条目详情" in str(recommend_detail_data.get("message_head") or ""),
+                json.dumps(recommend_detail_data, ensure_ascii=False)[:240],
+            )
+            recommend_detail_decision = route(base_url, api_key, sessions[15], "决策")
+            recommend_detail_decision_data = assert_route_action("route_recommend_detail_followup_decision", recommend_detail_decision, "smart_resource_decision", require_success=False)
+            assert_ok(
+                "route_recommend_detail_followup_decision_ok",
+                bool(recommend_detail_decision_data.get("decision_mode")),
+                json.dumps(recommend_detail_decision_data, ensure_ascii=False)[:240],
             )
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")

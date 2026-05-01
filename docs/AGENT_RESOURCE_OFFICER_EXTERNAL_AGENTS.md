@@ -66,10 +66,19 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
   - `route "选择 1 决策" --summary-only`
   - `route "选择 1 计划" --summary-only`
   - `route "选择 1 确认" --summary-only`
+  - `route "详情 1" --summary-only`
   - 进入推荐会话后，也支持：
     - `route "决策 1" --summary-only`
     - `route "计划 1" --summary-only`
     - `route "确认 1" --summary-only`
+    - 如果先看了 `详情 1`，还可以直接发：
+    - `route "详情" --summary-only`
+    - `route "决策" --summary-only`
+    - `route "计划" --summary-only`
+    - `route "确认" --summary-only`
+    - `route "盘搜" --summary-only`
+    - `route "影巢" --summary-only`
+    - `route "原生" --summary-only`
     - `route "电影" --summary-only`
     - `route "电视剧" --summary-only`
     - `route "豆瓣" --summary-only`
