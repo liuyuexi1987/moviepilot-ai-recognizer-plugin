@@ -500,6 +500,27 @@ class AgentResourceOfficer(_PluginBase):
             return "best_execute"
         return ""
 
+    @staticmethod
+    def _is_pending_plan_confirmation_text(value: Any) -> bool:
+        raw = str(value or "").strip()
+        if not raw:
+            return False
+        compact = re.sub(r"\s+", "", raw).lower()
+        if re.search(r"\d", compact):
+            return False
+        return compact in {
+            "确认",
+            "确认吧",
+            "确认执行",
+            "确认执行吧",
+            "执行",
+            "执行吧",
+            "execute",
+            "run",
+            "确定",
+            "确定执行",
+        }
+
     @classmethod
     def _normalize_ai_reingest_short_action(
         cls,
@@ -17447,12 +17468,30 @@ class AgentResourceOfficer(_PluginBase):
         text = self._clean_text(body.get("text") or body.get("query") or body.get("message") or "")
         state = self._load_session(cache_key) or {}
         compact = self._parse_bool_value(body.get("compact"), False)
+        saved_plan = self._session_workflow_plan_public_data(session=session, session_id=cache_key)
 
         def finish(result: Dict[str, Any]) -> Dict[str, Any]:
             return self._assistant_interaction_compact_response(result) if compact else result
 
         def immediate(result: Dict[str, Any]) -> Dict[str, Any]:
             return result
+
+        if (
+            saved_plan.get("has_pending")
+            and self._is_pending_plan_confirmation_text(text)
+            and not self._clean_text(body.get("plan_id"))
+        ):
+            return finish(await self.api_assistant_plan_execute(
+                _JsonRequestShim(request, {
+                    "session": session,
+                    "session_id": cache_key,
+                    "prefer_unexecuted": True,
+                    "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
+                    "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
+                    "compact": compact,
+                    "apikey": self._extract_apikey(request, body),
+                })
+            ))
 
         recommend_short_direct = self._normalize_mp_recommend_short_action(text, state=state)
         if recommend_short_direct:

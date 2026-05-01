@@ -1376,6 +1376,21 @@ def main() -> int:
                 bool(recommend_detail_decision_data.get("decision_mode")),
                 json.dumps(recommend_detail_decision_data, ensure_ascii=False)[:240],
             )
+            recommend_detail_plan = route(base_url, api_key, sessions[15], "计划")
+            recommend_detail_plan_data = assert_route_action("route_recommend_detail_followup_plan", recommend_detail_plan, "workflow_plan")
+            assert_ok(
+                "route_recommend_detail_followup_plan_ok",
+                bool(recommend_detail_plan_data.get("plan_id")),
+                json.dumps(recommend_detail_plan_data, ensure_ascii=False)[:240],
+            )
+            recommend_detail_confirm = route(base_url, api_key, sessions[15], "确认")
+            recommend_detail_confirm_data = assert_route_action("route_recommend_detail_followup_confirm", recommend_detail_confirm, "execute_plan", require_success=False)
+            confirm_message = message_text(recommend_detail_confirm)
+            assert_ok(
+                "route_recommend_detail_followup_confirm_pending_plan_ok",
+                "已根据智能搜索结果自动生成并执行当前首选计划" not in confirm_message,
+                confirm_message[:240],
+            )
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")
             tv_message = message_text(tv_recommend)
