@@ -790,6 +790,15 @@ def main() -> int:
                 isinstance(smart_search_detail_intent_data.get("score_summary"), dict),
                 json.dumps(smart_search_detail_intent_data, ensure_ascii=False)[:240],
             )
+            smart_decision_execute_intent_session = f"{sessions[1]}-execute-intent"
+            smart_decision_execute_intent = route(base_url, api_key, smart_decision_execute_intent_session, f"资源决策 {args.keyword} 确认")
+            smart_decision_execute_intent_data = assert_route_action("route_smart_decision_execute_intent", smart_decision_execute_intent, "execute_plan")
+            assert_ok(
+                "route_smart_decision_execute_intent_write_effect",
+                smart_decision_execute_intent_data.get("write_effect") == "write"
+                and bool(smart_decision_execute_intent_data.get("smart_execute_auto_selected")),
+                json.dumps(smart_decision_execute_intent_data, ensure_ascii=False)[:240],
+            )
             smart_shortcut_session = f"{sessions[1]}-shortcuts"
             assert_route_action(
                 "route_smart_decision_shortcuts_start",
