@@ -555,20 +555,41 @@ def main() -> int:
                 json.dumps(execution_followup_data, ensure_ascii=False)[:240],
             )
             download_task_actions = list(download_tasks_data.get("next_actions") or [])
+            has_download_controls = any(
+                action_name in download_task_actions
+                for action_name in [
+                    "mp_download_control.pause",
+                    "mp_download_control.resume",
+                    "mp_download_control.delete",
+                ]
+            )
             assert_ok(
-                "route_download_tasks_empty_next_actions",
-                "mp_download_control.pause" not in download_task_actions
-                and "mp_download_control.resume" not in download_task_actions
-                and "mp_download_control.delete" not in download_task_actions,
+                "route_download_tasks_next_actions",
+                (
+                    has_download_controls
+                    or (
+                        "mp_download_control.pause" not in download_task_actions
+                        and "mp_download_control.resume" not in download_task_actions
+                        and "mp_download_control.delete" not in download_task_actions
+                    )
+                ),
                 json.dumps(download_task_actions, ensure_ascii=False),
             )
             download_task_templates = template_names(download_tasks_data)
             assert_ok(
-                "route_download_tasks_empty_templates",
-                "pause_mp_download" not in download_task_templates
-                and "resume_mp_download" not in download_task_templates
-                and "delete_mp_download" not in download_task_templates
-                and "query_mp_download_history" in download_task_templates,
+                "route_download_tasks_templates",
+                (
+                    (
+                        "pause_mp_download" in download_task_templates
+                        and "resume_mp_download" in download_task_templates
+                        and "delete_mp_download" in download_task_templates
+                    ) if has_download_controls else (
+                        "pause_mp_download" not in download_task_templates
+                        and "resume_mp_download" not in download_task_templates
+                        and "delete_mp_download" not in download_task_templates
+                        and "query_mp_download_history" in download_task_templates
+                    )
+                ),
                 json.dumps(download_task_templates, ensure_ascii=False),
             )
 
@@ -1578,11 +1599,23 @@ def main() -> int:
                 bool(handoff_pansou_plan_data.get("plan_id")),
                 json.dumps(handoff_pansou_plan_data, ensure_ascii=False)[:260],
             )
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_plan_short_policy",
+                handoff_pansou_plan_data.get("preferred_command") == "确认"
+                and handoff_pansou_plan_data.get("fallback_command") == "详情",
+                json.dumps(handoff_pansou_plan_data, ensure_ascii=False)[:260],
+            )
             handoff_pansou_confirm = route(base_url, api_key, sessions[27], "确认")
             handoff_pansou_confirm_data = assert_route_action("route_smart_discovery_handoff_pansou_confirm", handoff_pansou_confirm, "execute_plan", require_success=False)
             assert_ok(
                 "route_smart_discovery_handoff_pansou_confirm_payload",
                 handoff_pansou_confirm_data.get("write_effect") == "write",
+                json.dumps(handoff_pansou_confirm_data, ensure_ascii=False)[:260],
+            )
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_confirm_followup",
+                handoff_pansou_confirm_data.get("preferred_command") in {"决策", "后续", ""}
+                or (handoff_pansou_confirm_data.get("followup_summary") or {}).get("preferred_command") == "决策",
                 json.dumps(handoff_pansou_confirm_data, ensure_ascii=False)[:260],
             )
             handoff_mp_recommend = route(base_url, api_key, sessions[28], "智能发现 热门电影")
@@ -1606,6 +1639,12 @@ def main() -> int:
             assert_ok(
                 "route_smart_discovery_handoff_mp_plan_payload",
                 bool(handoff_mp_plan_data.get("plan_id")),
+                json.dumps(handoff_mp_plan_data, ensure_ascii=False)[:260],
+            )
+            assert_ok(
+                "route_smart_discovery_handoff_mp_plan_short_policy",
+                handoff_mp_plan_data.get("preferred_command") == "确认"
+                and handoff_mp_plan_data.get("fallback_command") == "详情",
                 json.dumps(handoff_mp_plan_data, ensure_ascii=False)[:260],
             )
             handoff_mp_decision = route(base_url, api_key, sessions[28], "决策")

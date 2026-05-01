@@ -8898,17 +8898,31 @@ class AgentResourceOfficer(_PluginBase):
             session_id=cache_key,
             executed=False,
         )
+        handoff_state = dict(state or {})
+        if pending_plan and not isinstance(handoff_state.get("recommend_handoff"), dict):
+            pending_handoff = pending_plan.get("recommend_handoff") if isinstance(pending_plan.get("recommend_handoff"), dict) else {}
+            if pending_handoff:
+                handoff_state["recommend_handoff"] = dict(pending_handoff)
         if pending_plan:
-            return await self.api_assistant_plan_execute(_JsonRequestShim(request, {
+            result = await self.api_assistant_plan_execute(_JsonRequestShim(request, {
                 "session": session,
                 "session_id": cache_key,
                 "prefer_unexecuted": True,
                 "compact": compact,
                 "apikey": self._extract_apikey(request, {}),
             }))
+            if handoff_state.get("recommend_handoff") and not bool(result.get("success")):
+                result_data = dict(result.get("data") or {})
+                result_data.update(self._assistant_recommend_handoff_short_metadata(handoff_state))
+                result_data["followup_summary"] = self._assistant_recommend_handoff_execute_failure_followup(handoff_state)
+                command_summary = self._assistant_compact_command_summary(result_data)
+                if command_summary:
+                    result_data.update(command_summary)
+                result["data"] = result_data
+            return result
         kind = self._clean_text(state.get("kind"))
         if kind in {"assistant_pansou", "assistant_mp"}:
-            return await self.api_assistant_pick(_JsonRequestShim(request, {
+            result = await self.api_assistant_pick(_JsonRequestShim(request, {
                 "session": session,
                 "session_id": cache_key,
                 "choice": 0,
@@ -8917,6 +8931,15 @@ class AgentResourceOfficer(_PluginBase):
                 "compact": compact,
                 "apikey": self._extract_apikey(request, {}),
             }))
+            if handoff_state.get("recommend_handoff") and not bool(result.get("success")):
+                result_data = dict(result.get("data") or {})
+                result_data.update(self._assistant_recommend_handoff_short_metadata(handoff_state))
+                result_data["followup_summary"] = self._assistant_recommend_handoff_execute_failure_followup(handoff_state)
+                command_summary = self._assistant_compact_command_summary(result_data)
+                if command_summary:
+                    result_data.update(command_summary)
+                result["data"] = result_data
+            return result
         return {
             "success": False,
             "message": "当前会话没有待确认计划。影巢候选阶段请先选择编号；如果想回统一搜索决策，请回复：决策。",
@@ -8927,6 +8950,75 @@ class AgentResourceOfficer(_PluginBase):
                 "preferred_command": "决策",
                 "fallback_command": "回推荐",
             }),
+        }
+
+    def _assistant_recommend_handoff_short_metadata(
+        self,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        handoff = (state or {}).get("recommend_handoff") if isinstance((state or {}).get("recommend_handoff"), dict) else {}
+        source_short_commands = handoff.get("source_short_commands") if isinstance(handoff.get("source_short_commands"), dict) else {}
+        return {
+            "recommend_handoff": dict(handoff) if handoff else {},
+            "return_short_command": self._clean_text(handoff.get("return_short_command") or "回推荐") if handoff else "",
+            "detail_short_command": "详情",
+            "decision_short_command": "决策",
+            "plan_short_command": "计划",
+            "confirm_short_command": "确认",
+            "pansou_short_command": self._clean_text(source_short_commands.get("pansou") or "盘搜") if handoff else "",
+            "hdhive_short_command": self._clean_text(source_short_commands.get("hdhive") or "影巢") if handoff else "",
+            "mp_short_command": self._clean_text(source_short_commands.get("mp") or "原生") if handoff else "",
+        }
+
+    def _assistant_recommend_handoff_plan_summary(
+        self,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        meta = self._assistant_recommend_handoff_short_metadata(state)
+        return {
+            "stage": "confirm",
+            "label": "待确认计划",
+            "decision_hint": "当前推荐条目已生成计划；先看详情，再决定是否确认执行。",
+            "command_policy": "read_then_confirm_write",
+            "preferred_requires_confirmation": True,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": False,
+            "preferred_command": "确认",
+            "fallback_command": "详情",
+            "compact_commands": ["确认", "详情"],
+            "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+            "auto_run_command": "详情",
+            "confirm_command": "确认",
+            "display_command": "详情",
+            **meta,
+        }
+
+    def _assistant_recommend_handoff_execute_failure_followup(
+        self,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        meta = self._assistant_recommend_handoff_short_metadata(state)
+        return {
+            "category": "recommend_handoff",
+            "stage": "write_failed",
+            "label": "执行失败，建议换路",
+            "preferred_action": "return_to_smart_decision",
+            "decision_hint": "当前推荐条目的执行失败；优先回到统一资源决策，或回推荐后切换其它源。",
+            "command_policy": "safe_read_recovery",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": False,
+            "preferred_command": "决策",
+            "fallback_command": meta.get("return_short_command") or "回推荐",
+            "compact_commands": ["决策", meta.get("return_short_command") or "回推荐"],
+            "recommended_commands": [
+                "决策",
+                meta.get("return_short_command") or "回推荐",
+                meta.get("hdhive_short_command") or "影巢",
+                meta.get("mp_short_command") or "原生",
+            ],
+            "recommended_agent_behavior": "show_only",
+            **meta,
         }
 
     def _persist_workflow_plans(self) -> None:
@@ -9009,6 +9101,10 @@ class AgentResourceOfficer(_PluginBase):
             execute_body=execute_body,
         )
         plan_id = self._clean_text(plan.get("plan_id"))
+        recommend_handoff = extra_data.get("recommend_handoff") if isinstance((extra_data or {}).get("recommend_handoff"), dict) else {}
+        if plan_id and recommend_handoff and isinstance(self._workflow_plans.get(plan_id), dict):
+            self._workflow_plans[plan_id]["recommend_handoff"] = dict(recommend_handoff)
+            self._persist_workflow_plans()
         template = self._assistant_action_template(
             name="execute_plan",
             description="执行刚生成的计划",
@@ -18163,6 +18259,15 @@ class AgentResourceOfficer(_PluginBase):
             and self._is_pending_plan_confirmation_text(text)
             and not self._clean_text(body.get("plan_id"))
         ):
+            if isinstance(state.get("recommend_handoff"), dict) and state.get("recommend_handoff"):
+                return finish(await self._assistant_confirm_recommend_handoff(
+                    request,
+                    session=session,
+                    cache_key=cache_key,
+                    state=state,
+                    compact=compact,
+                    target_path=self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path"))),
+                ))
             return finish(await self.api_assistant_plan_execute(
                 _JsonRequestShim(request, {
                     "session": session,
@@ -21186,7 +21291,7 @@ class AgentResourceOfficer(_PluginBase):
                     "access_code": access_code,
                     "path": final_path,
                 }]
-                return finish(self._save_assistant_pick_plan_response(
+                result = self._save_assistant_pick_plan_response(
                     workflow="pansou_best_plan",
                     session=session,
                     session_id=cache_key,
@@ -21206,7 +21311,13 @@ class AgentResourceOfficer(_PluginBase):
                         "target_path": final_path,
                         "selected_item": selected,
                     },
-                ))
+                )
+                if state.get("recommend_handoff"):
+                    result_data = dict(result.get("data") or {})
+                    result_data.update(self._assistant_recommend_handoff_short_metadata(state))
+                    result_data["decision_summary"] = self._assistant_recommend_handoff_plan_summary(state)
+                    result["data"] = result_data
+                return finish(result)
             if action == "detail":
                 if index <= 0:
                     return {"success": False, "message": "盘搜详情需要编号，例如：选择 1 详情。"}
@@ -21566,11 +21677,17 @@ class AgentResourceOfficer(_PluginBase):
                 ))
             if action == "best_plan":
                 preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
-                return finish(await self._assistant_mp_best_download_plan(
+                result = await self._assistant_mp_best_download_plan(
                     session=session,
                     cache_key=cache_key,
                     preferences=preferences,
-                ))
+                )
+                if state.get("recommend_handoff"):
+                    result_data = dict(result.get("data") or {})
+                    result_data.update(self._assistant_recommend_handoff_short_metadata(state))
+                    result_data["decision_summary"] = self._assistant_recommend_handoff_plan_summary(state)
+                    result["data"] = result_data
+                return finish(result)
             if action == "detail" and index <= 0:
                 return {"success": False, "message": "MP 搜索结果详情需要编号，例如：选择 1。"}
             preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
