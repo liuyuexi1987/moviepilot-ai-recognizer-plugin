@@ -666,6 +666,21 @@ def main() -> int:
                 and smart_decision_plan_data.get("workflow") == "smart_resource_plan",
                 json.dumps(smart_decision_plan_data, ensure_ascii=False)[:240],
             )
+            smart_decision_confirm_plan = route(base_url, api_key, sessions[1], "先计划")
+            smart_decision_confirm_plan_data = assert_route_action("route_smart_decision_confirm_plan", smart_decision_confirm_plan, "workflow_plan")
+            assert_ok(
+                "route_smart_decision_confirm_plan_has_plan",
+                bool(smart_decision_confirm_plan_data.get("plan_id"))
+                and smart_decision_confirm_plan_data.get("workflow") == "smart_resource_plan",
+                json.dumps(smart_decision_confirm_plan_data, ensure_ascii=False)[:240],
+            )
+            smart_decision_best_detail = route(base_url, api_key, sessions[1], "先看详情")
+            smart_decision_best_detail_data = assert_route_action("route_smart_decision_best_detail", smart_decision_best_detail, "pansou_best_detail")
+            assert_ok(
+                "route_smart_decision_best_detail_score_summary",
+                isinstance(smart_decision_best_detail_data.get("score_summary"), dict),
+                json.dumps(smart_decision_best_detail_data, ensure_ascii=False)[:240],
+            )
             smart_search_best_plan = route(base_url, api_key, sessions[1], "计划最佳")
             smart_search_best_plan_data = assert_route_action("route_smart_search_best_plan", smart_search_best_plan, "workflow_plan")
             assert_ok(

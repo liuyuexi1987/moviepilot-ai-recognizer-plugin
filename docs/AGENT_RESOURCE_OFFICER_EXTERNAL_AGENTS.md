@@ -57,6 +57,10 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 如果用户已经明确要计划或直接执行，也可以直接发：
   - `route "资源决策 <片名> 计划" --summary-only`
   - `route "资源决策 <片名> 直接执行" --summary-only`
+- 如果已经进入同一资源决策会话，还可以直接发：
+  - `route "先计划" --summary-only`
+  - `route "确认执行" --summary-only`
+  - `route "先看详情" --summary-only`
 - 或者先读模板：`templates --recipe smart_search --compact`
 - 或先读模板：`templates --recipe smart_decision --compact`
 - 如果希望一步拿到待确认计划，用：`route "智能计划 <片名>" --summary-only`

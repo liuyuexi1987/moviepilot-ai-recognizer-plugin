@@ -57,6 +57,10 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 如果用户已经在一句话里明确要计划或直接执行，也可以直接发：
   - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "资源决策 <片名> 计划" --summary-only`
   - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "资源决策 <片名> 直接执行" --summary-only`
+- 如果已经进入同一资源决策会话，还可以直接发：
+  - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "先计划" --summary-only`
+  - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "确认执行" --summary-only`
+  - `python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "先看详情" --summary-only`
 - 或先读模板：`python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py templates --recipe smart_search --compact`
 - 或先读模板：`python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py templates --recipe smart_decision --compact`
 - 如果你希望一步拿到待确认计划，用：`python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py route "智能计划 <片名>" --summary-only`

@@ -399,6 +399,12 @@ class AgentResourceOfficer(_PluginBase):
             return "decision_conservative"
         if text in {"激进一点", "更激进", "激进模式", "decision_aggressive"}:
             return "decision_aggressive"
+        if text in {"确认执行", "确认执行吧", "就执行吧", "直接来", "执行它", "确认处理", "确认转存", "确认解锁"}:
+            return "best_execute"
+        if text in {"先计划", "先做计划", "先生成计划", "先出计划", "还是先计划"}:
+            return "best_plan"
+        if text in {"先看详情", "先看推荐", "先看结果", "看最佳", "看看最佳", "先看一下"}:
+            return "best"
         if text in {"best_execute", "execute_best", "执行最佳", "最佳执行", "立即执行最佳", "直接执行最佳"}:
             return "best_execute"
         if text in {"best_plan", "plan_best", "计划最佳", "最佳计划", "计划推荐", "推荐计划", "最优计划"}:
@@ -4696,6 +4702,7 @@ class AgentResourceOfficer(_PluginBase):
         }
         preferred_command = self._clean_text(best_candidate.get("next_command"))
         fallback_command = self._clean_text(best_candidate.get("detail_command"))
+        detail_command = "先看详情" if best_candidate.get("choice") else ""
         title = self._clean_text(best_candidate.get("title"))
         source_type = self._clean_text(best_candidate.get("source_type")).lower()
         score_value = self._safe_int(best_candidate.get("score"), 0)
@@ -4703,6 +4710,7 @@ class AgentResourceOfficer(_PluginBase):
         decision_mode = "show_detail"
         confirm_required = False
         decision_reason = ""
+        confirmation_prompt = ""
         if not best_candidate:
             return {
                 "checked_sources": [self._clean_text(item.get("source_type")) for item in checked if self._clean_text(item.get("source_type"))],
@@ -4711,6 +4719,8 @@ class AgentResourceOfficer(_PluginBase):
                 "decision_reason": "所有可用源都没有给出符合当前偏好的候选。",
                 "preferred_command": "",
                 "fallback_command": "",
+                "detail_command": "",
+                "confirmation_prompt": "",
                 "compact_commands": [],
                 "available_sources": available_sources or [],
                 "blocked_sources": blocked_sources or [],
@@ -4722,6 +4732,7 @@ class AgentResourceOfficer(_PluginBase):
             hint = f"已检查 {' -> '.join(source_names.get(self._clean_text(item.get('source_type')).lower(), self._clean_text(item.get('source_type'))) for item in checked if self._clean_text(item.get('source_type')))}；当前最高分是{source_names.get(source_type, source_type)} #{best_candidate.get('choice')}，但存在硬风险。"
             decision_mode = "not_recommended"
             decision_reason = "当前最高分候选存在硬风险，不能作为直接推荐执行项。"
+            confirmation_prompt = "先看详情，或换源后再试。"
         elif score_value >= threshold:
             hint = f"已检查 {' -> '.join(source_names.get(self._clean_text(item.get('source_type')).lower(), self._clean_text(item.get('source_type'))) for item in checked if self._clean_text(item.get('source_type')))}；当前首选是{source_names.get(source_type, source_type)} #{best_candidate.get('choice')}（{score_value}分）。"
             if score_value >= auto_threshold:
@@ -4730,18 +4741,21 @@ class AgentResourceOfficer(_PluginBase):
                 preferred_command = "执行最佳"
                 fallback_command = "计划最佳"
                 confirm_required = True
+                confirmation_prompt = "确认执行；如果想保守一点，回复：先计划 或 先看详情。"
             else:
                 decision_mode = "make_plan"
                 decision_reason = "当前首选已达到建议确认阈值，优先生成待确认计划。"
                 preferred_command = "计划最佳"
                 fallback_command = "执行最佳"
                 confirm_required = True
+                confirmation_prompt = "先计划；如果想直接落地，回复：确认执行；如果想先检查资源，回复：先看详情。"
         else:
             hint = f"已检查 {' -> '.join(source_names.get(self._clean_text(item.get('source_type')).lower(), self._clean_text(item.get('source_type'))) for item in checked if self._clean_text(item.get('source_type')))}；当前最佳候选是{source_names.get(source_type, source_type)} #{best_candidate.get('choice')}（{score_value}分），但还没达到优先阈值。"
             decision_mode = "show_detail"
             decision_reason = "当前最佳候选分数偏低，优先查看详情或尝试切换搜索源。"
             preferred_command = fallback_command or preferred_command
             fallback_command = "计划最佳" if best_candidate.get("choice") and not hard_risks else ""
+            confirmation_prompt = "先看详情；如果仍要继续，回复：先计划 或 换影巢 / 换盘搜 / 换PT。"
         if title:
             hint = f"{hint} {title}"
         return {
@@ -4756,11 +4770,13 @@ class AgentResourceOfficer(_PluginBase):
             "decision_reason": decision_reason or hint.strip(),
             "preferred_command": preferred_command,
             "fallback_command": fallback_command,
+            "detail_command": detail_command if best_candidate.get("choice") and not hard_risks else "",
+            "confirmation_prompt": confirmation_prompt,
             "plan_command": "计划最佳" if best_candidate.get("choice") and not hard_risks else "",
             "execute_command": "执行最佳" if best_candidate.get("choice") and not hard_risks else "",
             "compact_commands": [
                 command
-                for command in [preferred_command, fallback_command]
+                for command in [preferred_command, fallback_command, detail_command]
                 if command
             ][:2],
             "available_sources": available_sources or [],
@@ -4807,10 +4823,13 @@ class AgentResourceOfficer(_PluginBase):
             lines.append("结论：" + self._clean_text(decision_summary.get("decision_reason")))
         preferred_command = self._clean_text(decision_summary.get("preferred_command"))
         fallback_command = self._clean_text(decision_summary.get("fallback_command"))
+        confirmation_prompt = self._clean_text(decision_summary.get("confirmation_prompt"))
         if preferred_command:
             lines.append(f"首选：{preferred_command}")
         if fallback_command and fallback_command != preferred_command:
             lines.append(f"备选：{fallback_command}")
+        if confirmation_prompt:
+            lines.append("确认链：" + confirmation_prompt)
         return "\n".join(line for line in lines if line).strip()
 
     def _assistant_smart_source_item_by_choice(
@@ -18706,6 +18725,26 @@ class AgentResourceOfficer(_PluginBase):
                     cache_key=cache_key,
                     state=state,
                     target_path=target_path,
+                ))
+            if action == "best":
+                source_states = state.get("source_states") if isinstance(state.get("source_states"), dict) else {}
+                active_source = self._clean_text(state.get("active_source")).lower()
+                delegate_state = source_states.get(active_source) if active_source else None
+                if not isinstance(delegate_state, dict) or not delegate_state:
+                    delegate_state = state.get("active_state") if isinstance(state.get("active_state"), dict) else {}
+                if not isinstance(delegate_state, dict) or not delegate_state:
+                    return {"success": False, "message": "智能搜索会话缺少可继续状态，请重新发送：智能搜索 片名"}
+                self._save_session(cache_key, delegate_state)
+                return finish(await self.api_assistant_pick(
+                    _JsonRequestShim(request, {
+                        "session": session,
+                        "session_id": cache_key,
+                        "choice": 0,
+                        "action": "best",
+                        "path": target_path,
+                        "compact": compact,
+                        "apikey": self._extract_apikey(request, body),
+                    })
                 ))
             source_states = state.get("source_states") if isinstance(state.get("source_states"), dict) else {}
             requested_mode = self._clean_text(body.get("mode") or body.get("search_mode")).lower()
