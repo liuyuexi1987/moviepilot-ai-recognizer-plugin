@@ -600,6 +600,10 @@ class AgentResourceOfficer(_PluginBase):
             if match:
                 return {"index": match.group(1), **base}
         selected_index = cls._safe_int(current_state.get("selected_index"), 0)
+        if selected_index <= 0:
+            items = current_state.get("items") if isinstance(current_state.get("items"), list) else []
+            if items:
+                selected_index = 1
         if selected_index > 0:
             no_index_aliases = {
                 "详情": {"action": "detail"},
@@ -8467,8 +8471,9 @@ class AgentResourceOfficer(_PluginBase):
             for item in items[:10]:
                 lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
             lines.append("下一步：回复“选择 1 决策”进入统一资源决策。")
-            lines.append("如果已经明确意图，也可以直接发“选择 1 计划”或“选择 1 确认”。")
+            lines.append("如果已经明确意图，也可以直接发“选择 1 计划”或“选择 1 确认”；也支持直接回复“详情”“计划”“确认”，默认作用于当前榜单首项。")
             lines.append("如果想走单源，也可以回复“选择 1”进入 MP 原生搜索，或“选择 1 影巢”“选择 1 盘搜”。")
+            decision_summary = self._assistant_mp_recommendation_decision_summary()
             if cache_key:
                 self._save_session(cache_key, {
                     "kind": "assistant_mp_recommend",
@@ -8479,6 +8484,10 @@ class AgentResourceOfficer(_PluginBase):
                     "keyword": "",
                     "items": items,
                     "target_path": "",
+                    "decision_summary": decision_summary,
+                    "detail_short_command": "详情",
+                    "plan_short_command": "计划",
+                    "confirm_short_command": "确认",
                 })
             return {
                 "success": True,
@@ -8492,6 +8501,10 @@ class AgentResourceOfficer(_PluginBase):
                     "fallback_source": fallback_source,
                     "media_type": media_type_name,
                     "items": items,
+                    "decision_summary": decision_summary,
+                    "detail_short_command": "详情",
+                    "plan_short_command": "计划",
+                    "confirm_short_command": "确认",
                 }),
             }
         except Exception as exc:
@@ -8520,6 +8533,24 @@ class AgentResourceOfficer(_PluginBase):
             "下一步：回复“决策”“计划”“确认”，或“盘搜”“影巢”“原生”。",
         ]
         return "\n".join(lines)
+
+    def _assistant_mp_recommendation_decision_summary(self) -> Dict[str, Any]:
+        return {
+            "decision_mode": "show_detail",
+            "decision_reason": "推荐列表默认先看当前榜单首项详情，再决定是否生成计划或直接确认执行。",
+            "decision_hint": "当前推荐会话支持直接对首项继续：详情 / 计划 / 确认。",
+            "preferred_command": "详情",
+            "fallback_command": "计划",
+            "compact_commands": ["详情", "计划"],
+            "command_policy": "safe_read_only",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": True,
+            "recommended_agent_behavior": "show_only",
+            "detail_short_command": "详情",
+            "plan_short_command": "计划",
+            "confirm_short_command": "确认",
+        }
 
     def _persist_workflow_plans(self) -> None:
         try:
@@ -20585,8 +20616,20 @@ class AgentResourceOfficer(_PluginBase):
         if kind == "assistant_mp_recommend":
             items = state.get("items") or []
             selected_index = self._safe_int(state.get("selected_index"), 0)
+            pick_action = self._normalize_pick_action(body.get("action"))
+            next_mode = self._clean_text(
+                body.get("mode")
+                or body.get("search_mode")
+                or body.get("target")
+                or ""
+            ).lower()
             if index <= 0:
                 index = selected_index
+            if index <= 0 and (
+                pick_action in {"detail", "best", "plan", "best_execute"}
+                or next_mode
+            ):
+                index = 1
             if index <= 0:
                 return {"success": False, "message": "推荐结果需要先指定编号，例如：选择 1 决策，或先发：详情 1。"}
             if index > len(items):
@@ -20595,7 +20638,6 @@ class AgentResourceOfficer(_PluginBase):
             title = self._clean_text(selected.get("title"))
             if not title:
                 return {"success": False, "message": "选中的推荐条目缺少标题，无法继续搜索。"}
-            pick_action = self._normalize_pick_action(body.get("action"))
             if pick_action == "detail":
                 self._save_session(cache_key, {
                     **state,
@@ -20617,12 +20659,6 @@ class AgentResourceOfficer(_PluginBase):
                         "confirm_short_command": "确认",
                     }),
                 })
-            next_mode = self._clean_text(
-                body.get("mode")
-                or body.get("search_mode")
-                or body.get("target")
-                or ""
-            ).lower()
             mode_aliases = {
                 "原生": "mp",
                 "mp搜索": "mp",

@@ -272,6 +272,10 @@ python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py external-agen
 - `选择 1 计划`
 - `选择 1 确认`
 - `详情 1`
+- 也支持直接对当前榜单首项继续发：
+  - `详情`
+  - `计划`
+  - `确认`
 - 进入推荐会话后，也支持：
   - `决策 1`
   - `计划 1`

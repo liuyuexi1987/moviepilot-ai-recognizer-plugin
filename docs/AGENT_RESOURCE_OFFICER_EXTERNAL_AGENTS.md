@@ -67,6 +67,10 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
   - `route "选择 1 计划" --summary-only`
   - `route "选择 1 确认" --summary-only`
   - `route "详情 1" --summary-only`
+  - 也支持直接对当前榜单首项继续发：
+    - `route "详情" --summary-only`
+    - `route "计划" --summary-only`
+    - `route "确认" --summary-only`
   - 进入推荐会话后，也支持：
     - `route "决策 1" --summary-only`
     - `route "计划 1" --summary-only`

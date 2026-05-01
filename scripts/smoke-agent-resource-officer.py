@@ -250,6 +250,7 @@ def main() -> int:
             f"smoke-aro-smart-discovery-short-execute-{stamp}",
             f"smoke-aro-smart-discovery-followups-{stamp}",
             f"smoke-aro-smart-discovery-detail-flow-{stamp}",
+            f"smoke-aro-smart-discovery-autoplan-{stamp}",
         ])
 
     try:
@@ -1397,6 +1398,36 @@ def main() -> int:
                 and isinstance(recommend_detail_confirm_data.get("compact_commands"), list)
                 and recommend_detail_confirm_data.get("command_source") in {"followup_summary", "error_summary"},
                 json.dumps(recommend_detail_confirm_data, ensure_ascii=False)[:240],
+            )
+            smart_discovery_autoplan = route(base_url, api_key, sessions[16], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_autoplan", smart_discovery_autoplan, "mp_recommendations")
+            smart_discovery_autoplan_data = data(smart_discovery_autoplan)
+            assert_ok(
+                "route_smart_discovery_autoplan_payload",
+                smart_discovery_autoplan_data.get("preferred_command") == "详情"
+                and smart_discovery_autoplan_data.get("fallback_command") == "计划",
+                json.dumps(smart_discovery_autoplan_data, ensure_ascii=False)[:240],
+            )
+            recommend_autoplan = route(base_url, api_key, sessions[16], "计划")
+            recommend_autoplan_data = data(recommend_autoplan)
+            assert_ok(
+                "route_recommend_autoplan",
+                recommend_autoplan.get("success")
+                and recommend_autoplan_data.get("action") in {"workflow_plan", "smart_resource_plan"},
+                json.dumps(recommend_autoplan, ensure_ascii=False)[:240],
+            )
+            assert_ok(
+                "route_recommend_autoplan_has_plan",
+                bool(recommend_autoplan_data.get("plan_id")) and recommend_autoplan_data.get("workflow") == "smart_resource_plan",
+                json.dumps(recommend_autoplan_data, ensure_ascii=False)[:240],
+            )
+            recommend_autoconfirm = route(base_url, api_key, sessions[16], "确认")
+            recommend_autoconfirm_data = data(recommend_autoconfirm)
+            assert_ok(
+                "route_recommend_autoconfirm",
+                recommend_autoconfirm_data.get("action") == "execute_plan"
+                and recommend_autoconfirm_data.get("write_effect") == "write",
+                json.dumps(recommend_autoconfirm, ensure_ascii=False)[:240],
             )
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")
