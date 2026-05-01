@@ -560,6 +560,10 @@ class AgentResourceOfficer(_PluginBase):
         compact = re.sub(r"\s+", "", text)
         if not compact:
             return ""
+        if any(token in compact for token in ["smart_execute", "smartexecute", "直接执行", "确认执行", "立即执行", "确认", "执行"]):
+            return "smart_execute"
+        if any(token in compact for token in ["smart_plan", "smartplan", "生成计划", "先计划", "计划"]):
+            return "smart_plan"
         if any(token in compact for token in ["smart_decision", "smartdecision", "智能决策", "资源决策", "决策"]):
             return "smart_decision"
         if re.search(r"(^|[^a-z])smart($|[^a-z])", text):
@@ -8359,6 +8363,7 @@ class AgentResourceOfficer(_PluginBase):
             for item in items[:10]:
                 lines.append(f"{item.get('index')}. {item.get('title') or '-'} ({item.get('year') or '-'}) | {item.get('type') or '-'} | 评分 {item.get('vote_average') or '-'}")
             lines.append("下一步：回复“选择 1 决策”进入统一资源决策。")
+            lines.append("如果已经明确意图，也可以直接发“选择 1 计划”或“选择 1 确认”。")
             lines.append("如果想走单源，也可以回复“选择 1”进入 MP 原生搜索，或“选择 1 影巢”“选择 1 盘搜”。")
             if cache_key:
                 self._save_session(cache_key, {
@@ -9094,7 +9099,11 @@ class AgentResourceOfficer(_PluginBase):
         elif has_session and kind == "assistant_mp_recommend":
             mode = "continue_mp_recommend"
             reason = "当前会话停留在 MP 热门推荐列表"
-            template = self._assistant_find_action_template(templates, ["pick_recommend_smart_decision", "pick_recommend_mp_search"])
+            template = self._assistant_find_action_template(templates, [
+                "pick_recommend_smart_decision",
+                "pick_recommend_smart_plan",
+                "pick_recommend_mp_search",
+            ])
         elif has_session and kind == "assistant_mp_download_tasks":
             mode = "continue_mp_download_tasks"
             reason = "当前会话停留在 MP 下载任务列表"
@@ -10108,6 +10117,20 @@ class AgentResourceOfficer(_PluginBase):
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                     tool="agent_resource_officer_smart_pick",
                     body={**base_pick, "choice": "<1-N>", "mode": "smart_decision"},
+                ),
+                self._assistant_action_template(
+                    name="pick_recommend_smart_plan",
+                    description="按编号选择推荐条目并直接生成统一资源计划",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "smart_plan"},
+                ),
+                self._assistant_action_template(
+                    name="pick_recommend_smart_execute",
+                    description="按编号选择推荐条目并直接进入统一资源执行链",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "choice": "<1-N>", "mode": "smart_execute"},
                 ),
                 self._assistant_action_template(
                     name="pick_recommend_mp_search",
@@ -13263,7 +13286,7 @@ class AgentResourceOfficer(_PluginBase):
                 "body": {"workflow": "mp_recommend", "source": "tmdb_trending", "media_type": "all", "limit": 20, "session": "assistant", "compact": True},
             },
             "mp_recommend_search": {
-                "description": "读取 MP 原生推荐并按编号继续搜索；mode 可选 smart_decision、mp、hdhive、pansou。",
+                "description": "读取 MP 原生推荐并按编号继续搜索；mode 可选 smart_decision、smart_plan、smart_execute、mp、hdhive、pansou。",
                 "side_effect": "read_only",
                 "requires_confirmation": False,
                 "cache_scope": "session_cache",
@@ -20324,11 +20347,12 @@ class AgentResourceOfficer(_PluginBase):
             title = self._clean_text(selected.get("title"))
             if not title:
                 return {"success": False, "message": "选中的推荐条目缺少标题，无法继续搜索。"}
+            pick_action = self._normalize_pick_action(body.get("action"))
             next_mode = self._clean_text(
                 body.get("mode")
                 or body.get("search_mode")
                 or body.get("target")
-                or "mp"
+                or ""
             ).lower()
             mode_aliases = {
                 "原生": "mp",
@@ -20337,15 +20361,30 @@ class AgentResourceOfficer(_PluginBase):
                 "yc": "hdhive",
                 "盘搜": "pansou",
                 "ps": "pansou",
+                "计划": "smart_plan",
+                "smart_plan": "smart_plan",
+                "确认": "smart_execute",
+                "执行": "smart_execute",
+                "直接执行": "smart_execute",
+                "smart_execute": "smart_execute",
                 "决策": "smart_decision",
                 "资源决策": "smart_decision",
                 "智能决策": "smart_decision",
                 "smart": "smart_decision",
                 "smart_decision": "smart_decision",
             }
+            if not next_mode:
+                if pick_action == "plan":
+                    next_mode = "smart_plan"
+                elif pick_action == "best_execute":
+                    next_mode = "smart_execute"
+                elif pick_action in {"best", "detail"}:
+                    next_mode = "smart_decision"
             next_mode = mode_aliases.get(next_mode, next_mode)
-            if next_mode not in {"mp", "hdhive", "pansou", "smart_decision"}:
-                return {"success": False, "message": "推荐选择只支持 mode=smart_decision、mode=mp、mode=hdhive 或 mode=pansou。"}
+            if not next_mode:
+                next_mode = "mp"
+            if next_mode not in {"mp", "hdhive", "pansou", "smart_decision", "smart_plan", "smart_execute"}:
+                return {"success": False, "message": "推荐选择只支持 mode=smart_decision、mode=smart_plan、mode=smart_execute、mode=mp、mode=hdhive 或 mode=pansou。"}
             selected_media_type = self._clean_text(selected.get("type") or state.get("media_type") or "auto").lower()
             media_type_aliases = {
                 "电影": "movie",
@@ -20360,12 +20399,15 @@ class AgentResourceOfficer(_PluginBase):
                 "全部": "auto",
             }
             selected_media_type = media_type_aliases.get(selected_media_type, "auto")
+            next_keyword = title
+            if next_mode == "smart_decision" and pick_action in {"best", "detail"}:
+                next_keyword = f"{title} 详情"
             return finish(await self.api_assistant_route(
                 _JsonRequestShim(request, {
                     "session": session,
                     "session_id": cache_key,
                     "mode": next_mode,
-                    "keyword": title,
+                    "keyword": next_keyword,
                     "media_type": selected_media_type,
                     "path": target_path,
                     "apikey": self._extract_apikey(request, body),

@@ -31,6 +31,16 @@ def run(*args: str) -> str:
     return completed.stdout
 
 
+def ref_exists(ref: str) -> bool:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return completed.returncode == 0
+
+
 def remote_branches() -> list[str]:
     output = run("git", "branch", "-r", "--format", "%(refname:short)")
     return [
@@ -73,6 +83,8 @@ def pr_map() -> tuple[dict[str, dict], str]:
 
 
 def is_ancestor(branch: str) -> bool:
+    if not ref_exists(branch):
+        return False
     completed = subprocess.run(
         ["git", "merge-base", "--is-ancestor", branch, "main"],
         cwd=ROOT,
@@ -83,11 +95,18 @@ def is_ancestor(branch: str) -> bool:
 
 
 def cherry_unique_count(branch: str) -> int:
-    output = run("git", "cherry", "main", branch)
+    if not ref_exists(branch):
+        return -1
+    try:
+        output = run("git", "cherry", "main", branch)
+    except subprocess.CalledProcessError:
+        return -1
     return len([line for line in output.splitlines() if line.startswith("+ ")])
 
 
 def remote_recommendation(*, has_pr: bool, pr_state: str | None, ancestor: bool, unique_count: int) -> str:
+    if unique_count < 0:
+        return "unavailable"
     if has_pr and pr_state == "MERGED":
         return "safe_to_prune_after_fetch"
     if unique_count == 0:
@@ -100,6 +119,8 @@ def remote_recommendation(*, has_pr: bool, pr_state: str | None, ancestor: bool,
 
 
 def local_recommendation(*, has_remote: bool, has_pr: bool, pr_state: str | None, ancestor: bool, unique_count: int) -> str:
+    if unique_count < 0:
+        return "unavailable"
     if ancestor or unique_count == 0:
         return "safe_to_delete_local_copy"
     if has_pr and pr_state == "OPEN":
