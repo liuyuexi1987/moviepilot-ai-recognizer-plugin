@@ -486,6 +486,23 @@ def print_json(data):
 
 def summary_command(summary, confirmed=False):
     summary = summary or {}
+    explicit_behavior = str(summary.get("recommended_agent_behavior") or "").strip()
+    auto_run_command = str(summary.get("auto_run_command") or "").strip()
+    confirm_command = str(summary.get("confirm_command") or "").strip()
+    display_command = str(summary.get("display_command") or "").strip()
+    if explicit_behavior:
+        if confirmed and confirm_command:
+            return confirm_command
+        if explicit_behavior in {"auto_continue", "auto_continue_then_wait_confirmation"} and auto_run_command:
+            return auto_run_command
+        if explicit_behavior == "wait_user_confirmation":
+            return confirm_command or display_command
+        if explicit_behavior == "show_only":
+            return display_command or auto_run_command or confirm_command
+        if explicit_behavior == "stop":
+            return ""
+        if auto_run_command or confirm_command or display_command:
+            return auto_run_command or confirm_command or display_command
     preferred_command = str(summary.get("preferred_command") or "").strip()
     fallback_command = str(summary.get("fallback_command") or "").strip()
     preferred_requires_confirmation = bool(summary.get("preferred_requires_confirmation"))
@@ -1043,6 +1060,14 @@ def selftest_result():
     }
     top_level_policy = command_execution_policy(top_level_policy_summary)
     check("command_execution_policy_auto_continue_then_wait", top_level_policy.get("recommended_agent_behavior") == "auto_continue_then_wait_confirmation")
+    explicit_summary_command = {
+        "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+        "auto_run_command": "先看详情",
+        "confirm_command": "执行最佳",
+        "display_command": "先看详情",
+    }
+    check("command_only_prefers_explicit_auto_run_command", summary_command(explicit_summary_command) == "先看详情")
+    check("command_only_confirmed_prefers_explicit_confirm_command", summary_command(explicit_summary_command, confirmed=True) == "执行最佳")
     explicit_top_level_policy = command_execution_policy({
         "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
         "auto_run_command": "先看详情",
