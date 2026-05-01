@@ -1391,6 +1391,13 @@ def main() -> int:
                 "已根据智能搜索结果自动生成并执行当前首选计划" not in confirm_message,
                 confirm_message[:240],
             )
+            assert_ok(
+                "route_recommend_detail_followup_confirm_has_followup_commands",
+                bool(recommend_detail_confirm_data.get("preferred_command"))
+                and isinstance(recommend_detail_confirm_data.get("compact_commands"), list)
+                and recommend_detail_confirm_data.get("command_source") in {"followup_summary", "error_summary"},
+                json.dumps(recommend_detail_confirm_data, ensure_ascii=False)[:240],
+            )
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")
             tv_message = message_text(tv_recommend)

@@ -10816,14 +10816,28 @@ class AgentResourceOfficer(_PluginBase):
         ok: bool,
         plan_id: str = "",
     ) -> Dict[str, Any]:
-        if not ok:
+        workflow_name = self._clean_text(workflow)
+        if not ok and workflow_name != "smart_resource_plan":
             return {"next_actions": [], "action_templates": [], "recommended_action": "", "follow_up_hint": ""}
 
-        workflow_name = self._clean_text(workflow)
+        workflow_stage = workflow_name
         state = dict(session_state or {})
         session_name = self._clean_text(session or state.get("session")) or "default"
         session_cache = self._clean_text(session_id or state.get("session_id")) or self._assistant_session_id(session_name)
         keyword = self._clean_text(state.get("keyword"))
+        plan_execute_body = dict(state.get("plan_execute_body") or {})
+        if workflow_name == "smart_resource_plan":
+            inferred_source = self._clean_text(
+                state.get("source_type")
+                or ((state.get("best_candidate") or {}).get("source_type"))
+                or plan_execute_body.get("mode")
+            ).lower()
+            if inferred_source == "mp":
+                inferred_source = "mp_pt"
+            if inferred_source == "mp_pt":
+                workflow_name = "mp_best_download"
+            elif inferred_source in {"pansou", "hdhive"}:
+                workflow_name = inferred_source
         base_route = {
             "session": session_name,
             "session_id": session_cache,
@@ -10919,7 +10933,7 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_route, "mode": "mp", "keyword": keyword_value},
                 ),
             ]
-        elif workflow_name in {"share_transfer", "pansou_transfer_selected", "hdhive_unlock", "hdhive_unlock_selected"}:
+        elif workflow_name in {"share_transfer", "pansou_transfer_selected", "hdhive_unlock", "hdhive_unlock_selected", "pansou", "hdhive"}:
             next_actions = ["query_execution_followup", "query_mp_transfer_history", "query_mp_local_diagnose"]
             follow_up_hint = "可以先执行统一后续追踪；它会自动查整理/入库历史，失败时再切到本地诊断。"
             templates = [
@@ -10949,6 +10963,20 @@ class AgentResourceOfficer(_PluginBase):
                     body={**base_state, "name": "query_mp_local_diagnose", "keyword": keyword_value, "limit": 5},
                 ),
             ]
+            if workflow_stage == "smart_resource_plan" and keyword:
+                next_actions = ["query_execution_followup", "query_mp_ingest_status", "query_mp_local_diagnose"]
+                follow_up_hint = "推荐先跟进当前发现链的落库状态；它会先看统一后续，再判断是否已入库或需要本地诊断。"
+                templates = [
+                    templates[0],
+                    self._assistant_action_template(
+                        name="query_mp_ingest_status",
+                        description="按推荐标题查看当前是否已下载、整理或入库",
+                        endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/action",
+                        tool="agent_resource_officer_execute_action",
+                        body={**base_state, "name": "query_mp_ingest_status", "keyword": keyword_value, "limit": 5},
+                    ),
+                    templates[-1],
+                ]
         elif workflow_name == "ai_replay_failed_sample":
             next_actions = ["query_ai_sample_worklist", "query_ai_failed_samples", "query_ai_sample_insights"]
             follow_up_hint = "先回看 AI 工作清单和失败样本，确认这次二次识别是否减少了失败样本。"
@@ -11006,7 +11034,7 @@ class AgentResourceOfficer(_PluginBase):
             category = "ai_reingest"
         followup_summary = self._assistant_followup_summary(
             category=category,
-            stage=self._clean_text(workflow_name),
+            stage=self._clean_text(workflow_stage),
             recommended_action=next_actions[0] if next_actions else "",
             follow_up_hint=follow_up_hint,
             next_actions=next_actions,
@@ -20216,11 +20244,14 @@ class AgentResourceOfficer(_PluginBase):
             "plan_executed_at": executed_at,
             "plan_executed_at_text": plan.get("executed_at_text"),
         })
+        followup_state = dict(data.get("session_state") or {}) if isinstance(data.get("session_state"), dict) else {}
+        if isinstance(plan.get("execute_body"), dict):
+            followup_state["plan_execute_body"] = dict(plan.get("execute_body") or {})
         followup = self._assistant_plan_execute_followup(
             workflow=workflow_name,
             session=session,
             session_id=session_id,
-            session_state=data.get("session_state") if isinstance(data.get("session_state"), dict) else {},
+            session_state=followup_state,
             ok=bool(action_result.get("success")),
             plan_id=plan_id,
         )
