@@ -9,6 +9,14 @@
 - 当前插件版本：`Agent影视助手 0.2.67`
 - 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
+- 当前 AI 失败样本只读诊断入口：
+  - `python3 scripts/aro_request.py route --text "失败样本 蜘蛛侠" --summary-only`
+  - `python3 scripts/aro_request.py route --text "工作清单 蜘蛛侠" --summary-only`
+  - `python3 scripts/aro_request.py route --text "样本洞察 蜘蛛侠" --summary-only`
+  - `python3 scripts/aro_request.py route --text "重放样本 3" --summary-only`
+  - `python3 scripts/aro_request.py route --text "重放 3" --summary-only`
+  - `python3 scripts/aro_request.py route --text "确认" --summary-only`
+  - `python3 scripts/aro_request.py templates --recipe ai_reingest --compact`
 - 当前最低成本入口：
   - `python3 scripts/aro_request.py readiness`
   - `python3 scripts/aro_request.py external-agent`
@@ -105,6 +113,7 @@ python3 scripts/aro_request.py feishu-health
 python3 scripts/aro_request.py recover --summary-only
 python3 scripts/aro_request.py followup --session agent:<用户ID>
 python3 scripts/aro_request.py templates --recipe followup --compact
+python3 scripts/aro_request.py templates --recipe ai_reingest --compact
 python3 scripts/aro_request.py version
 python3 scripts/aro_request.py selftest
 python3 scripts/aro_request.py commands
@@ -129,6 +138,12 @@ python3 scripts/aro_request.py route "资源决策 蜘蛛侠 详情"
 python3 scripts/aro_request.py route "资源决策 蜘蛛侠 计划"
 python3 scripts/aro_request.py route "资源决策 蜘蛛侠 确认"
 python3 scripts/aro_request.py route "资源决策 蜘蛛侠 直接执行"
+python3 scripts/aro_request.py route "失败样本 蜘蛛侠"
+python3 scripts/aro_request.py route "工作清单 蜘蛛侠"
+python3 scripts/aro_request.py route "样本洞察 蜘蛛侠"
+python3 scripts/aro_request.py route "重放样本 3"
+python3 scripts/aro_request.py route "重放 3"
+python3 scripts/aro_request.py route "确认"
 python3 scripts/aro_request.py route "先计划"
 python3 scripts/aro_request.py route "确认执行"
 python3 scripts/aro_request.py route "先看详情"
@@ -202,6 +217,15 @@ python3 scripts/aro_request.py pick 1
 
 它会按当前智能搜索会话里的首选结果，直接生成待确认 `plan_id`，但不会立刻执行下载、解锁或转存。
 如果用户已经明确要求立即执行，再用 `智能执行` 或 `执行最佳`；这两个入口会直接走写入链。
+
+AI 失败样本链现在分两步：
+
+- `失败样本 / 工作清单 / 样本洞察`：只读诊断
+- `重放样本 3` 或会话内 `重放 3`：只生成待确认计划
+- `确认`：执行当前会话里最近一条 AI 重放计划
+- 重放后可直接继续：`诊断`、`入库状态`
+
+真正执行仍然要回复 `执行计划 <plan_id>`，不会直接裸重放。
 
 搜索类响应可能带有 `score_summary`，包含 `best` 和 `top_recommendations`。外部智能体应优先读取这个结构化摘要，而不是解析长文本；存在 `hard_risk_reasons` 时不要自动执行，`risk_reasons` 只作为确认前需要解释的提醒。
 

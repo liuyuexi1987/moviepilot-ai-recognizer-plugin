@@ -1120,6 +1120,85 @@ def main() -> int:
                 isinstance(local_diagnose_data.get("diagnosis_summary"), dict),
                 json.dumps(local_diagnose_data.get("diagnosis_summary") or {}, ensure_ascii=False)[:240],
             )
+            assert_ok(
+                "route_local_diagnose_ai_sample_worklist",
+                isinstance((local_diagnose_data.get("ai_sample_worklist") or {}).get("items"), list),
+                json.dumps(local_diagnose_data.get("ai_sample_worklist") or {}, ensure_ascii=False)[:240],
+            )
+
+            ai_failed_samples = route(base_url, api_key, sessions[4], f"失败样本 {args.keyword}")
+            ai_failed_samples_data = assert_route_action("route_ai_failed_samples", ai_failed_samples, "ai_failed_samples", require_success=False)
+            assert_ok(
+                "route_ai_failed_samples_payload",
+                isinstance(ai_failed_samples_data.get("items"), list),
+                json.dumps(ai_failed_samples_data, ensure_ascii=False)[:240],
+            )
+
+            ai_worklist = route(base_url, api_key, sessions[4], f"工作清单 {args.keyword}")
+            ai_worklist_data = assert_route_action("route_ai_sample_worklist", ai_worklist, "ai_sample_worklist", require_success=False)
+            assert_ok(
+                "route_ai_sample_worklist_payload",
+                isinstance(ai_worklist_data.get("items"), list),
+                json.dumps(ai_worklist_data, ensure_ascii=False)[:240],
+            )
+            ai_diagnose_short = route(base_url, api_key, sessions[4], "诊断")
+            ai_diagnose_short_data = assert_route_action("route_ai_session_diagnose_short", ai_diagnose_short, "mp_local_diagnose", require_success=False)
+            assert_ok(
+                "route_ai_session_diagnose_short_ok",
+                ai_diagnose_short_data.get("action") == "mp_local_diagnose",
+                json.dumps(ai_diagnose_short_data, ensure_ascii=False)[:240],
+            )
+            ai_ingest_short = route(base_url, api_key, sessions[4], "入库状态")
+            ai_ingest_short_data = assert_route_action("route_ai_session_ingest_short", ai_ingest_short, "mp_ingest_status", require_success=False)
+            assert_ok(
+                "route_ai_session_ingest_short_ok",
+                ai_ingest_short_data.get("action") == "mp_ingest_status",
+                json.dumps(ai_ingest_short_data, ensure_ascii=False)[:240],
+            )
+
+            ai_insights = route(base_url, api_key, sessions[4], f"样本洞察 {args.keyword}")
+            ai_insights_data = assert_route_action("route_ai_sample_insights", ai_insights, "ai_sample_insights", require_success=False)
+            assert_ok(
+                "route_ai_sample_insights_payload",
+                isinstance(ai_insights_data.get("insights"), dict),
+                json.dumps(ai_insights_data, ensure_ascii=False)[:240],
+            )
+
+            ai_replay = route(base_url, api_key, sessions[4], "重放样本 1")
+            ai_replay_data = assert_route_action("route_ai_replay_failed_sample", ai_replay, "ai_replay_failed_sample", require_success=False)
+            if ai_replay.get("success"):
+                assert_ok(
+                    "route_ai_replay_failed_sample_plan",
+                    bool(ai_replay_data.get("plan_id")) and ai_replay_data.get("workflow") == "ai_replay_failed_sample",
+                    json.dumps(ai_replay_data, ensure_ascii=False)[:240],
+                )
+            else:
+                assert_ok(
+                    "route_ai_replay_failed_sample_empty_ok",
+                    ai_replay_data.get("error_code") in {"sample_not_found", "missing_sample_index"},
+                    json.dumps(ai_replay_data, ensure_ascii=False)[:240],
+                )
+            ai_replay_short = route(base_url, api_key, sessions[4], "重放 1")
+            ai_replay_short_data = assert_route_action("route_ai_replay_short_command", ai_replay_short, "ai_replay_failed_sample", require_success=False)
+            if ai_replay_short.get("success"):
+                assert_ok(
+                    "route_ai_replay_short_plan",
+                    bool(ai_replay_short_data.get("plan_id")) and ai_replay_short_data.get("workflow") == "ai_replay_failed_sample",
+                    json.dumps(ai_replay_short_data, ensure_ascii=False)[:240],
+                )
+                ai_replay_confirm = route(base_url, api_key, sessions[4], "确认")
+                ai_replay_confirm_data = assert_route_action("route_ai_replay_confirm_short", ai_replay_confirm, "execute_plan", require_success=False)
+                assert_ok(
+                    "route_ai_replay_confirm_short_ok",
+                    ai_replay_confirm_data.get("write_effect") == "write",
+                    json.dumps(ai_replay_confirm_data, ensure_ascii=False)[:240],
+                )
+            else:
+                assert_ok(
+                    "route_ai_replay_short_empty_ok",
+                    ai_replay_short_data.get("error_code") in {"sample_not_found", "missing_sample_index"},
+                    json.dumps(ai_replay_short_data, ensure_ascii=False)[:240],
+                )
 
             smart_followup_idle = route(base_url, api_key, sessions[4], "跟进")
             smart_followup_idle_data = assert_route_action("route_smart_followup_idle", smart_followup_idle, "smart_followup")

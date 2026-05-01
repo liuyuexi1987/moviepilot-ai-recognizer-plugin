@@ -14,6 +14,14 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 - 当前 helper 版本：`agent-resource-officer 0.1.40`
 - 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
+- 当前 AI 识别失败诊断入口：
+  - `route "失败样本 <片名>" --summary-only`
+  - `route "工作清单 <片名>" --summary-only`
+  - `route "样本洞察 <片名>" --summary-only`
+  - `route "重放样本 3" --summary-only`
+  - `route "重放 3" --summary-only`
+  - `route "确认" --summary-only`
+  - `templates --recipe ai_reingest --compact`
 
 给其他机器或其他智能体复现时，优先让它阅读这三个文件：
 
@@ -96,6 +104,23 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 这会按当前首选自动生成待确认 `plan_id`，但仍然需要后续 `执行计划` 才会真正写入。
 而 `执行最佳` / `智能执行` 会直接走写入链，只适用于用户已经明确要求立即执行的场景。
+
+如果当前问题是“整理为什么失败、有没有 AI 失败样本可以继续分析”，优先走只读链：
+
+- `route "本地诊断 <片名>" --summary-only`
+- `route "失败样本 <片名>" --summary-only`
+- `route "工作清单 <片名>" --summary-only`
+- `route "样本洞察 <片名>" --summary-only`
+- 或先读模板：`templates --recipe ai_reingest --compact`
+
+如果用户已经明确要对某条样本做二次识别重放，再用：
+
+- `route "重放样本 3" --summary-only`
+- 或在当前 AI 样本会话里直接发：`route "重放 3" --summary-only`
+- 计划生成后再发：`route "确认" --summary-only`
+- 重放后可直接发：`route "诊断" --summary-only`、`route "入库状态" --summary-only`
+
+这一步仍然遵守确认链：先生成待确认计划，再通过 `确认` 或 `执行计划 <plan_id>` 实际执行。
 
 三类入口都复用这一套 assistant 协议：
 
