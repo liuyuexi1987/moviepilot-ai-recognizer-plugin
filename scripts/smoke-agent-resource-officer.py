@@ -263,6 +263,8 @@ def main() -> int:
             f"smoke-aro-smart-discovery-switch-mp-{stamp}",
             f"smoke-aro-smart-discovery-handoff-pansou-flow-{stamp}",
             f"smoke-aro-smart-discovery-handoff-mp-flow-{stamp}",
+            f"smoke-aro-smart-discovery-source-compound-recommend-{stamp}",
+            f"smoke-aro-smart-discovery-source-compound-handoff-{stamp}",
         ])
 
     try:
@@ -1677,6 +1679,33 @@ def main() -> int:
                 "route_smart_discovery_handoff_mp_decision_payload",
                 bool(handoff_mp_decision_data.get("decision_mode")),
                 json.dumps(handoff_mp_decision_data, ensure_ascii=False)[:260],
+            )
+            recommend_source_compound = route(base_url, api_key, sessions[29], "智能发现 热门电影")
+            assert_route_action("route_smart_discovery_source_compound_recommend", recommend_source_compound, "mp_recommendations")
+            recommend_source_compound_pansou_plan = route(base_url, api_key, sessions[29], "盘搜 计划")
+            recommend_source_compound_pansou_plan_data = assert_route_action(
+                "route_smart_discovery_source_compound_pansou_plan",
+                recommend_source_compound_pansou_plan,
+                "workflow_plan",
+            )
+            assert_ok(
+                "route_smart_discovery_source_compound_pansou_plan_payload",
+                bool(recommend_source_compound_pansou_plan_data.get("plan_id")),
+                json.dumps(recommend_source_compound_pansou_plan_data, ensure_ascii=False)[:260],
+            )
+            recommend_source_compound_mp = route(base_url, api_key, sessions[30], "智能发现 热门电影 盘搜")
+            assert_route_action("route_smart_discovery_source_compound_handoff_entry", recommend_source_compound_mp, "pansou_search")
+            recommend_source_compound_mp_detail = route(base_url, api_key, sessions[30], "原生 详情")
+            recommend_source_compound_mp_detail_data = assert_route_action(
+                "route_smart_discovery_source_compound_mp_detail",
+                recommend_source_compound_mp_detail,
+                "mp_search_best_detail",
+            )
+            assert_ok(
+                "route_smart_discovery_source_compound_mp_detail_payload",
+                recommend_source_compound_mp_detail_data.get("preferred_command") == "计划"
+                and recommend_source_compound_mp_detail_data.get("fallback_command") == "确认",
+                json.dumps(recommend_source_compound_mp_detail_data, ensure_ascii=False)[:260],
             )
             tv_recommend = route(base_url, api_key, sessions[7], "热门电视剧")
             assert_route_action("route_recommend_tv", tv_recommend, "mp_recommendations")

@@ -719,6 +719,45 @@ class AgentResourceOfficer(_PluginBase):
         return {}
 
     @classmethod
+    def _normalize_recommend_source_compound_action(
+        cls,
+        value: Any,
+        *,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        current_state = dict(state or {})
+        kind = cls._clean_text(current_state.get("kind"))
+        if kind not in {"assistant_mp_recommend", "assistant_pansou", "assistant_mp", "assistant_hdhive"}:
+            return {}
+        compact = re.sub(r"[\s，。？！!?,、:：]+", "", cls._clean_text(value)).lower()
+        source_aliases = {
+            "盘搜": "pansou",
+            "ps": "pansou",
+            "原生": "mp",
+            "mp": "mp",
+        }
+        action_aliases = {
+            "详情": "best",
+            "看详情": "best",
+            "计划": "best_plan",
+            "确认": "best_execute",
+            "执行": "best_execute",
+        }
+        for alias, mode in source_aliases.items():
+            if not compact.startswith(alias):
+                continue
+            remain = compact[len(alias):]
+            followup_action = action_aliases.get(remain)
+            if not followup_action:
+                continue
+            return {
+                "action": "recommend_source_compound",
+                "mode": mode,
+                "followup_action": followup_action,
+            }
+        return {}
+
+    @classmethod
     def _normalize_mp_recommend_direct_intent(cls, value: Any) -> Dict[str, Any]:
         raw = cls._clean_text(value)
         if not raw:
@@ -8838,6 +8877,72 @@ class AgentResourceOfficer(_PluginBase):
             "keyword": keyword,
             "media_type": media_type,
             "recommend_handoff": dict(handoff),
+            "apikey": self._extract_apikey(request, {}),
+        }))
+
+    async def _assistant_run_recommend_source_compound(
+        self,
+        request,
+        *,
+        session: str,
+        cache_key: str,
+        state: Dict[str, Any],
+        mode: str,
+        followup_action: str,
+        compact: bool,
+        target_path: str,
+    ) -> Dict[str, Any]:
+        mode = self._clean_text(mode).lower()
+        followup_action = self._clean_text(followup_action)
+        kind = self._clean_text(state.get("kind"))
+        if mode not in {"pansou", "mp"}:
+            return {
+                "success": False,
+                "message": "当前只支持 盘搜/原生 的单条详情、计划、确认命令。",
+                "data": self._assistant_response_data(session=session, data={
+                    "action": "recommend_source_compound",
+                    "ok": False,
+                    "error_code": "unsupported_recommend_source_compound_mode",
+                }),
+            }
+
+        if kind == "assistant_mp_recommend":
+            selected_index = max(1, self._safe_int(state.get("selected_index"), 0) or 1)
+            source_result = await self.api_assistant_pick(_JsonRequestShim(request, {
+                "session": session,
+                "session_id": cache_key,
+                "index": selected_index,
+                "mode": mode,
+                "path": target_path,
+                "compact": compact,
+                "apikey": self._extract_apikey(request, {}),
+            }))
+            if not source_result.get("success"):
+                return source_result
+        else:
+            kind_mode = {
+                "assistant_pansou": "pansou",
+                "assistant_mp": "mp",
+                "assistant_hdhive": "hdhive",
+            }.get(kind, "")
+            if kind_mode != mode:
+                source_result = await self._assistant_switch_recommend_handoff_source(
+                    request,
+                    session=session,
+                    cache_key=cache_key,
+                    state=state,
+                    mode=mode,
+                )
+                if not source_result.get("success"):
+                    return source_result
+
+        return await self.api_assistant_pick(_JsonRequestShim(request, {
+            "session": session,
+            "session_id": cache_key,
+            "index": 0,
+            "action": followup_action,
+            "path": target_path,
+            "compact": compact,
             "apikey": self._extract_apikey(request, {}),
         }))
 
@@ -18366,6 +18471,19 @@ class AgentResourceOfficer(_PluginBase):
                     "compact": compact,
                     "apikey": self._extract_apikey(request, body),
                 })
+            ))
+
+        recommend_source_compound = self._normalize_recommend_source_compound_action(text, state=state)
+        if recommend_source_compound:
+            return finish(await self._assistant_run_recommend_source_compound(
+                request,
+                session=session,
+                cache_key=cache_key,
+                state=state,
+                mode=self._clean_text(recommend_source_compound.get("mode")),
+                followup_action=self._clean_text(recommend_source_compound.get("followup_action")),
+                compact=compact,
+                target_path=self._resolve_pan_path_value(self._clean_text(body.get("path") or body.get("target_path"))),
             ))
 
         parsed = self._merge_assistant_structured_input(body, self._parse_assistant_text(text))
