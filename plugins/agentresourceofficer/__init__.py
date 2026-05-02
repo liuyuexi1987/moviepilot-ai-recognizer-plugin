@@ -8993,6 +8993,29 @@ class AgentResourceOfficer(_PluginBase):
             **meta,
         }
 
+    def _assistant_recommend_handoff_entry_summary(
+        self,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        meta = self._assistant_recommend_handoff_short_metadata(state)
+        return {
+            "stage": "source_entry",
+            "label": "已切入单源",
+            "decision_hint": "当前推荐条目已切入单源结果；先看详情，再决定是否生成计划。",
+            "command_policy": "read_then_confirm_write",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": False,
+            "can_auto_run_preferred": True,
+            "preferred_command": "详情",
+            "fallback_command": "计划",
+            "compact_commands": ["详情", "计划"],
+            "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+            "auto_run_command": "详情",
+            "confirm_command": "确认",
+            "display_command": "详情",
+            **meta,
+        }
+
     def _assistant_recommend_handoff_detail_summary(
         self,
         state: Optional[Dict[str, Any]] = None,
@@ -19427,7 +19450,10 @@ class AgentResourceOfficer(_PluginBase):
             if result.get("success") and recommend_handoff:
                 current_state = self._load_session(cache_key) or {}
                 self._save_session(cache_key, {**current_state, "recommend_handoff": dict(recommend_handoff)})
-                result["data"] = self._assistant_response_data(session=session, data=dict(result.get("data") or {}))
+                result_data = dict(result.get("data") or {})
+                result_data.update(self._assistant_recommend_handoff_short_metadata(self._load_session(cache_key) or {}))
+                result_data["decision_summary"] = self._assistant_recommend_handoff_entry_summary(self._load_session(cache_key) or {})
+                result["data"] = self._assistant_response_data(session=session, data=result_data)
             return finish(result)
 
         if mode == "pansou":
@@ -19462,16 +19488,21 @@ class AgentResourceOfficer(_PluginBase):
                 },
             )
             text_message = self._format_pansou_text(keyword, items, int(data.get("total") or len(items)))
-            return finish({
-                "success": True,
-                "message": text_message,
-                "data": self._assistant_response_data(session=session, data={
+            result_data = {
                 "action": "pansou_search",
                 "ok": True,
                 "items": items,
                 "score_summary": self._score_summary(items, limit=5),
-            }),
-        })
+            }
+            if recommend_handoff:
+                saved_state = self._load_session(cache_key) or {}
+                result_data.update(self._assistant_recommend_handoff_short_metadata(saved_state))
+                result_data["decision_summary"] = self._assistant_recommend_handoff_entry_summary(saved_state)
+            return finish({
+                "success": True,
+                "message": text_message,
+                "data": self._assistant_response_data(session=session, data=result_data),
+            })
 
         allowed, disabled = self._ensure_hdhive_resource_enabled()
         if not allowed:

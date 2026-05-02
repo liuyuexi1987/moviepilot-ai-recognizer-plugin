@@ -1585,6 +1585,12 @@ def main() -> int:
                 handoff_pansou_start_data.get("return_short_command") == "回推荐",
                 json.dumps(handoff_pansou_start_data, ensure_ascii=False)[:260],
             )
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_start_short_policy",
+                handoff_pansou_start_data.get("preferred_command") == "详情"
+                and handoff_pansou_start_data.get("fallback_command") == "计划",
+                json.dumps(handoff_pansou_start_data, ensure_ascii=False)[:260],
+            )
             handoff_pansou_detail = route(base_url, api_key, sessions[27], "详情")
             handoff_pansou_detail_data = assert_route_action("route_smart_discovery_handoff_pansou_detail", handoff_pansou_detail, "pansou_best_detail")
             assert_ok(
@@ -1631,6 +1637,12 @@ def main() -> int:
             assert_ok(
                 "route_smart_discovery_handoff_mp_start_payload",
                 handoff_mp_start_data.get("return_short_command") == "回推荐",
+                json.dumps(handoff_mp_start_data, ensure_ascii=False)[:260],
+            )
+            assert_ok(
+                "route_smart_discovery_handoff_mp_start_short_policy",
+                handoff_mp_start_data.get("preferred_command") == "详情"
+                and handoff_mp_start_data.get("fallback_command") == "计划",
                 json.dumps(handoff_mp_start_data, ensure_ascii=False)[:260],
             )
             handoff_mp_detail = route(base_url, api_key, sessions[28], "详情")
