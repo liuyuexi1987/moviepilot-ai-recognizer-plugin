@@ -559,6 +559,10 @@ class AgentResourceOfficer(_PluginBase):
             return {"action": "ai_failed_samples", "keyword": keyword}
         if compact in {"样本洞察", "洞察", "返回样本洞察", "回样本洞察"}:
             return {"action": "ai_sample_insights", "keyword": keyword}
+        if compact in {"继续重放", "再试一次", "继续处理"}:
+            return {"action": "ai_sample_worklist", "keyword": keyword}
+        if compact in {"人工处理", "转人工", "手动处理"}:
+            return {"action": "ai_sample_insights", "keyword": keyword}
         raw = cls._clean_text(value)
         replay_match = re.match(r"^\s*(重放|重识别|重跑)\s*(\d+)(?:\s+(.*))?$", raw)
         if replay_match:
@@ -8299,6 +8303,53 @@ class AgentResourceOfficer(_PluginBase):
             "display_command": "工作清单",
         }
 
+    def _assistant_ai_replay_outcome_summary(
+        self,
+        *,
+        ok: bool,
+        resolved: bool,
+        has_title: bool,
+        sample_removed: bool = False,
+    ) -> Dict[str, Any]:
+        if ok and resolved and has_title:
+            return {
+                "status": "resolved",
+                "label": "已解决",
+                "summary": "这次二次识别已命中目标，建议转入本地诊断确认是否已消除入库失败。",
+                "recommended_next_step": "diagnose",
+                "preferred_command": "诊断",
+                "fallback_command": "入库状态",
+                "compact_commands": ["诊断", "入库状态"],
+                "stop_replay": True,
+                "needs_manual_review": False,
+                "sample_removed": bool(sample_removed),
+            }
+        if ok:
+            return {
+                "status": "unresolved",
+                "label": "仍需处理",
+                "summary": "这次重放已完成，但暂未命中目标。建议回看工作清单挑下一次重放，或查看样本洞察后转人工处理。",
+                "recommended_next_step": "retry_or_review",
+                "preferred_command": "工作清单",
+                "fallback_command": "样本洞察",
+                "compact_commands": ["工作清单", "样本洞察"],
+                "stop_replay": False,
+                "needs_manual_review": False,
+                "sample_removed": bool(sample_removed),
+            }
+        return {
+            "status": "failed",
+            "label": "重放失败",
+            "summary": "这次重放没有成功执行。建议先回看工作清单或失败样本，再决定是否人工处理。",
+            "recommended_next_step": "manual_review",
+            "preferred_command": "工作清单",
+            "fallback_command": "失败样本",
+            "compact_commands": ["工作清单", "失败样本"],
+            "stop_replay": True,
+            "needs_manual_review": True,
+            "sample_removed": bool(sample_removed),
+        }
+
     async def _assistant_ai_replay_failed_sample(
         self,
         *,
@@ -8361,6 +8412,7 @@ class AgentResourceOfficer(_PluginBase):
         else:
             lines.append(self._clean_text(result.get("message")) or "重放失败")
         resolved = bool(payload.get("resolved"))
+        sample_removed = bool(payload.get("sample_removed"))
         recommended_action = "query_mp_local_diagnose" if ok and resolved and title else "query_ai_sample_worklist"
         follow_up_hint = (
             "先回到本地诊断或入库状态，确认这次重放是否已经消除失败。"
@@ -8372,6 +8424,14 @@ class AgentResourceOfficer(_PluginBase):
             resolved=resolved,
             has_title=bool(title),
         )
+        outcome_summary = self._assistant_ai_replay_outcome_summary(
+            ok=ok,
+            resolved=resolved,
+            has_title=bool(title),
+            sample_removed=sample_removed,
+        )
+        lines.append(f"结论：{self._clean_text(outcome_summary.get('label')) or '-'}")
+        lines.append(self._clean_text(outcome_summary.get("summary")))
         return {
             "success": ok,
             "message": "\n".join(line for line in lines if line).strip(),
@@ -8391,6 +8451,7 @@ class AgentResourceOfficer(_PluginBase):
                 "recommended_action": recommended_action,
                 "follow_up_hint": follow_up_hint,
                 "decision_summary": decision_summary,
+                "outcome_summary": outcome_summary,
                 "next_actions": next_actions,
                 "action_templates": action_templates,
             }),
@@ -12190,6 +12251,8 @@ class AgentResourceOfficer(_PluginBase):
             payload["decision_summary"] = data.get("decision_summary")
         if isinstance(data.get("diagnosis_summary"), dict):
             payload["diagnosis_summary"] = data.get("diagnosis_summary")
+        if isinstance(data.get("outcome_summary"), dict):
+            payload["outcome_summary"] = data.get("outcome_summary")
         if isinstance(data.get("followup_summary"), dict):
             payload["followup_summary"] = data.get("followup_summary")
         for key in ["best_candidate", "source_sample", "target", "identifier_preview", "recognize_result", "sample_removal_result"]:
@@ -12330,6 +12393,8 @@ class AgentResourceOfficer(_PluginBase):
             payload["decision_summary"] = data.get("decision_summary")
         if isinstance(data.get("diagnosis_summary"), dict):
             payload["diagnosis_summary"] = data.get("diagnosis_summary")
+        if isinstance(data.get("outcome_summary"), dict):
+            payload["outcome_summary"] = data.get("outcome_summary")
         if isinstance(data.get("followup_summary"), dict):
             payload["followup_summary"] = data.get("followup_summary")
         if isinstance(data.get("effective_preferences"), dict):
@@ -15654,6 +15719,32 @@ class AgentResourceOfficer(_PluginBase):
             and ai_replay_execution_summary_failed.get("preferred_command") == "工作清单"
             and ai_replay_execution_summary_failed.get("recommended_agent_behavior") == "show_only"
         )
+        ai_replay_outcome_summary_resolved = self._assistant_ai_replay_outcome_summary(
+            ok=True,
+            resolved=True,
+            has_title=True,
+            sample_removed=True,
+        )
+        ai_replay_outcome_summary_unresolved = self._assistant_ai_replay_outcome_summary(
+            ok=True,
+            resolved=False,
+            has_title=True,
+            sample_removed=False,
+        )
+        ai_replay_outcome_summary_failed = self._assistant_ai_replay_outcome_summary(
+            ok=False,
+            resolved=False,
+            has_title=True,
+            sample_removed=False,
+        )
+        ai_replay_outcome_summary_ok = (
+            ai_replay_outcome_summary_resolved.get("status") == "resolved"
+            and ai_replay_outcome_summary_resolved.get("preferred_command") == "诊断"
+            and ai_replay_outcome_summary_unresolved.get("status") == "unresolved"
+            and ai_replay_outcome_summary_unresolved.get("fallback_command") == "样本洞察"
+            and ai_replay_outcome_summary_failed.get("status") == "failed"
+            and ai_replay_outcome_summary_failed.get("needs_manual_review") is True
+        )
         checks = {
             "compact_templates": compact_templates_ok,
             "bool_parser": bool_parse_ok,
@@ -15678,6 +15769,7 @@ class AgentResourceOfficer(_PluginBase):
             "executed_plan_recovery": executed_plan_recovery_ok,
             "execute_plan_followups": execute_plan_followups_ok,
             "ai_replay_execution_summary": ai_replay_execution_summary_ok,
+            "ai_replay_outcome_summary": ai_replay_outcome_summary_ok,
             "toolbox_startup_endpoint": bool((toolbox.get("endpoints") or {}).get("startup")),
             "toolbox_maintain_endpoint": bool((toolbox.get("endpoints") or {}).get("maintain")),
             "toolbox_request_templates_endpoint": bool((toolbox.get("endpoints") or {}).get("request_templates")),
@@ -18458,6 +18550,67 @@ class AgentResourceOfficer(_PluginBase):
                 })
             ))
 
+        ai_short_action = self._normalize_ai_reingest_short_action(text, state=state)
+        if ai_short_action:
+            ai_action = self._clean_text(ai_short_action.get("action"))
+            if ai_action == "mp_local_diagnose":
+                return finish(await self._assistant_mp_local_diagnose(
+                    session=session,
+                    cache_key=cache_key,
+                    title=self._clean_text(ai_short_action.get("keyword")),
+                    hash_value=self._clean_text(ai_short_action.get("hash") or ""),
+                    limit=self._safe_int(body.get("limit"), 5),
+                ))
+            if ai_action == "mp_ingest_status":
+                return finish(await self._assistant_mp_ingest_status(
+                    session=session,
+                    cache_key=cache_key,
+                    title=self._clean_text(ai_short_action.get("keyword")),
+                    hash_value=self._clean_text(ai_short_action.get("hash") or ""),
+                    limit=self._safe_int(body.get("limit"), 5),
+                ))
+            if ai_action == "ai_sample_worklist":
+                return finish(await self._assistant_ai_sample_worklist(
+                    session=session,
+                    cache_key=cache_key,
+                    keyword=self._clean_text(ai_short_action.get("keyword")),
+                    limit=self._safe_int(body.get("limit"), 10),
+                ))
+            if ai_action == "ai_failed_samples":
+                return finish(await self._assistant_ai_failed_samples(
+                    session=session,
+                    cache_key=cache_key,
+                    keyword=self._clean_text(ai_short_action.get("keyword")),
+                    limit=self._safe_int(body.get("limit"), 10),
+                ))
+            if ai_action == "ai_sample_insights":
+                return finish(await self._assistant_ai_sample_insights(
+                    session=session,
+                    cache_key=cache_key,
+                    keyword=self._clean_text(ai_short_action.get("keyword")),
+                    limit=self._safe_int(body.get("limit"), 20),
+                    top=self._safe_int(body.get("top"), 5),
+                ))
+            if ai_action == "ai_replay_failed_sample":
+                return finish(self._assistant_ai_replay_sample_plan_response(
+                    sample_index=self._safe_int(ai_short_action.get("sample_index"), 0),
+                    session=session,
+                    cache_key=cache_key,
+                    remove_if_resolved=self._parse_bool_value(ai_short_action.get("remove_if_resolved"), True),
+                ))
+            if ai_action == "execute_plan":
+                return finish(await self.api_assistant_plan_execute(
+                    _JsonRequestShim(request, {
+                        "session": session,
+                        "session_id": cache_key,
+                        "prefer_unexecuted": True,
+                        "stop_on_error": self._parse_bool_value(body.get("stop_on_error"), True),
+                        "include_raw_results": self._parse_bool_value(body.get("include_raw_results"), False),
+                        "compact": compact,
+                        "apikey": self._extract_apikey(request, body),
+                    })
+                ))
+
         recommend_short_direct = self._normalize_mp_recommend_short_action(text, state=state)
         if recommend_short_direct:
             return finish(await self.api_assistant_pick(
@@ -18570,7 +18723,6 @@ class AgentResourceOfficer(_PluginBase):
             })
 
         assistant_action = preparsed_action
-        ai_short_action = self._normalize_ai_reingest_short_action(text, state=state)
         if not assistant_action and ai_short_action:
             for key, value in ai_short_action.items():
                 if value not in {None, ""}:

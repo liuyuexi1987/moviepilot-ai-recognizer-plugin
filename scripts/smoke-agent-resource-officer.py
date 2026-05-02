@@ -1185,6 +1185,20 @@ def main() -> int:
                 isinstance(ai_worklist_data.get("items"), list),
                 json.dumps(ai_worklist_data, ensure_ascii=False)[:240],
             )
+            ai_retry_short = route(base_url, api_key, sessions[4], "继续重放")
+            ai_retry_short_data = assert_route_action("route_ai_retry_short", ai_retry_short, "ai_sample_worklist", require_success=False)
+            assert_ok(
+                "route_ai_retry_short_ok",
+                ai_retry_short_data.get("action") == "ai_sample_worklist",
+                json.dumps(ai_retry_short_data, ensure_ascii=False)[:240],
+            )
+            ai_manual_short = route(base_url, api_key, sessions[4], "人工处理")
+            ai_manual_short_data = assert_route_action("route_ai_manual_short", ai_manual_short, "ai_sample_insights", require_success=False)
+            assert_ok(
+                "route_ai_manual_short_ok",
+                ai_manual_short_data.get("action") == "ai_sample_insights",
+                json.dumps(ai_manual_short_data, ensure_ascii=False)[:240],
+            )
             ai_diagnose_short = route(base_url, api_key, sessions[4], "诊断")
             ai_diagnose_short_data = assert_route_action("route_ai_session_diagnose_short", ai_diagnose_short, "mp_local_diagnose", require_success=False)
             assert_ok(
