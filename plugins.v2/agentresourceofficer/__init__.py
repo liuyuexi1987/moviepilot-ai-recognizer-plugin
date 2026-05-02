@@ -432,6 +432,21 @@ class AgentResourceOfficer(_PluginBase):
         mapped = alias_map.get(text, text)
         return cls._normalize_path(mapped)
 
+    @classmethod
+    def _is_inbox_path_alias(cls, value: Any) -> bool:
+        text = cls._normalize_path(value)
+        return text in {"/收件箱", "/inbox"}
+
+    def _resolve_transfer_target_path(self, target_path: str, provider: str = "") -> str:
+        normalized = self._resolve_pan_path_value(self._clean_text(target_path))
+        provider_name = self._clean_text(provider).lower()
+        if self._is_inbox_path_alias(normalized):
+            if provider_name == "115":
+                return self._p115_default_path
+            if provider_name == "quark":
+                return self._quark_default_path
+        return normalized
+
     @staticmethod
     def _normalize_pick_action(value: Any) -> str:
         text = str(value or "").strip().lower()
@@ -2912,7 +2927,10 @@ class AgentResourceOfficer(_PluginBase):
 
         share_text = self._clean_text(body.get("url") or body.get("share_url") or body.get("share_text"))
         access_code = self._clean_text(body.get("access_code") or body.get("pwd") or body.get("code"))
-        target_path = self._clean_text(body.get("path") or body.get("target_path"))
+        target_path = self._resolve_transfer_target_path(
+            self._clean_text(body.get("path") or body.get("target_path")),
+            provider="quark",
+        )
         trigger = self._clean_text(body.get("trigger") or "Agent影视助手 API")
 
         service = self._ensure_quark_service()
@@ -18192,11 +18210,12 @@ class AgentResourceOfficer(_PluginBase):
         trigger = self._clean_text(body.get("trigger") or "Agent影视助手 自动路由")
 
         if self._is_quark_url(share_url):
+            final_target_path = self._resolve_transfer_target_path(target_path or self._quark_default_path, provider="quark")
             quark_service = self._ensure_quark_service()
             transfer_ok, result, transfer_message = quark_service.transfer_share(
                 share_url,
                 access_code=access_code,
-                target_path=target_path or self._quark_default_path,
+                target_path=final_target_path,
                 trigger=trigger,
             )
             if not transfer_ok:
@@ -18218,11 +18237,12 @@ class AgentResourceOfficer(_PluginBase):
             }
 
         if self._is_115_url(share_url):
+            final_target_path = self._resolve_transfer_target_path(target_path or self._p115_default_path, provider="115")
             p115_service = self._ensure_p115_service()
             transfer_ok, result, transfer_message = p115_service.transfer_share(
                 url=share_url,
                 access_code=access_code,
-                path=target_path or self._p115_default_path,
+                path=final_target_path,
                 trigger=trigger,
             )
             if not transfer_ok:
@@ -18230,7 +18250,7 @@ class AgentResourceOfficer(_PluginBase):
                     "success": False,
                     "message": self._format_p115_transfer_failure(
                         detail=transfer_message,
-                        target_path=target_path or self._p115_default_path,
+                        target_path=final_target_path,
                     ),
                     "data": {
                         "provider": "115",
