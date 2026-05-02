@@ -8993,6 +8993,29 @@ class AgentResourceOfficer(_PluginBase):
             **meta,
         }
 
+    def _assistant_recommend_handoff_detail_summary(
+        self,
+        state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        meta = self._assistant_recommend_handoff_short_metadata(state)
+        return {
+            "stage": "detail",
+            "label": "已查看详情",
+            "decision_hint": "当前推荐条目详情已展开；可以先生成计划，确认无误后再执行。",
+            "command_policy": "read_then_confirm_write",
+            "preferred_requires_confirmation": False,
+            "fallback_requires_confirmation": True,
+            "can_auto_run_preferred": True,
+            "preferred_command": "计划",
+            "fallback_command": "确认",
+            "compact_commands": ["计划", "确认"],
+            "recommended_agent_behavior": "auto_continue_then_wait_confirmation",
+            "auto_run_command": "计划",
+            "confirm_command": "确认",
+            "display_command": "详情",
+            **meta,
+        }
+
     def _assistant_recommend_handoff_execute_failure_followup(
         self,
         state: Optional[Dict[str, Any]] = None,
@@ -21204,6 +21227,17 @@ class AgentResourceOfficer(_PluginBase):
                         "item": best,
                         "score_summary": self._score_summary([best], limit=1),
                     }),
+                } if not state.get("recommend_handoff") else {
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(best, title="盘搜当前最佳候选"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "pansou_best_detail",
+                        "ok": True,
+                        "item": best,
+                        "score_summary": self._score_summary([best], limit=1),
+                        **self._assistant_recommend_handoff_short_metadata(state),
+                        "decision_summary": self._assistant_recommend_handoff_detail_summary(state),
+                    }),
                 })
             if action == "best_execute":
                 best = self._best_scored_source_item(items)
@@ -21333,6 +21367,18 @@ class AgentResourceOfficer(_PluginBase):
                         "choice": index,
                         "item": selected,
                         "score_summary": self._score_summary([selected], limit=1),
+                    }),
+                } if not state.get("recommend_handoff") else {
+                    "success": True,
+                    "message": self._format_cloud_item_detail_text(selected, title="盘搜资源详情"),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "pansou_result_detail",
+                        "ok": True,
+                        "choice": index,
+                        "item": selected,
+                        "score_summary": self._score_summary([selected], limit=1),
+                        **self._assistant_recommend_handoff_short_metadata(state),
+                        "decision_summary": self._assistant_recommend_handoff_detail_summary(state),
                     }),
                 })
             if action == "plan":
@@ -21655,11 +21701,17 @@ class AgentResourceOfficer(_PluginBase):
         if kind == "assistant_mp":
             if action == "best":
                 preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
-                return finish(await self._assistant_mp_best_result_detail(
+                result = await self._assistant_mp_best_result_detail(
                     session=session,
                     cache_key=cache_key,
                     preferences=preferences,
-                ))
+                )
+                if state.get("recommend_handoff"):
+                    result_data = dict(result.get("data") or {})
+                    result_data.update(self._assistant_recommend_handoff_short_metadata(state))
+                    result_data["decision_summary"] = self._assistant_recommend_handoff_detail_summary(state)
+                    result["data"] = result_data
+                return finish(result)
             if action == "best_execute":
                 preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
                 plan_result = await self._assistant_mp_best_download_plan(
@@ -21691,12 +21743,18 @@ class AgentResourceOfficer(_PluginBase):
             if action == "detail" and index <= 0:
                 return {"success": False, "message": "MP 搜索结果详情需要编号，例如：选择 1。"}
             preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
-            return finish(await self._assistant_mp_result_detail(
+            result = await self._assistant_mp_result_detail(
                 choice=index,
                 session=session,
                 cache_key=cache_key,
                 preferences=preferences,
-            ))
+            )
+            if state.get("recommend_handoff"):
+                result_data = dict(result.get("data") or {})
+                result_data.update(self._assistant_recommend_handoff_short_metadata(state))
+                result_data["decision_summary"] = self._assistant_recommend_handoff_detail_summary(state)
+                result["data"] = result_data
+            return finish(result)
 
         if kind == "assistant_hdhive":
             allowed, disabled = self._ensure_hdhive_resource_enabled()

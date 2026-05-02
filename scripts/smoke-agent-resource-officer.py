@@ -1592,6 +1592,12 @@ def main() -> int:
                 isinstance(handoff_pansou_detail_data.get("score_summary"), dict),
                 json.dumps(handoff_pansou_detail_data, ensure_ascii=False)[:260],
             )
+            assert_ok(
+                "route_smart_discovery_handoff_pansou_detail_short_policy",
+                handoff_pansou_detail_data.get("preferred_command") == "计划"
+                and handoff_pansou_detail_data.get("fallback_command") == "确认",
+                json.dumps(handoff_pansou_detail_data, ensure_ascii=False)[:260],
+            )
             handoff_pansou_plan = route(base_url, api_key, sessions[27], "计划")
             handoff_pansou_plan_data = assert_route_action("route_smart_discovery_handoff_pansou_plan", handoff_pansou_plan, "workflow_plan")
             assert_ok(
@@ -1632,6 +1638,12 @@ def main() -> int:
             assert_ok(
                 "route_smart_discovery_handoff_mp_detail_payload",
                 isinstance(handoff_mp_detail_data.get("score_summary"), dict),
+                json.dumps(handoff_mp_detail_data, ensure_ascii=False)[:260],
+            )
+            assert_ok(
+                "route_smart_discovery_handoff_mp_detail_short_policy",
+                handoff_mp_detail_data.get("preferred_command") == "计划"
+                and handoff_mp_detail_data.get("fallback_command") == "确认",
                 json.dumps(handoff_mp_detail_data, ensure_ascii=False)[:260],
             )
             handoff_mp_plan = route(base_url, api_key, sessions[28], "计划")
