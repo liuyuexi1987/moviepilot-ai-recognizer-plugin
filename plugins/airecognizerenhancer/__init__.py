@@ -1,3 +1,4 @@
+import hmac
 import json
 import re
 from collections import Counter
@@ -120,7 +121,7 @@ class AIRecognizerEnhancer(_PluginBase):
         if not expected:
             return False, "服务端未配置 API Token"
         actual = self._extract_apikey(request, body)
-        if actual != expected:
+        if not hmac.compare_digest(actual, expected):
             return False, "API Token 无效"
         return True, ""
 

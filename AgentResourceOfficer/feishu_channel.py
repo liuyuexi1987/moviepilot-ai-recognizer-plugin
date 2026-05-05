@@ -1668,6 +1668,19 @@ class FeishuChannel:
     def _cache_key(chat_id: str, open_id: str) -> str:
         return f"feishu::{chat_id or ''}::{open_id or ''}"
 
+    @staticmethod
+    def _brief_response_error(data: Any) -> str:
+        if not isinstance(data, dict):
+            return "body=<non-json>"
+        code = str(data.get("code") or "").strip()
+        msg = str(data.get("msg") or data.get("message") or "").strip()
+        parts: List[str] = []
+        if code:
+            parts.append(f"code={code}")
+        if msg:
+            parts.append(f"msg={msg}")
+        return " ".join(parts) if parts else "body=<json>"
+
     def reply_text(self, chat_id: str, open_id: str, text: str) -> None:
         if not self.reply_enabled or not self.app_id or not self.app_secret:
             return
@@ -1696,7 +1709,10 @@ class FeishuChannel:
         except Exception:
             data = {}
         if response.status_code != 200 or data.get("code") not in (0, None):
-            logger.error(f"[AgentResourceOfficer][Feishu] 发送文本失败: status={response.status_code} body={data}")
+            logger.error(
+                f"[AgentResourceOfficer][Feishu] 发送文本失败: status={response.status_code} "
+                f"{self._brief_response_error(data)}"
+            )
 
     def reply_qrcode_data_url(self, chat_id: str, open_id: str, data_url: str) -> None:
         text = str(data_url or "").strip()
@@ -1731,7 +1747,10 @@ class FeishuChannel:
         except Exception:
             data = {}
         if response.status_code != 200 or data.get("code") not in (0, None):
-            logger.error(f"[AgentResourceOfficer][Feishu] 上传图片失败: status={response.status_code} body={data}")
+            logger.error(
+                f"[AgentResourceOfficer][Feishu] 上传图片失败: status={response.status_code} "
+                f"{self._brief_response_error(data)}"
+            )
             return None
         return str(((data.get("data") or {}).get("image_key")) or "").strip() or None
 
@@ -1763,7 +1782,10 @@ class FeishuChannel:
         except Exception:
             data = {}
         if response.status_code != 200 or data.get("code") not in (0, None):
-            logger.error(f"[AgentResourceOfficer][Feishu] 发送图片失败: status={response.status_code} body={data}")
+            logger.error(
+                f"[AgentResourceOfficer][Feishu] 发送图片失败: status={response.status_code} "
+                f"{self._brief_response_error(data)}"
+            )
 
     def _get_tenant_access_token(self) -> Optional[str]:
         if RequestUtils is None:
@@ -1789,7 +1811,9 @@ class FeishuChannel:
             token = data.get("tenant_access_token")
             expire = int(data.get("expire") or 0)
             if not token:
-                logger.error(f"[AgentResourceOfficer][Feishu] token 缺失：{data}")
+                logger.error(
+                    f"[AgentResourceOfficer][Feishu] token 缺失：{self._brief_response_error(data)}"
+                )
                 return None
             self._token_cache = {"token": token, "expires_at": now + expire}
             return token

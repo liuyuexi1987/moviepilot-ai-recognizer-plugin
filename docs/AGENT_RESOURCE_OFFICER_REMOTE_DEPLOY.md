@@ -26,6 +26,13 @@
 - `MoviePilot` 在 Windows，外部智能体在 Mac。
 - `MoviePilot` 在另一台 Linux / Docker 主机，外部智能体在本地工作站。
 
+最常见也最推荐的落地形态就是：
+
+- `MoviePilot + Agent影视助手` 在 NAS
+- `WorkBuddy / OpenClaw / Hermes` 在 Win / Mac
+
+这一种不是“特殊兼容模式”，而是当前主线支持的正常部署方式。
+
 ## 架构理解
 
 把当前方案拆成两层理解：
@@ -50,6 +57,13 @@
 
 所以跨机器时，变化的只是地址，不是协议。
 
+还要再补一句：
+
+- 普通资源命令由 NAS 上的 MP 执行
+- 本机浏览器 Cookie 修复命令，会借用外部智能体所在电脑的浏览器登录态
+
+这两类动作不要混成一回事。
+
 ## 外部智能体配置
 
 外部智能体所在机器的 Skill 配置文件：
@@ -64,6 +78,17 @@
 ARO_BASE_URL=http://你的MoviePilot地址:3000
 ARO_API_KEY=你的MoviePilot API_TOKEN
 ```
+
+如果要在外部智能体机器上使用影巢/夸克 Cookie 修复命令，建议额外准备：
+
+```text
+ARO_HDHIVE_COOKIE_EXPORT_DIR=你的影巢导出工具目录
+ARO_HDHIVE_COOKIE_BROWSER=edge
+ARO_QUARK_COOKIE_EXPORT_DIR=你的夸克导出工具目录
+ARO_QUARK_COOKIE_BROWSER=edge
+```
+
+这些变量是给**外部智能体所在电脑**用的，不是给 NAS 上 MP 用的。
 
 典型写法：
 
@@ -83,6 +108,30 @@ ARO_BASE_URL=https://mp.example.com
 - 只有 `MoviePilot` 和外部智能体在同一台机器时，才用 `127.0.0.1`
 - 如果 `MoviePilot` 在 NAS / Windows / 另一台主机，就必须写那台主机对外可达的地址
 
+### 本机浏览器修复链怎么理解
+
+如果你执行的是：
+
+```text
+刷新影巢Cookie
+修复影巢签到
+刷新夸克Cookie
+修复夸克转存
+```
+
+它的执行链不是“NAS 自己去读浏览器 Cookie”，而是：
+
+1. 外部智能体所在电脑先从本机浏览器读取 Cookie
+2. 再把 Cookie 写回 NAS 上的 `MoviePilot / Agent影视助手`
+3. 必要时重启 NAS 上的 `moviepilot-v2`
+
+所以：
+
+- Win / Mac 上先登录浏览器
+- 再执行修复命令
+
+这是对的。
+
 ## 对外部智能体来说，哪些能力不变
 
 下面这些入口跨机器都一样：
@@ -95,6 +144,11 @@ ARO_BASE_URL=https://mp.example.com
 - `workflow`
 - `plan-execute`
 - `followup`
+
+另外再补一个实践层结论：
+
+- `搜索 / 云盘搜索 / 转存 / 下载 / 更新检查` 这类都是远程调用 NAS 上的 MP
+- `刷新影巢Cookie / 刷新夸克Cookie` 这类会额外使用本机浏览器能力
 
 也就是说：
 
@@ -114,6 +168,11 @@ ARO_BASE_URL=https://mp.example.com
 - 结果 `ARO_BASE_URL` 还写成 `http://127.0.0.1:3000`
 
 这时请求会打到 Mac 自己，不是 NAS。
+
+同理，如果你在 Win / Mac 上执行 Cookie 修复命令：
+
+- 浏览器登录态一定要存在于这台 Win / Mac 本机
+- 不要以为 NAS 会代替你读取浏览器 Cookie
 
 ### 2. 盘搜等旁路服务地址按错视角
 

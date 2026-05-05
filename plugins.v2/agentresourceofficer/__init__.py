@@ -1,6 +1,7 @@
 import asyncio
 import concurrent.futures
 import copy
+import hmac
 import json
 import os
 import re
@@ -1447,7 +1448,7 @@ class AgentResourceOfficer(_PluginBase):
         if not expected:
             return False, "服务端未配置 API Token"
         actual = self._extract_apikey(request, body)
-        if actual != expected:
+        if not hmac.compare_digest(actual, expected):
             return False, "API Token 无效"
         return True, ""
 
@@ -7966,7 +7967,10 @@ class AgentResourceOfficer(_PluginBase):
                     "建议先刷新夸克登录后再试。"
                 )
         if not text:
-            return f"夸克转存失败：无法转存到 {target}"
+            return (
+                f"夸克转存失败：无法转存到 {target}。"
+                "当前原因未明，请先不要自行推断为路径问题，可稍后重试或先检查夸克登录态。"
+            )
         return f"夸克转存失败：{text}"
 
     @staticmethod
