@@ -51,10 +51,11 @@ class IdentifierSuggestionBundle(BaseModel):
 
 class AIRecognizerEnhancer(_PluginBase):
     plugin_name = "AI识别增强"
-    plugin_desc = "原生识别失败后直接复用 MoviePilot 当前 LLM 做本地结构化识别兜底。"
+    plugin_desc = "直接复用 MoviePilot 当前 LLM 配置，在原生识别失败后做本地结构化识别兜底，并交回原生链路继续二次识别。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/airecognizerenhancer.png"
     plugin_version = "0.1.12"
     plugin_author = "liuyuexi1987"
+    plugin_level = 1
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "arrecognizerenhancer_"
     plugin_order = 41
