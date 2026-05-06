@@ -2,26 +2,71 @@
 
 `Agent影视助手` 是这个仓库当前最重要的主线插件。
 
-它的目标很简单：
-
-- 帮你把 `盘搜`、`影巢`、`115`、`夸克`、`MoviePilot 原生搜索/PT` 这些能力收进同一条资源工作流
-- 让你在 `MoviePilot`、`飞书`、`WorkBuddy`、`OpenClaw`、`Hermes` 这类外部智能体里，用尽量一致的命令去搜索、转存、下载、更新和修复
-
 如果你是第一次接触这个仓库，优先看这个插件就够了。
 
 ## 适合谁
 
 适合这些场景：
 
+- 你想把 `飞书` 当成和 `TG / 企业微信` 类似的命令入口，用长连接直接控制 `MoviePilot`，不依赖特殊网络环境和公网暴露
 - 你想统一处理“找资源 -> 选资源 -> 转存到网盘”的流程
+- 你也想把 `MoviePilot` 原生搜索、`PT` 下载、订阅、下载任务这些能力收进同一套命令入口
 - 你既用 `115`，也用 `夸克`
 - 你会同时用 `盘搜`、`影巢`、`MP/PT`
 - 你希望外部智能体不要乱发挥，而是按固定命令稳定执行
-- 你需要在 `Win/Mac` 上跑智能体、在 `NAS` 上跑 `MoviePilot`
 
-## 主要能力
+## 两种用法
+
+### 1. 飞书用法
+
+- 直接把飞书当成一个资源命令入口
+- 不依赖 `OpenClaw`、`Hermes`、`WorkBuddy`
+- 更像 `TG / 企业微信` 机器人命令入口
+- 适合：
+  - 搜资源
+  - 选资源
+  - 转存
+  - 登录 115
+  - 查更新
+  - 触发影巢签到
+- 也能顺手接住一部分 `MoviePilot` 原生能力，比如搜索、下载、订阅和状态查询
+
+飞书常用命令和接入方式，直接看：
+
+- [`PLUGIN_INSTALL.md`](../docs/PLUGIN_INSTALL.md)
+- [`AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`](../docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
+
+### 2. 外部智能体用法
+
+- 通过 `skill / helper` 调 `Agent影视助手`
+- 由 `OpenClaw`、`Hermes`、`WorkBuddy` 承接会话和执行
+- 更适合：
+  - 会话续接
+  - 计划确认
+  - 自动修复
+  - 复杂工作流
+- 会把 `盘搜`、`影巢`、`115`、`夸克`、`MoviePilot 原生搜索/PT` 这些能力收进同一条统一工作流
+- 如果你要这样用，第一步就是安装 `agent-resource-officer` 的 `skill / helper`
+
+最短接入思路是：
+
+1. `NAS / 本机 MoviePilot` 安装并启用本插件
+2. 智能体所在机器安装 `agent-resource-officer skill / helper`
+3. 配好 `ARO_BASE_URL` 和 `ARO_API_KEY`
+4. 让智能体优先使用固定命令，不要自由改写
+
+优先阅读：
+
+- [`agent-resource-officer/SKILL.md`](../skills/agent-resource-officer/SKILL.md)
+- [`AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`](../docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
+- [`AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`](../docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
+
+下面这部分说明，默认都按**外部智能体用法**理解。
 
 ### 资源搜索
+
+- 这是最核心的用户命令层
+- 飞书也能直接发同名命令，但这里只展开外部智能体场景
 
 - `搜索 <片名>`：普通搜索，默认先盘搜
 - `盘搜搜索 <片名>`：只看盘搜
@@ -31,6 +76,14 @@
 
 ### 资源执行
 
+- 这一组命令用于云盘转存和 PT 下载主线
+- 飞书也能直接发同名命令，但这里只展开外部智能体场景
+- 执行前会结合智能评分系统自动择优：
+  - 云盘更看清晰度、HDR/DV、字幕、更新集数、完整度、目录和影巢积分
+  - PT 更看做种数、免费/促销、下载热度、清晰度、字幕和匹配度
+- 如果结果明显够好，会直接走一条龙执行
+- 如果整体质量不够稳，会优先给出候选编号让用户自己选
+
 - `转存 <片名>`：云盘资源一条龙转存
 - `夸克转存 <片名>`：优先选夸克资源并转存到夸克
 - `115转存 <片名>`：优先选 115 资源并转存到 115
@@ -38,11 +91,16 @@
 
 ### 更新与检查
 
+- 这组命令适合更新判断、签到和状态检查
+
 - `更新检查 <片名>` / `检查 <片名>`
 - `影巢签到`
 - `影巢签到日志`
 
 ### 维护与修复
+
+- 这一组更偏外部智能体和本机修复链
+- 其中 `刷新影巢Cookie`、`修复影巢签到`、`刷新夸克Cookie`、`修复夸克转存` 会牵涉本机浏览器 Cookie 导出工具
 
 - `115登录`
 - `115状态`
@@ -66,124 +124,39 @@
 - 站点状态 / 下载器状态
 - 热门探索 / 推荐
 
-## 推荐使用方式
+## 命令文档
 
-### 1. 你已经知道片名
+如果你想直接查看完整命令，而不是继续读说明，优先看：
 
-优先这样用：
-
-- `云盘搜索 片名`
-- `转存 片名`
-- `夸克转存 片名`
-- `115转存 片名`
-- `下载 片名`
-
-### 2. 你想先看看是否更新
-
-优先这样用：
-
-- `更新检查 片名`
-- `检查 片名`
-
-### 3. 你只想盯单一来源
-
-优先这样用：
-
-- `盘搜搜索 片名`
-- `影巢搜索 片名`
-- `MP搜索 片名`
-- `PT搜索 片名`
-
-## 常用命令示例
-
-```text
-云盘搜索 21世纪大君夫人
-盘搜搜索 低智商犯罪
-影巢搜索 流浪地球2
-转存 21世纪大君夫人
-夸克转存 21世纪大君夫人
-115转存 低智商犯罪
-下载 沙丘2
-更新检查 大君夫人
-检查 低智商犯罪
-影巢签到
-修复影巢签到
-刷新夸克Cookie
-115登录
-清空115转存目录
-清空夸克转存目录
-```
-
-## 外部智能体怎么接
-
-如果你只是直接在 `MoviePilot` 里点插件、调用原生能力，这一节可以先跳过。
-
-如果你要接：
-
-- `WorkBuddy`
-- `OpenClaw`
-- `Hermes`
-- 其他外部智能体
-
-那就需要安装 `agent-resource-officer` 的 `skill / helper`。
-
-优先阅读：
-
-- [`agent-resource-officer/SKILL.md`](../skills/agent-resource-officer/SKILL.md)
 - [`AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`](../docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
-- [`AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`](../docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
-
-最短接入思路是：
-
-1. `NAS / 本机 MoviePilot` 安装并启用本插件
-2. 智能体所在机器安装 `agent-resource-officer skill / helper`
-3. 配好 `ARO_BASE_URL` 和 `ARO_API_KEY`
-4. 让智能体优先使用固定命令，不要自由改写
-
-## 飞书入口
-
-这个插件已经内置可选的飞书入口。
-
-适合你想在飞书里直接发：
-
-- 搜索
-- 选择
-- 转存
-- 115 登录
-- 影巢签到
-
-如果你准备启用它，建议：
-
-- 先关闭旧的 `FeishuCommandBridgeLong`
-- 避免同一个飞书机器人被两个插件同时监听
+- [`PLUGIN_INSTALL.md`](../docs/PLUGIN_INSTALL.md)
 
 ## 和旧插件的关系
 
 这个插件的定位是：**把旧的分散能力收成主线。**
 
-它主要承接过这些旧链路的能力：
+常见旧插件和用途可以简单理解成这样：
 
-- `FeishuCommandBridgeLong`
-- `HdhiveOpenApi`
-- `QuarkShareSaver`
+| 旧插件 | 主要用途 |
+| --- | --- |
+| `FeishuCommandBridgeLong` | 旧的飞书命令桥接入口 |
+| `HdhiveOpenApi` | 影巢搜索、解锁、账号与配额相关能力 |
+| `QuarkShareSaver` | 夸克分享转存 |
+| `HDHiveDailySign` | 旧的影巢签到与网页 Cookie 兜底 |
 
-另外还有一个常见的“旧组合”：
+这几个旧插件常见的依存关系是：
 
-- 旧飞书桥接插件
-- 夸克分享转存插件
-- `P115StrmHelper`
-- 影巢 API / 影巢签到相关插件
+- `FeishuCommandBridgeLong` 负责接收飞书命令
+- `HdhiveOpenApi` 负责影巢搜索、解锁和影巢用户态能力
+- `QuarkShareSaver` 负责夸克分享转存
+- `HDHiveDailySign` 负责旧的影巢签到兜底
+
+也就是说，旧方案通常是：
+
+- 用一个插件收消息
+- 再分别调用不同插件完成影巢、夸克和签到兜底的具体动作
 
 这套旧组合仍然能用，但更适合兼容老环境，不适合作为后续主线继续扩展。
-
-### 关于 P115StrmHelper
-
-`Agent影视助手` 已经能处理很多 `115` 分享转存场景，但 `STRM` 生成、302、全量/增量同步、媒体库整理，仍建议继续交给 `P115StrmHelper`。
-
-也就是说：
-
-- `Agent影视助手`：更偏资源入口、搜索、转存、下载、更新、修复
-- `P115StrmHelper`：更偏 `STRM`、同步、媒体库落地
 
 ## 新手最容易踩的坑
 
@@ -233,3 +206,4 @@
 - [`PLUGIN_INSTALL.md`](../docs/PLUGIN_INSTALL.md)
 - [`AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md`](../docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
 - [`AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md`](../docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
+- [`AI识别增强 README`](../AIRecognizerEnhancer/README.md)
