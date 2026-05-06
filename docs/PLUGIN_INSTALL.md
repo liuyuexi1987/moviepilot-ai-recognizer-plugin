@@ -1,110 +1,76 @@
 # 插件安装说明
 
-这个仓库是 MoviePilot 自定义插件仓库，当前同时提供资源工作流、飞书桥接、AI 识别增强、影巢、夸克和极影视刷新等插件。
+这份文档只讲一件事：
 
-推荐优先使用 MoviePilot 自定义插件仓库安装；只有需要离线安装或调试单插件时，再使用本地 ZIP。
+- 普通用户该装什么
+- 普通用户怎么开始用
 
-## 当前推荐安装状态
+如果你只是想把插件装起来，不需要看打包、发布、维护命令。
 
-- 资源主线：`Agent影视助手 / AgentResourceOfficer 0.2.68`
-- AI 识别主线：`AIRecognizerEnhancer 0.1.12`
-- 当前 Skill helper：`agent-resource-officer 0.1.42`
-- 当前 Release：<https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.68>
+## 新用户先装什么
 
-如果你是新用户，优先装：
+优先安装：
 
 - `AgentResourceOfficer`
 - `AIRecognizerEnhancer`
 
-只有在明确需要旧兼容入口或单点功能时，再补装旧插件。
+这两个就够你先跑通主线：
 
-## 方式 1：插件仓库安装
+- 搜资源
+- 选资源
+- 转存 / 下载
+- 更新检查
+- 识别失败兜底
 
-在 MoviePilot 中添加本仓库作为自定义插件仓库：
+## 安装方式
+
+### 方式 1：插件仓库安装
+
+在 MoviePilot 中添加这个自定义插件仓库：
 
 ```text
 https://github.com/liuyuexi1987/MoviePilot-Plugins
 ```
 
-添加后在插件市场安装需要的插件。
+然后在插件市场里安装：
 
-## 方式 2：本地 ZIP 安装
+- `AgentResourceOfficer`
+- `AIRecognizerEnhancer`
 
-如果你是在维护仓库、准备打包或发布，而不是普通安装用户，先执行一次仓库卫生检查：
+这是最推荐的方式。
 
-```bash
-bash scripts/repo-hygiene.sh
-```
+### 方式 2：本地 ZIP 安装
 
-如果只想快速查维护/发布命令，不想先读完整安装说明，直接看：
+如果你拿到的是 Release 里的 ZIP 包，也可以在 MoviePilot 插件页直接本地上传安装。
 
-- `docs/MAINTENANCE_COMMANDS.md`
+普通用户只需要认这几个包：
 
-如果要跑完整发版前检查，直接执行：
+- `AgentResourceOfficer-<版本>.zip`
+- `AIRecognizerEnhancer-<版本>.zip`
+- 如果你确实还要旧兼容入口，再按需装：
+  - `FeishuCommandBridgeLong-<版本>.zip`
+  - `HdhiveOpenApi-<版本>.zip`
+  - `QuarkShareSaver-<版本>.zip`
 
-```bash
-bash scripts/release-preflight.sh
-```
+## 接外部智能体时怎么装
 
-如果只是本地临时打包、不需要完整验收，也可以执行：
+如果你要接：
 
-```bash
-bash scripts/package-plugin.sh --all
-```
+- WorkBuddy
+- OpenClaw
+- Hermes
+- 其他外部智能体
 
-如果只想单独跑低层发布检查，而不先做仓库卫生检查，也可以直接执行 `bash scripts/pre-release-check.sh`。正式发布前仍优先使用 `release-preflight.sh`。
+除了 MoviePilot 里的插件本体，还需要安装：
 
-如果本机已经有可访问的 MoviePilot 实例，并且 `~/.config/agent-resource-officer/config` 配好了 `ARO_BASE_URL` / `ARO_API_KEY`，可以再跑一遍真实只读 smoke：
+- `agent-resource-officer` skill / helper
 
-```bash
-RUN_AGENT_RESOURCE_OFFICER_LIVE_SMOKE=1 bash scripts/pre-release-check.sh
-```
+先看这两个文件：
 
-生成目录：
+- [skills/agent-resource-officer/SKILL.md](../skills/agent-resource-officer/SKILL.md)
+- [AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md](./AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
 
-```text
-dist/
-```
-
-当前会生成：
-
-- `AIRecognizerEnhancer-0.1.12.zip`
-- `AgentResourceOfficer-0.2.68.zip`
-- `FeishuCommandBridgeLong-0.5.26.zip`
-- `HdhiveOpenApi-0.3.0.zip`
-- `QuarkShareSaver-0.1.0.zip`
-
-然后在 MoviePilot 插件页面选择本地上传安装。
-
-## Skill 模板安装
-
-仓库同时提供两个公开 Skill 模板，给外部智能体调用 MoviePilot 资源工作流使用：
-
-发布产物里会包含：
-
-- `agent-resource-officer-<version>.zip`
-- `hdhive-search-unlock-to-115-<version>.zip`
-
-如果使用源码仓库，也可以直接运行安装脚本：
-
-```bash
-bash skills/agent-resource-officer/install.sh --dry-run
-bash skills/agent-resource-officer/install.sh
-
-bash skills/hdhive-search-unlock-to-115/install.sh --dry-run
-bash skills/hdhive-search-unlock-to-115/install.sh
-```
-
-安装后可先跑本地自测：
-
-```bash
-python3 <SKILL_HOME>/agent-resource-officer/scripts/aro_request.py selftest
-python3 <SKILL_HOME>/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py selftest
-```
-
-这里的 `<SKILL_HOME>` 指你的智能体 Skill 根目录，例如某些客户端会使用自己的 `skills/` 目录。
-
-安装完 `agent-resource-officer` skill 后，建议先把下面这段最短提示词发给智能体：
+可以直接丢给智能体这段最短提示词：
 
 ```text
 请安装并使用 agent-resource-officer skill。
@@ -120,27 +86,49 @@ python3 <SKILL_HOME>/hdhive-search-unlock-to-115/scripts/hdhive_agent_tool.py se
 - 盘搜结果里的链接必须原样保留，不要吞掉 115 或夸克 URL
 ```
 
-如果你接的是微信、WorkBuddy、OpenClaw 这类容易二次摘要的智能体，上面最后一条尤其重要。
-
 ## 推荐安装组合
 
-智能体 / 资源工作流主线：
+### 组合 A：当前推荐主线
 
 - `AgentResourceOfficer`
-- 需要独立夸克转存页面时再装 `QuarkShareSaver`
-- 需要旧飞书桥接兼容入口时再装 `FeishuCommandBridgeLong`
-- 需要旧影巢 OpenAPI 页面时再装 `HdhiveOpenApi`
+- `AIRecognizerEnhancer`
 
-新用户优先使用 `AgentResourceOfficer` 内置飞书入口；同一个飞书 App 不建议同时开启插件内置飞书和旧 `FeishuCommandBridgeLong`。
+适合：
 
-AI 识别线：
+- 新用户
+- 想少装插件
+- 想把搜索、转存、下载、签到、修复尽量统一到一个主入口
 
-- 统一使用 `AIRecognizerEnhancer`
+### 组合 B：旧兼容组合
 
-影巢签到：
+如果你还在沿用旧工作流，可以按需补这些插件：
 
-- 已安装 `AgentResourceOfficer` 时，也可以在插件内启用影巢签到，由插件统一承接签到、搜索、解锁和智能入口。
+- `FeishuCommandBridgeLong`
+- `HdhiveOpenApi`
+- `QuarkShareSaver`
+- `P115StrmHelper`（这个不在本仓库）
 
-## AI Gateway 说明
+它们组合起来时的大致分工是：
 
-`AIRecognizerEnhancer` 不需要额外 Gateway，直接复用 MoviePilot 当前 LLM 配置。
+- `FeishuCommandBridgeLong`
+  - 负责飞书消息入口
+- `HdhiveOpenApi`
+  - 负责影巢搜索、解锁、签到、配额
+- `QuarkShareSaver`
+  - 负责夸克分享直转
+- `P115StrmHelper`
+  - 负责 115 转存、整理、STRM
+
+也就是说，旧组合是“多插件拼一条链”；现在更推荐把这条链尽量收进：
+
+- `AgentResourceOfficer`
+
+## AI 识别补充说明
+
+`AIRecognizerEnhancer` 不需要额外 Gateway，直接复用 MoviePilot 当前已经启用的 LLM 配置。
+
+## 如果你只是普通用户，到这里就够了
+
+如果你后面真的要自己打包、发布或维护仓库，再去看：
+
+- [MAINTENANCE_COMMANDS.md](./MAINTENANCE_COMMANDS.md)

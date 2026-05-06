@@ -183,6 +183,51 @@ AI识别增强
 - [跨机器部署说明](./docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
 - [agent-resource-officer skill](./skills/agent-resource-officer/SKILL.md)
 
+## 旧组合方案
+
+在 `Agent影视助手` 成为主线之前，这个仓库常见的老组合是：
+
+- `FeishuCommandBridgeLong`
+- `QuarkShareSaver`
+- `HdhiveOpenApi`
+- `P115StrmHelper`（外部插件，不在本仓库内）
+
+这四个插件放在一起时，分工大致是：
+
+- `FeishuCommandBridgeLong`
+  - 负责飞书消息入口
+  - 把“搜索、选择、转存、115 登录”这些动作从聊天消息转成插件调用
+- `HdhiveOpenApi`
+  - 负责影巢搜索、解锁、签到、配额查询
+  - 处理“先搜影巢，再解锁资源”这条链
+- `QuarkShareSaver`
+  - 负责夸克分享链接的实际转存
+  - 是夸克侧的轻量执行层
+- `P115StrmHelper`
+  - 负责 115 转存、整理、STRM 等落盘能力
+  - 是 115 侧的执行层
+
+把它们拼起来以后，整体效果就是：
+
+- 飞书里发命令
+- 飞书桥接负责接收和分流
+- 影巢插件负责搜影巢和解锁
+- 夸克插件负责夸克转存
+- `P115StrmHelper` 负责 115 落盘和后续整理
+
+这套老方案现在仍然能用，但问题也很明显：
+
+- 插件分散
+- 会话分散
+- 失败恢复分散
+- 外部智能体接入不统一
+
+所以现在更推荐直接使用：
+
+- `Agent影视助手`
+
+它本质上就是把上面这条旧组合主线，尽量收拢成一个统一入口。
+
 ## 全部插件目录
 
 下面是当前仓库里所有主要插件。首页只给一行说明；详细作用、配置和用法请点进去看各自 README。
@@ -203,7 +248,6 @@ AI识别增强
 - [插件安装说明](./docs/PLUGIN_INSTALL.md)
 - [外部智能体接入](./docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
 - [跨机器部署说明](./docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
-- [维护命令速查](./docs/MAINTENANCE_COMMANDS.md)
 
 ## 当前状态
 
