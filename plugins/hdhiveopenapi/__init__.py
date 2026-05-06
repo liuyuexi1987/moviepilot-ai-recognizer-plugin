@@ -28,10 +28,11 @@ except Exception:
 
 class HdhiveOpenApi(_PluginBase):
     plugin_name = "影巢 OpenAPI"
-    plugin_desc = "通过 HDHive Open API 完成用户信息、签到、资源搜索解锁、分享管理与配额查询。"
+    plugin_desc = "通过 HDHive Open API 完成签到、关键词/TMDB 搜索、资源解锁、115 转存、分享管理与配额查询。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/hdhive.ico"
     plugin_version = "0.3.0"
     plugin_author = "liuyuexi1987"
+    plugin_level = 1
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "hdhiveopenapi_"
     plugin_order = 30

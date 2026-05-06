@@ -141,6 +141,7 @@ class FeishuCommandBridgeLong(_PluginBase):
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/feishucommandbridgelong.png"
     plugin_version = "0.5.26"
     plugin_author = "liuyuexi1987"
+    plugin_level = 1
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "feishucommandbridgelong_"
     plugin_order = 29

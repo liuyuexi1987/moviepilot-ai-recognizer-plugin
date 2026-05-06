@@ -123,11 +123,12 @@ class _RequestContextShim:
 
 class AgentResourceOfficer(_PluginBase):
     plugin_name = "Agent影视助手"
-    plugin_desc = "统一承接影巢、115、夸克、飞书与智能体入口的资源工作流主插件。"
+    plugin_desc = "统一承接影巢搜索/解锁、115 转存、夸克转存、飞书入口与智能体接口的资源工作流主插件。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/agentresourceofficer.png"
     plugin_version = "0.2.68"
     request_templates_schema_version = "request_templates.v1"
     plugin_author = "liuyuexi1987"
+    plugin_level = 1
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "agentresourceofficer_"
     plugin_order = 40

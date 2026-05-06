@@ -33,10 +33,11 @@ except Exception:
 
 class QuarkShareSaver(_PluginBase):
     plugin_name = "夸克分享转存"
-    plugin_desc = "把夸克分享链接直接转存到自己的夸克网盘目录，供智能体和飞书桥接稳定调用。"
+    plugin_desc = "把夸克分享链接直接转存到自己的夸克网盘目录，适合作为智能体和飞书的稳定执行入口。"
     plugin_icon = "https://raw.githubusercontent.com/liuyuexi1987/MoviePilot-Plugins/main/icons/quark.ico"
     plugin_version = "0.1.0"
     plugin_author = "liuyuexi1987"
+    plugin_level = 1
     author_url = "https://github.com/liuyuexi1987"
     plugin_config_prefix = "quarksharesaver_"
     plugin_order = 32
