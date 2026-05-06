@@ -153,9 +153,7 @@ gh workflow run draft-release.yml -f tag=<tag> -f dry_run=true
 - `AgentResourceOfficer`
 - `FeishuCommandBridgeLong`
 - `HdhiveOpenApi`
-- `HDHiveDailySign`
 - `QuarkShareSaver`
-- `ZspaceMediaFreshMix`
 
 完整检查还会校验：
 

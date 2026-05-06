@@ -276,18 +276,6 @@
       "0.3.0": "支持关键词搜索、TMDB 候选解析、115 自动转存、分享管理、签到与配额查询。"
     }
   },
-  "HDHiveDailySign": {
-    "name": "HDHive Daily Sign",
-    "description": "自动完成影巢(HDHive)每日签到，支持普通/赌狗模式、失败重试、自动登录与历史记录。",
-    "labels": "HDHiveDailySign,HDHive Daily Sign,影巢签到,HDHive,签到,自动登录,赌狗签到",
-    "version": "1.0.0",
-    "icon": "hdhive.ico",
-    "author": "liuyuexi1987",
-    "level": 2,
-    "history": {
-      "1.0.0": "以全新英文插件身份发布，统一作者信息并与旧插件统计口径分离。"
-    }
-  },
   "QuarkShareSaver": {
     "name": "夸克分享转存",
     "description": "把夸克分享链接直接转存到自己的夸克网盘目录，适合作为智能体和飞书的稳定执行入口。",
@@ -298,18 +286,6 @@
     "level": 1,
     "history": {
       "0.1.0": "首个轻量版本，支持夸克分享解析、目录自动创建、转存执行，以及智能体和飞书调用。"
-    }
-  },
-  "ZspaceMediaFreshMix": {
-    "name": "极影视刷新（自用魔改）",
-    "description": "基于 gxterry 原版整理的自用魔改版，兼容电影/电视剧混合分类、新版极空间 Cookie 和分类刷新轮询。",
-    "labels": "极影视,极空间,Zspace,媒体刷新,混合分类,自用魔改",
-    "version": "1.0.0",
-    "icon": "zspacemediafreshmix.png",
-    "author": "liuyuexi1987",
-    "level": 1,
-    "history": {
-      "1.0.0": "基于原版刷新极影视插件整理为独立自用魔改版，兼容混合分类与新版极空间 Cookie。"
     }
   }
 }

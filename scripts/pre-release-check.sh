@@ -39,9 +39,7 @@ PACKAGE_PLUGINS=(
   AgentResourceOfficer
   FeishuCommandBridgeLong
   HdhiveOpenApi
-  HDHiveDailySign
   QuarkShareSaver
-  ZspaceMediaFreshMix
 )
 
 release_git_status() {

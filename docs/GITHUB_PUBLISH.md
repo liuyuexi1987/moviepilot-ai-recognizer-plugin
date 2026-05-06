@@ -53,10 +53,8 @@ Personal MoviePilot plugin suite for agent-driven resource workflows, AI recogni
 - `AIRecognizerEnhancer`
 - `AgentResourceOfficer`
 - `FeishuCommandBridgeLong`
-- `HDHiveDailySign`
 - `HdhiveOpenApi`
 - `QuarkShareSaver`
-- `ZspaceMediaFreshMix`
 
 ## 历史说明
 

@@ -71,10 +71,8 @@ dist/
 - `AIRecognizerEnhancer-0.1.12.zip`
 - `AgentResourceOfficer-0.2.68.zip`
 - `FeishuCommandBridgeLong-0.5.26.zip`
-- `HDHiveDailySign-1.0.0.zip`
 - `HdhiveOpenApi-0.3.0.zip`
 - `QuarkShareSaver-0.1.0.zip`
-- `ZspaceMediaFreshMix-1.0.0.zip`
 
 然后在 MoviePilot 插件页面选择本地上传安装。
 
@@ -141,13 +139,7 @@ AI 识别线：
 
 影巢签到：
 
-- 只需要轻量签到时用 `HDHiveDailySign`
-- OpenAPI 签到如果要求付费接口，普通用户优先保留轻量签到插件
 - 已安装 `AgentResourceOfficer` 时，也可以在插件内启用影巢签到，由插件统一承接签到、搜索、解锁和智能入口。
-
-极影视刷新：
-
-- 使用 `ZspaceMediaFreshMix`
 
 ## AI Gateway 说明
 

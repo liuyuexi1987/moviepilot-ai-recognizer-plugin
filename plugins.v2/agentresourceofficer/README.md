@@ -32,7 +32,6 @@
 
 - `FeishuCommandBridgeLong`
 - `HdhiveOpenApi`
-- `HDHiveDailySign`
 - `QuarkShareSaver`
 
 ## 首期模块
@@ -88,7 +87,7 @@
 - 影巢签到已收口到本插件：支持普通 / 赌狗签到、OpenAPI Premium 接口、网页 Cookie 兜底和定时任务
 - 影巢网页 Cookie 失效时可由插件使用账号密码自动登录刷新，并自动重试签到
 - 影巢签到日志已内置，可通过 `GET /hdhive/checkin/history` 或智能入口 `签到日志` 查看最近记录
-- 影巢部分用户态接口受站点 Premium 权限限制；账号信息会优先回退到 `HDHiveDailySign` 的网页快照，签到会优先尝试 `HDHiveDailySign` 现有 Cookie 做网页兜底
+- 影巢部分用户态接口受站点 Premium 权限限制；如果你本地仍保留旧 `HDHiveDailySign`，账号信息可回退到它的网页快照，签到也可优先尝试它现有 Cookie 做网页兜底；公开仓库主线不再继续发布该插件
 - `115` 自动转存已具备轻量直转层：可优先使用扫码得到的 115 客户端会话，或复用已加载的 115 客户端直接调用分享转存接口；直转失败时再回退 `P115StrmHelper`
 - 已内置可选 `Feishu Channel`：可直接用飞书长连接接收消息，并复用本插件统一入口执行搜索、选择、转存、115 登录和 STRM 调度
 - 已新增智能体偏好画像：第一次接入可询问用户片源偏好，后续云盘和 PT 结果会按偏好评分

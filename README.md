@@ -193,9 +193,7 @@ AI识别增强
 | `AIRecognizerEnhancer` / AI识别增强 | MoviePilot 原生识别失败后的本地 LLM 兜底和失败样本治理 | [查看说明](./AIRecognizerEnhancer/README.md) |
 | `FeishuCommandBridgeLong` / 飞书命令桥接 | 旧飞书长连接兼容/备份入口；新环境优先使用 Agent影视助手 内置入口 | [查看说明](./FeishuCommandBridgeLong/README.md) |
 | `HdhiveOpenApi` / 影巢 OpenAPI | 影巢搜索、解锁、签到、配额查询、115 转存的独立 OpenAPI 插件 | [查看说明](./HdhiveOpenApi/README.md) |
-| `HDHiveDailySign` / 影巢签到 | 自动影巢每日签到，支持普通/赌狗模式、失败重试、自动登录与历史记录 | [查看说明](./HDHiveDailySign/README.md) |
 | `QuarkShareSaver` / 夸克分享转存 | 夸克分享链接直转自己的夸克目录，适合作为轻量执行入口 | [查看说明](./QuarkShareSaver/README.md) |
-| `ZspaceMediaFreshMix` / 极影视刷新（自用魔改） | 极空间/极影视媒体刷新与混合分类兼容 | [查看说明](./ZspaceMediaFreshMix/README.md) |
 
 ## 文档入口
 

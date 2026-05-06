@@ -3,8 +3,8 @@
 ## 当前主线
 
 - 仓库已经从单一 AI Gateway 插件，收拢为 MoviePilot 资源与智能体插件套件。
-- 当前发布前检查覆盖 7 个可本地安装插件：
-  `AIRecognizerEnhancer`、`AgentResourceOfficer`、`FeishuCommandBridgeLong`、`HdhiveOpenApi`、`HDHiveDailySign`、`QuarkShareSaver`、`ZspaceMediaFreshMix`。
+- 当前发布前检查覆盖 5 个可本地安装插件：
+  `AIRecognizerEnhancer`、`AgentResourceOfficer`、`FeishuCommandBridgeLong`、`HdhiveOpenApi`、`QuarkShareSaver`。
 - `AgentResourceOfficer` 已作为新资源主入口，负责影巢、盘搜、115、夸克、内置飞书入口和智能体 Tool 的统一路由。
 - `FeishuCommandBridgeLong` 继续保留为兼容/备份入口，新用户优先使用 `AgentResourceOfficer` 内置飞书 Channel。
 - `AIRecognizerEnhancer` 作为新识别增强线，逐步替代旧网关转发链路。
@@ -16,9 +16,7 @@
 - `AgentResourceOfficer`: `0.2.68`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
-- `HDHiveDailySign`: `1.0.0`
 - `QuarkShareSaver`: `0.1.0`
-- `ZspaceMediaFreshMix`: `1.0.0`
 
 ## 近期基础设施更新
 
