@@ -1940,6 +1940,10 @@ class AgentResourceOfficer(_PluginBase):
         feishu_state = "已启用" if feishu_health.get("enabled") else "未启用"
         feishu_running = "运行中" if feishu_health.get("running") else "未运行"
         hdhive_lines = [line.strip() for line in str(hdhive_summary or "").splitlines() if line.strip()]
+        hdhive_compact_lines = hdhive_lines[:4]
+        if len(hdhive_lines) >= 6:
+            hdhive_compact_lines.append(f"{hdhive_lines[4]} / {hdhive_lines[5]}")
+        p115_cookie_message = cookie_state.get("message") or "当前会话可直接用于 115 直转"
 
         def text_line(text: str, css_class: str = "text-body-2 py-1") -> Dict[str, Any]:
             return {
@@ -1965,24 +1969,26 @@ class AgentResourceOfficer(_PluginBase):
                     },
                     {
                         "component": "VCardText",
-                        "content": [text_line(line) for line in lines],
+                        "props": {"class": "py-2"},
+                        "content": [text_line(line, "text-body-2 py-0") for line in lines],
                     },
                 ],
             }
 
-        def section_card(title: str, lines: List[str]) -> Dict[str, Any]:
+        def section_card(title: str, lines: List[str], compact: bool = False) -> Dict[str, Any]:
             return {
                 "component": "VCard",
                 "props": {"flat": True, "border": True, "class": "h-100"},
                 "content": [
                     {
                         "component": "VCardTitle",
-                        "props": {"class": "text-subtitle-1 font-weight-bold"},
+                        "props": {"class": "text-subtitle-1 font-weight-bold pb-1" if compact else "text-subtitle-1 font-weight-bold"},
                         "text": title,
                     },
                     {
                         "component": "VCardText",
-                        "content": [text_line(line) for line in lines],
+                        "props": {"class": "py-2"} if compact else {},
+                        "content": [text_line(line, "text-body-2 py-0") for line in lines] if compact else [text_line(line) for line in lines],
                     },
                 ],
             }
@@ -1992,84 +1998,6 @@ class AgentResourceOfficer(_PluginBase):
                 "component": "VContainer",
                 "props": {"fluid": True, "class": "pa-0"},
                 "content": [
-                    {
-                        "component": "VAlert",
-                        "props": {
-                            "type": "info",
-                            "variant": "tonal",
-                            "class": "mb-4",
-                            "title": "统一资源入口",
-                        },
-                        "content": [
-                            text_line(
-                                "Agent影视助手支持三种接入模式：飞书直接发命令、外部智能体调用 skill/helper、MP 内置智能体调用 Agent Tool。",
-                                "text-body-2 mb-3",
-                            ),
-                            text_line(
-                                "不接外部智能体",
-                                "text-subtitle-2 font-weight-bold mb-2",
-                            ),
-                            {
-                                "component": "div",
-                                "props": {
-                                    "class": "pa-3 rounded text-body-2 mb-3",
-                                    "style": "white-space: pre-line; line-height: 1.75; background: rgba(255,255,255,.55);",
-                                },
-                                "text": (
-                                    "如果你只想直接用插件或飞书入口，不需要额外安装 skill。\n"
-                                    "直接使用这些命令即可：搜索 片名 / 云盘搜索 片名 / 转存 片名 / 下载 片名 / 更新检查 片名。"
-                                ),
-                            },
-                            text_line(
-                                "接外部智能体（同一台机器）",
-                                "text-subtitle-2 font-weight-bold mb-2",
-                            ),
-                            {
-                                "component": "div",
-                                "props": {
-                                    "class": "pa-3 rounded text-body-2 mb-3",
-                                    "style": "white-space: pre-line; line-height: 1.75; background: rgba(255,255,255,.55);",
-                                },
-                                "text": (
-                                    "把下面这段话直接发给 WorkBuddy、Hermes、OpenClaw（小龙虾）或其他外部智能体：\n"
-                                    "请从这个仓库安装并使用 agent-resource-officer skill：\n"
-                                    "https://github.com/liuyuexi1987/MoviePilot-Plugins\n\n"
-                                    "按下面配置完成接入：\n"
-                                    "ARO_BASE_URL=http://127.0.0.1:3000\n"
-                                    "ARO_API_KEY=你的 MoviePilot API_TOKEN\n\n"
-                                    "安装后请优先读取：\n"
-                                    "1. skills/agent-resource-officer/SKILL.md\n"
-                                    "2. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md\n\n"
-                                    "然后按其中的固定命令和接入规则执行。"
-                                ),
-                            },
-                            text_line(
-                                "接外部智能体（MoviePilot 在 NAS / 远程主机）",
-                                "text-subtitle-2 font-weight-bold mb-2",
-                            ),
-                            {
-                                "component": "div",
-                                "props": {
-                                    "class": "pa-3 rounded text-body-2",
-                                    "style": "white-space: pre-line; line-height: 1.75; background: rgba(255,255,255,.55);",
-                                },
-                                "text": (
-                                    "如果 MoviePilot 不在当前电脑，而是在 NAS / Docker / 另一台主机，把下面这段话直接发给外部智能体：\n"
-                                    "请从这个仓库安装并使用 agent-resource-officer skill：\n"
-                                    "https://github.com/liuyuexi1987/MoviePilot-Plugins\n\n"
-                                    "MoviePilot 在 NAS，智能体在当前电脑。\n"
-                                    "请按下面配置完成接入：\n"
-                                    "ARO_BASE_URL=http://你的NAS地址:3000\n"
-                                    "ARO_API_KEY=你的 MoviePilot API_TOKEN\n\n"
-                                    "安装后请优先读取：\n"
-                                    "1. skills/agent-resource-officer/SKILL.md\n"
-                                    "2. docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md\n"
-                                    "3. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md\n\n"
-                                    "然后按其中的固定命令和接入规则执行。"
-                                ),
-                            },
-                        ],
-                    },
                     {
                         "component": "VRow",
                         "props": {"dense": True},
@@ -2141,6 +2069,92 @@ class AgentResourceOfficer(_PluginBase):
                         ],
                     },
                     {
+                        "component": "VAlert",
+                        "props": {
+                            "type": "info",
+                            "variant": "tonal",
+                            "class": "mt-3 mb-4",
+                            "title": "统一资源入口",
+                        },
+                        "content": [
+                            text_line(
+                                "Agent影视助手支持三种接入模式：飞书直接发命令、外部智能体调用 skill/helper、MP 内置智能体调用 Agent Tool。",
+                                "text-body-2 mb-3",
+                            ),
+                            text_line(
+                                "不接外部智能体",
+                                "text-subtitle-2 font-weight-bold mb-2",
+                            ),
+                            {
+                                "component": "div",
+                                "props": {
+                                    "class": "pa-3 rounded text-body-2 mb-3",
+                                    "style": "white-space: pre-line; line-height: 1.7; background: rgba(255,255,255,.55);",
+                                },
+                                "text": (
+                                    "如果你只想直接用插件或飞书入口，不需要额外安装 skill。\n"
+                                    "直接使用这些命令即可：搜索 片名 / 云盘搜索 片名 / 转存 片名 / 下载 片名 / 更新检查 片名。"
+                                ),
+                            },
+                            text_line(
+                                "接外部智能体（同一台机器）",
+                                "text-subtitle-2 font-weight-bold mb-2",
+                            ),
+                            text_line(
+                                "⚠️ 先把下面示例里的 ARO_BASE_URL 和 ARO_API_KEY 换成你自己的地址和 Token，再发给外部智能体。",
+                                "text-subtitle-2 font-weight-bold text-error mb-2",
+                            ),
+                            {
+                                "component": "div",
+                                "props": {
+                                    "class": "pa-3 rounded text-body-2 mb-3",
+                                    "style": "white-space: pre-line; line-height: 1.7; background: rgba(255,255,255,.55);",
+                                },
+                                "text": (
+                                    "把下面这段话直接发给 WorkBuddy、Hermes、OpenClaw（小龙虾）或其他外部智能体：\n"
+                                    "请从这个仓库安装并使用 agent-resource-officer skill：\n"
+                                    "https://github.com/liuyuexi1987/MoviePilot-Plugins\n\n"
+                                    "按下面配置完成接入：\n"
+                                    "ARO_BASE_URL=http://127.0.0.1:3000\n"
+                                    "ARO_API_KEY=你的 MoviePilot API_TOKEN\n\n"
+                                    "安装后请优先读取：\n"
+                                    "1. skills/agent-resource-officer/SKILL.md\n"
+                                    "2. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md\n\n"
+                                    "然后按其中的固定命令和接入规则执行。"
+                                ),
+                            },
+                            text_line(
+                                "接外部智能体（MoviePilot 在 NAS / 远程主机）",
+                                "text-subtitle-2 font-weight-bold mb-2",
+                            ),
+                            text_line(
+                                "⚠️ 先把下面示例里的 ARO_BASE_URL 和 ARO_API_KEY 换成你自己的地址和 Token，再发给外部智能体。",
+                                "text-subtitle-2 font-weight-bold text-error mb-2",
+                            ),
+                            {
+                                "component": "div",
+                                "props": {
+                                    "class": "pa-3 rounded text-body-2",
+                                    "style": "white-space: pre-line; line-height: 1.7; background: rgba(255,255,255,.55);",
+                                },
+                                "text": (
+                                    "如果 MoviePilot 不在当前电脑，而是在 NAS / Docker / 另一台主机，把下面这段话直接发给外部智能体：\n"
+                                    "请从这个仓库安装并使用 agent-resource-officer skill：\n"
+                                    "https://github.com/liuyuexi1987/MoviePilot-Plugins\n\n"
+                                    "MoviePilot 在 NAS，智能体在当前电脑。\n"
+                                    "请按下面配置完成接入：\n"
+                                    "ARO_BASE_URL=http://你的NAS地址:3000\n"
+                                    "ARO_API_KEY=你的 MoviePilot API_TOKEN\n\n"
+                                    "安装后请优先读取：\n"
+                                    "1. skills/agent-resource-officer/SKILL.md\n"
+                                    "2. docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md\n"
+                                    "3. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md\n\n"
+                                    "然后按其中的固定命令和接入规则执行。"
+                                ),
+                            },
+                        ],
+                    },
+                    {
                         "component": "VRow",
                         "props": {"dense": True, "class": "mt-1"},
                         "content": [
@@ -2166,10 +2180,11 @@ class AgentResourceOfficer(_PluginBase):
                                 "content": [
                                     section_card(
                                         "账号与签到",
-                                        hdhive_lines
+                                        hdhive_compact_lines
                                         + [
-                                            f"115 Cookie：{cookie_state.get('message') or '当前会话可直接用于 115 直转'}",
+                                            f"115 Cookie：{p115_cookie_message}",
                                         ],
+                                        compact=True,
                                     )
                                 ],
                             },
