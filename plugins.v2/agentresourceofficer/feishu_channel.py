@@ -5,6 +5,7 @@ import importlib
 import json
 import re
 import sqlite3
+import subprocess
 import sys
 import threading
 import time
@@ -29,6 +30,10 @@ try:
     import lark_oapi as lark
 except Exception:
     lark = None
+
+_LARK_IMPORT_LOCK = threading.Lock()
+_LARK_AUTO_INSTALL_ATTEMPTED = False
+_LARK_PACKAGE_SPEC = "lark-oapi==1.5.3"
 
 try:
     from app.chain.download import DownloadChain
@@ -92,6 +97,68 @@ except Exception:
 _EVENT_CACHE_FILE = Path("/config/plugins/AgentResourceOfficer/.feishu_event_cache.json")
 
 
+def ensure_lark_sdk(auto_install: bool = False) -> tuple[bool, str]:
+    global lark, _LARK_AUTO_INSTALL_ATTEMPTED
+
+    if lark is not None:
+        return True, ""
+
+    with _LARK_IMPORT_LOCK:
+        if lark is not None:
+            return True, ""
+
+        try:
+            import lark_oapi as runtime_lark
+
+            lark = runtime_lark
+            return True, ""
+        except Exception as exc:
+            first_error = str(exc)
+
+        if not auto_install:
+            return False, f"缺少依赖 lark-oapi：{first_error}"
+
+        if _LARK_AUTO_INSTALL_ATTEMPTED:
+            return False, f"缺少依赖 lark-oapi：{first_error}"
+
+        _LARK_AUTO_INSTALL_ATTEMPTED = True
+        requirements_file = Path(__file__).with_name("requirements.txt")
+        install_cmds = []
+        if requirements_file.exists():
+            install_cmds.append([sys.executable, "-m", "pip", "install", "-r", str(requirements_file)])
+        install_cmds.append([sys.executable, "-m", "pip", "install", _LARK_PACKAGE_SPEC])
+
+        install_errors: list[str] = []
+        for cmd in install_cmds:
+            try:
+                logger.info(f"[AgentResourceOfficer][Feishu] 正在尝试安装依赖：{' '.join(cmd)}")
+                proc = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+            except Exception as exc:
+                install_errors.append(str(exc))
+                continue
+            if proc.returncode == 0:
+                try:
+                    import lark_oapi as runtime_lark
+
+                    lark = runtime_lark
+                    logger.info("[AgentResourceOfficer][Feishu] 已自动安装并加载 lark-oapi")
+                    return True, ""
+                except Exception as exc:
+                    install_errors.append(str(exc))
+            else:
+                stderr = (proc.stderr or "").strip()
+                stdout = (proc.stdout or "").strip()
+                install_errors.append(stderr or stdout or f"returncode={proc.returncode}")
+
+        detail = " | ".join([msg for msg in install_errors if msg]) or first_error
+        return False, f"缺少依赖 lark-oapi，且自动安装失败：{detail}"
+
+
 class _FeishuLongConnectionRuntime:
     def __init__(self) -> None:
         self._thread: Optional[threading.Thread] = None
@@ -100,14 +167,10 @@ class _FeishuLongConnectionRuntime:
         self._channel: Optional["FeishuChannel"] = None
 
     def start(self, channel: "FeishuChannel") -> None:
-        global lark
-        if lark is None:
-            try:
-                import lark_oapi as runtime_lark
-                lark = runtime_lark
-            except Exception as exc:
-                logger.error(f"[AgentResourceOfficer][Feishu] 缺少依赖 lark-oapi：{exc}")
-                return
+        ok, message = ensure_lark_sdk(auto_install=True)
+        if not ok:
+            logger.error(f"[AgentResourceOfficer][Feishu] {message}")
+            return
 
         if not channel.enabled or not channel.app_id or not channel.app_secret:
             return
@@ -391,8 +454,8 @@ class FeishuChannel:
         return "|".join([self.app_id, self.app_secret, self.verification_token])
 
     def health(self) -> Dict[str, Any]:
+        sdk_available, sdk_message = ensure_lark_sdk(auto_install=False)
         legacy_bridge_running = self.is_legacy_bridge_running()
-        sdk_available = lark is not None
         app_id_configured = bool(self.app_id)
         app_secret_configured = bool(self.app_secret)
         verification_token_configured = bool(self.verification_token)
@@ -443,6 +506,7 @@ class FeishuChannel:
             "ready_to_start": ready_to_start,
             "safe_to_enable": safe_to_enable,
             "missing_requirements": missing_requirements,
+            "sdk_message": sdk_message,
             "recommended_action": recommended_action,
             "migration_hint": migration_hint,
         }

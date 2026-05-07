@@ -13,7 +13,7 @@ MoviePilot 插件仓库，核心是两个插件：
 
 ## 快速开始
 
-### 1. 安装插件
+### 1. 先装插件
 
 在 MoviePilot 插件市场添加本仓库：
 
@@ -28,7 +28,7 @@ Agent影视助手
 AI识别增强
 ```
 
-### 2. 填写配置
+### 2. 先填插件配置
 
 在 `Agent影视助手` 设置里按需填写：
 
@@ -38,7 +38,9 @@ AI识别增强
 - 夸克 Cookie 或 CookieCloud
 - 飞书 / 智能体配置（可选）
 
-### 3. 开始使用
+### 3. 如果你只想直接用插件
+
+装完插件后，直接在 MoviePilot 或飞书里用这些命令就够了：
 
 ```text
 搜索 <片名>
@@ -48,7 +50,103 @@ AI识别增强
 更新检查 <片名>
 ```
 
+如果只走这条路，到这里就够了。
 如果需要识别兜底，再开启 **AI识别增强**。
+
+### 4. 如果你还要接外部智能体
+
+这一步只针对：
+
+- OpenClaw
+- Hermes
+- WorkBuddy
+
+也就是：**插件已经装好以后，再把它接给外部智能体。**
+
+#### 4.1 同一台机器：MoviePilot 和智能体都在当前电脑
+
+适合：
+
+- MoviePilot 在你现在这台 Mac / Win 电脑
+- OpenClaw / Hermes / WorkBuddy 也在这台电脑
+
+推荐直接把下面这段发给外部智能体：
+
+```text
+请从这个仓库安装并使用 agent-resource-officer skill：
+https://github.com/liuyuexi1987/MoviePilot-Plugins
+
+按下面配置完成接入：
+ARO_BASE_URL=http://127.0.0.1:3000
+ARO_API_KEY=你的 MoviePilot API_TOKEN
+
+安装后请优先读取：
+1. skills/agent-resource-officer/SKILL.md
+2. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
+
+然后按其中的固定命令和接入规则执行。
+```
+
+如果你的外部智能体不会自动安装 skill，再手动安装 `agent-resource-officer` skill / helper，并在 **智能体所在电脑** 的 helper 配置文件里填写：
+
+```text
+ARO_BASE_URL=http://127.0.0.1:3000
+ARO_API_KEY=你的 MoviePilot API_TOKEN
+```
+
+`ARO_API_KEY` 就是你在 MoviePilot 里启用插件助手接口时使用的 API Token。
+
+常见位置：
+
+- `OpenClaw / WorkBuddy / 类 Claw 环境`：通常在 `~/.workbuddy/skills/agent-resource-officer/`
+- 如果你是从本仓库直接安装：就是仓库里的 `skills/agent-resource-officer/`
+- helper 的实际配置文件通常在：`~/.config/agent-resource-officer/config`
+
+#### 4.2 不同机器：MoviePilot 在 NAS，智能体在 Win / Mac
+
+适合：
+
+- MoviePilot 跑在 NAS / Docker
+- OpenClaw / Hermes / WorkBuddy 跑在你的 Mac / Win
+
+推荐直接把下面这段发给外部智能体：
+
+```text
+请从这个仓库安装并使用 agent-resource-officer skill：
+https://github.com/liuyuexi1987/MoviePilot-Plugins
+
+MoviePilot 在 NAS，智能体在当前电脑。
+请按下面配置完成接入：
+ARO_BASE_URL=http://你的NAS地址:3000
+ARO_API_KEY=你的 MoviePilot API_TOKEN
+
+安装后请优先读取：
+1. skills/agent-resource-officer/SKILL.md
+2. docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md
+3. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
+
+然后按其中的固定命令和接入规则执行。
+```
+
+如果你的外部智能体不会自动安装 skill，再手动安装 `agent-resource-officer` skill / helper，并在 **Win / Mac 这台智能体电脑** 的 helper 配置文件里填写：
+
+```text
+ARO_BASE_URL=http://你的NAS地址:3000
+ARO_API_KEY=你的 MoviePilot API_TOKEN
+```
+
+常见位置同上。
+
+注意：
+   - `ARO_BASE_URL` 要填 **你的 Win / Mac 真能访问到的 MP 地址**
+   - 不要填 `127.0.0.1`，除非 MP 就在这台电脑上
+   - `盘搜 API 地址` 要按 **NAS 上 MoviePilot 容器能访问到的地址** 填
+
+如果后面要用：
+   - `刷新影巢Cookie`
+   - `刷新夸克Cookie`
+
+   先在 **当前 Win / Mac 浏览器** 登录对应网站，因为 Cookie 是从你这台电脑浏览器导出的，再写回 NAS 上的 MoviePilot。
 
 ---
 
@@ -89,39 +187,11 @@ AI识别增强
 
 ## 外部智能体接入
 
-如果你只在 MoviePilot 内使用，装插件就行。
+如果你已经按上面的“同一台机器”或“不同机器”完成了配置，这里再继续看详细文档：
 
-如果要接 `OpenClaw`、`Hermes`、`WorkBuddy` 等外部智能体，需额外安装 skill：
-
-```text
-skills/agent-resource-officer/SKILL.md
-docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
-```
-
-最短提示词（可直接复制给智能体）：
-
-```text
-请安装并使用 agent-resource-officer skill。
-先读取：
-1. skills/agent-resource-officer/SKILL.md
-2. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
-然后按其中的固定命令和接入规则执行。
-```
-
-### NAS + Win/Mac 部署
-
-推荐架构：
-
-- MoviePilot 跑在 NAS
-- 智能体跑在 Win / Mac
-
-要点：
-
-- `ARO_BASE_URL` 填 NAS 上 MP 的可达地址
-- `盘搜 API 地址` 按 NAS 容器视角填写
-- Cookie 刷新命令（影巢 / 夸克）需先在本机浏览器登录对应站点
-
-详细说明：[跨机器部署](./docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
+- [Skill 说明](./skills/agent-resource-officer/SKILL.md)
+- [外部智能体接入](./docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
+- [跨机器部署说明](./docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
 
 ---
 
@@ -187,6 +257,7 @@ docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
 - [插件安装说明](./docs/PLUGIN_INSTALL.md)
 - [外部智能体接入](./docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md)
 - [跨机器部署说明](./docs/AGENT_RESOURCE_OFFICER_REMOTE_DEPLOY.md)
+- [Cookie 导出工具](./tools/README.md)
 
 ---
 

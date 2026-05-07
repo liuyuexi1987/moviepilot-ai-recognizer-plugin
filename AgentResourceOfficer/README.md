@@ -179,7 +179,7 @@
 更稳的方式是：
 
 - 在浏览器登录 `https://hdhive.com`
-- 然后运行本机导出工具
+- 然后运行仓库里的本机导出工具：`tools/hdhive-cookie-export/`
 
 ### 3. 夸克失败不一定是 Cookie 失效
 

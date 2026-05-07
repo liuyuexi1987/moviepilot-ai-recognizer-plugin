@@ -82,9 +82,9 @@ ARO_API_KEY=你的MoviePilot API_TOKEN
 如果要在外部智能体机器上使用影巢/夸克 Cookie 修复命令，建议额外准备：
 
 ```text
-ARO_HDHIVE_COOKIE_EXPORT_DIR=你的影巢导出工具目录
+ARO_HDHIVE_COOKIE_EXPORT_DIR=/绝对路径/MoviePilot-Plugins/tools/hdhive-cookie-export
 ARO_HDHIVE_COOKIE_BROWSER=edge
-ARO_QUARK_COOKIE_EXPORT_DIR=你的夸克导出工具目录
+ARO_QUARK_COOKIE_EXPORT_DIR=/绝对路径/MoviePilot-Plugins/tools/quark-cookie-export
 ARO_QUARK_COOKIE_BROWSER=edge
 ```
 

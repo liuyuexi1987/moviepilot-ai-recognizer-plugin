@@ -12,6 +12,7 @@ import urllib.request
 CONFIG_PATH_DISPLAY = "~/.config/agent-resource-officer/config"
 CONFIG_PATH = os.path.expanduser(CONFIG_PATH_DISPLAY)
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(os.path.dirname(SKILL_DIR))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
 HELPER_VERSION = "0.1.42"
@@ -63,9 +64,11 @@ WRITE_WORKFLOWS = {
     "mp_subscribe_and_search",
 }
 HDHIVE_COOKIE_TOOL_DIR_CANDIDATES = [
+    os.path.join(REPO_ROOT, "tools", "hdhive-cookie-export"),
     os.path.expanduser("~/Services/工具项目/影巢Cookie导出 YingChaoCookieExport"),
 ]
 QUARK_COOKIE_TOOL_DIR_CANDIDATES = [
+    os.path.join(REPO_ROOT, "tools", "quark-cookie-export"),
     os.path.expanduser("~/Services/工具项目/夸克Cookie导出 QuarkCookieExport"),
 ]
 

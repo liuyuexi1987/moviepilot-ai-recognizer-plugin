@@ -68,6 +68,18 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 
 - `agent-resource-officer` skill / helper
 
+如果你后面还要用：
+
+- `刷新影巢Cookie`
+- `修复影巢签到`
+- `刷新夸克Cookie`
+- `修复夸克转存`
+
+仓库里已经附带可分发的本机导出工具：
+
+- [tools/hdhive-cookie-export](../tools/hdhive-cookie-export/README.md)
+- [tools/quark-cookie-export](../tools/quark-cookie-export/README.md)
+
 先看这两个文件：
 
 - [skills/agent-resource-officer/SKILL.md](../skills/agent-resource-officer/SKILL.md)
@@ -76,10 +88,17 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 可以直接丢给智能体这段最短提示词：
 
 ```text
-请安装并使用 agent-resource-officer skill。
-先读取：
+请从这个仓库安装并使用 agent-resource-officer skill：
+https://github.com/liuyuexi1987/MoviePilot-Plugins
+
+请按下面配置完成接入：
+ARO_BASE_URL=http://127.0.0.1:3000
+ARO_API_KEY=你的 MoviePilot API_TOKEN
+
+安装后请优先读取：
 1. skills/agent-resource-officer/SKILL.md
 2. docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md
+
 然后按其中的固定命令和接入规则执行。
 
 额外要求：

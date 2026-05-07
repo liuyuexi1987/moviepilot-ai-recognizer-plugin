@@ -61,6 +61,13 @@ Environment overrides:
 
 Never print API keys, cookies, or tokens back to the user.
 
+If this skill is installed from the `MoviePilot-Plugins` repository checkout, the helper will first try the bundled cookie export tools in:
+
+- `tools/hdhive-cookie-export/`
+- `tools/quark-cookie-export/`
+
+You can still override them with `ARO_HDHIVE_COOKIE_EXPORT_DIR` and `ARO_QUARK_COOKIE_EXPORT_DIR`.
+
 Optional install helper:
 
 ```bash
