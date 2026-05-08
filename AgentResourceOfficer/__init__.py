@@ -5866,7 +5866,7 @@ class AgentResourceOfficer(_PluginBase):
             if not resource_ok:
                 continue
             preview = self._attach_cloud_scores(
-                self._group_resource_preview(resource_result.get("data") or [], per_group=6),
+                self._group_resource_preview(resource_result.get("data") or [], per_group=None),
                 preferences=preferences,
                 source_type="hdhive",
                 target_path=target_path,
@@ -5897,6 +5897,8 @@ class AgentResourceOfficer(_PluginBase):
                 "target_path": target_path,
                 "selected_candidate": selected_candidate,
                 "resources": selected_preview,
+                "page": 1,
+                "page_size": 10,
             }
         else:
             state = {
@@ -10730,7 +10732,7 @@ class AgentResourceOfficer(_PluginBase):
             return ""
 
     @staticmethod
-    def _group_resource_preview(items: List[Dict[str, Any]], per_group: int = 6) -> List[Dict[str, Any]]:
+    def _group_resource_preview(items: List[Dict[str, Any]], per_group: Optional[int] = 6) -> List[Dict[str, Any]]:
         groups: Dict[str, List[Dict[str, Any]]] = {"115": [], "quark": [], "other": []}
         for item in items:
             pan = str(item.get("pan_type") or "").lower()
@@ -10740,7 +10742,7 @@ class AgentResourceOfficer(_PluginBase):
                 key = "quark"
             else:
                 key = "other"
-            if len(groups[key]) < per_group:
+            if per_group is None or len(groups[key]) < per_group:
                 groups[key].append(item)
         ordered = groups["115"] + groups["quark"]
         if not ordered:
@@ -11417,6 +11419,11 @@ class AgentResourceOfficer(_PluginBase):
             elif stage == "resource":
                 resources = state.get("resources") or []
                 selected_candidate = dict(state.get("selected_candidate") or {})
+                current_page = max(1, self._safe_int(state.get("page"), 1))
+                page_size = max(1, self._safe_int(state.get("page_size"), 10))
+                total_pages = max(1, (len(resources) + page_size - 1) // page_size) if resources else 1
+                start = (current_page - 1) * page_size
+                end = start + page_size
                 payload.update({
                     "selected_candidate": {
                         "tmdb_id": self._clean_text(selected_candidate.get("tmdb_id")),
@@ -11425,7 +11432,10 @@ class AgentResourceOfficer(_PluginBase):
                         "media_type": self._clean_text(selected_candidate.get("media_type")),
                         "actors": selected_candidate.get("actors") or [],
                     },
+                    "page": current_page,
+                    "page_size": page_size,
                     "total_resources": len(resources),
+                    "total_pages": total_pages,
                     "resource_count_115": len([x for x in resources if str((x or {}).get("pan_type") or "").lower() == "115"]),
                     "resource_count_quark": len([x for x in resources if str((x or {}).get("pan_type") or "").lower() == "quark"]),
                     "resources_preview": [
@@ -11446,11 +11456,11 @@ class AgentResourceOfficer(_PluginBase):
                             "recommended_action": (item.get("score") or {}).get("recommended_action") if isinstance(item.get("score"), dict) else "",
                             "risk_reasons": (item.get("score") or {}).get("risk_reasons", [])[:2] if isinstance(item.get("score"), dict) else [],
                         }
-                        for idx, item in enumerate(resources[:8])
+                        for idx, item in enumerate(resources[start:end], start=start + 1)
                         if isinstance(item, dict)
                     ],
                     "score_summary": self._score_summary(resources, limit=5),
-                    "suggested_actions": ["smart_pick.choice", "session_clear"],
+                    "suggested_actions": ["smart_pick.choice", "smart_pick.action=下一页", "session_clear"],
                 })
                 if payload.get("recommend_handoff"):
                     payload["suggested_actions"] = [
@@ -11510,9 +11520,14 @@ class AgentResourceOfficer(_PluginBase):
             elif result["stage"] == "resource":
                 selected = dict(payload.get("selected_candidate") or {})
                 resources = payload.get("resources") or []
+                page_size = max(1, self._safe_int(payload.get("page_size"), 10))
+                current_page = max(1, self._safe_int(payload.get("page"), 1))
+                total_pages = max(1, (len(resources) + page_size - 1) // page_size) if resources else 1
                 result["selected_title"] = self._clean_text(selected.get("title"))
                 result["selected_year"] = self._clean_text(selected.get("year"))
                 result["total_resources"] = len(resources)
+                result["page"] = current_page
+                result["total_pages"] = total_pages
         elif result["kind"] == "assistant_p115_login":
             result["client_type"] = self._clean_text(payload.get("client_type")) or self._p115_client_type
         result["recovery"] = self._assistant_recovery_public_data(
@@ -12296,6 +12311,13 @@ class AgentResourceOfficer(_PluginBase):
                     endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
                     tool="agent_resource_officer_smart_pick",
                     body={**base_pick, "choice": "<1-N>", "action": "plan", "path": target_path or self._hdhive_default_path},
+                ),
+                self._assistant_action_template(
+                    name="resource_next_page",
+                    description="翻到影巢资源下一页",
+                    endpoint="/api/v1/plugin/AgentResourceOfficer/assistant/pick",
+                    tool="agent_resource_officer_smart_pick",
+                    body={**base_pick, "action": "next_page"},
                 ),
             ])
             if isinstance(data.get("recommend_handoff"), dict) and data.get("recommend_handoff"):
@@ -13865,7 +13887,9 @@ class AgentResourceOfficer(_PluginBase):
             if selected.get("title"):
                 lines.append(f"已选影片：{selected.get('title')} ({selected.get('year') or '-'})")
             lines.append(f"资源数：{data.get('total_resources') or 0}")
-            lines.append("下一步：调用 smart_pick，传入 choice=资源编号")
+            if data.get("page") and data.get("total_pages"):
+                lines.append(f"页码：{data.get('page')}/{data.get('total_pages')}")
+            lines.append("下一步：smart_pick 可传 choice=资源编号，或 action=下一页")
         elif data.get("kind") == "assistant_p115_login":
             lines.append(f"扫码客户端：{data.get('client_type') or self._p115_client_type}")
             lines.append("下一步：调用 smart_entry，传入 text=检查115登录")
@@ -18361,7 +18385,7 @@ class AgentResourceOfficer(_PluginBase):
                     )
                     if resource_ok:
                         preview = self._attach_cloud_scores(
-                            self._group_resource_preview(resource_result.get("data") or [], per_group=10),
+                            self._group_resource_preview(resource_result.get("data") or [], per_group=None),
                             preferences=preferences,
                             source_type="hdhive",
                             target_path=self._hdhive_default_path,
@@ -18735,15 +18759,30 @@ class AgentResourceOfficer(_PluginBase):
                 return text
         return ""
 
-    def _format_resource_lines(self, resources: List[Dict[str, Any]], candidate: Optional[Dict[str, Any]] = None) -> str:
+    def _format_resource_lines(
+        self,
+        resources: List[Dict[str, Any]],
+        candidate: Optional[Dict[str, Any]] = None,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+        total_resources: Optional[int] = None,
+    ) -> str:
+        safe_page, safe_page_size, total_pages, start, end = self._page_bounds(len(resources), page=page, page_size=page_size)
+        page_items = resources[start:end]
+        total_count = max(0, self._safe_int(total_resources if total_resources is not None else len(resources), len(resources)))
         lines = []
         if candidate:
             candidate_title = str(candidate.get("title") or "未命名")
             candidate_year = str(candidate.get("year") or "?")
             lines.append(f"已选影片：{candidate_title} ({candidate_year})")
-        lines.append(f"资源结果：共 {len(resources)} 条")
+        lines.append(f"资源结果：共 {total_count} 条")
+        if total_pages > 1 and page_items:
+            first_visible = self._safe_int((page_items[0] or {}).get("pick_index"), start + 1)
+            last_visible = self._safe_int((page_items[-1] or {}).get("pick_index"), min(len(resources), end))
+            lines.append(f"当前第 {safe_page}/{total_pages} 页，展示编号 {first_visible}-{last_visible} / 共 {total_count} 条：")
         current_provider = ""
-        for idx, item in enumerate(resources, start=1):
+        for local_idx, item in enumerate(page_items, start=1):
             provider = str(item.get("pan_type") or "?").lower()
             if provider != current_provider:
                 current_provider = provider
@@ -18767,7 +18806,8 @@ class AgentResourceOfficer(_PluginBase):
             spec_parts = [resolution]
             if source:
                 spec_parts.append(source)
-            lines.append(f"#{idx} {item_title}")
+            global_index = self._safe_int(item.get("pick_index"), start + local_idx)
+            lines.append(f"#{global_index} {item_title}")
             lines.append(f"   网盘：{provider_text} · 积分：{points_text}")
             lines.append(f"   规格：{' / '.join(part for part in spec_parts if part)}")
             if share_size:
@@ -18784,6 +18824,8 @@ class AgentResourceOfficer(_PluginBase):
         detail_hint = f"选择 {best_index} 详情" if best_index > 0 else "选择 1 详情"
         lines.append(f"下一步：直接回编号即可转存；想先确认可发“{detail_hint}”。")
         lines.append("如需保留计划确认链，可再发“计划选择 编号”。")
+        if safe_page < total_pages:
+            lines.append("如需继续翻页，可回复：n 下一页")
         return "\n".join(line for line in lines if line is not None)
 
     def _assistant_hdhive_resource_entry_summary(self, resources: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -19078,7 +19120,7 @@ class AgentResourceOfficer(_PluginBase):
                 (self._assistant_preferences or {}).get(self._normalize_preference_key(session=self._clean_text(session.get("keyword")) or "default"))
             )
             preview = self._attach_cloud_scores(
-                self._group_resource_preview(resource_result.get("data") or [], per_group=6),
+                self._group_resource_preview(resource_result.get("data") or [], per_group=None),
                 preferences=preferences,
                 source_type="hdhive",
                 target_path=target_path or session.get("target_path") or "",
@@ -19090,13 +19132,24 @@ class AgentResourceOfficer(_PluginBase):
                     "stage": "resource",
                     "selected_candidate": candidate,
                     "resources": preview,
+                    "page": 1,
+                    "page_size": 10,
                     "target_path": self._clean_text(target_path) or session.get("target_path") or "",
                 },
             )
-            return self._format_resource_lines(preview, candidate)
+            return self._format_resource_lines(preview, candidate, page=1, page_size=10, total_resources=len(preview))
 
         if stage == "resource":
             resources = session.get("resources") or []
+            page_size = max(1, self._safe_int(session.get("page_size"), 10))
+            current_page = max(1, self._safe_int(session.get("page"), 1))
+            if action == "next_page":
+                total_pages = max(1, (len(resources) + page_size - 1) // page_size) if resources else 1
+                if current_page >= total_pages:
+                    return "已经是最后一页了，可以直接回复编号继续选择。"
+                next_page = current_page + 1
+                self._save_session(self._clean_text(session_id), {**session, "page": next_page})
+                return self._format_resource_lines(resources, dict(session.get("selected_candidate") or {}), page=next_page, page_size=page_size, total_resources=len(resources))
             if index <= 0 or index > len(resources):
                 return "资源编号超出范围"
             resource = dict(resources[index - 1])
@@ -24371,7 +24424,7 @@ class AgentResourceOfficer(_PluginBase):
                     return {"success": False, "message": f"影巢资源查询失败：{resource_message}", "data": resource_result}
                 preferences = self._normalize_assistant_preferences((self._assistant_preferences or {}).get(self._normalize_preference_key(session=session)))
                 preview = self._attach_cloud_scores(
-                    self._group_resource_preview(resource_result.get("data") or [], per_group=6),
+                    self._group_resource_preview(resource_result.get("data") or [], per_group=None),
                     preferences=preferences,
                     source_type="hdhive",
                     target_path=final_path,
@@ -24383,22 +24436,62 @@ class AgentResourceOfficer(_PluginBase):
                         "stage": "resource",
                         "selected_candidate": candidate,
                         "resources": preview,
+                        "page": 1,
+                        "page_size": 10,
                         "target_path": final_path,
                     },
                 )
                 return finish({
                     "success": True,
-                    "message": self._format_resource_lines(preview, candidate),
+                    "message": self._format_resource_lines(preview, candidate, page=1, page_size=10, total_resources=len(preview)),
                     "data": self._assistant_response_data(session=session, data={
                         "action": "hdhive_search",
                         "ok": True,
                         "selected_candidate": candidate,
                         "resources": preview,
+                        "page": 1,
+                        "page_size": 10,
+                        "total_pages": max(1, (len(preview) + 10 - 1) // 10) if preview else 1,
                         "score_summary": self._score_summary(preview, limit=5),
                         "decision_summary": self._assistant_hdhive_resource_entry_summary(preview),
                     }),
                 })
             resources = state.get("resources") or []
+            page_size = max(1, self._safe_int(state.get("page_size"), 10))
+            current_page = max(1, self._safe_int(state.get("page"), 1))
+            if action == "next_page":
+                total_pages = max(1, (len(resources) + page_size - 1) // page_size) if resources else 1
+                if current_page >= total_pages:
+                    return finish({
+                        "success": False,
+                        "message": "已经是最后一页了，可以直接回复编号继续选择。",
+                        "data": self._assistant_response_data(session=session, data={
+                            "action": "hdhive_resources_next_page",
+                            "ok": False,
+                            "error_code": "already_last_page",
+                            "page": current_page,
+                            "page_size": page_size,
+                            "total_pages": total_pages,
+                        }),
+                    })
+                next_page = current_page + 1
+                updated_state = {**state, "page": next_page, "page_size": page_size}
+                self._save_session(cache_key, updated_state)
+                return finish({
+                    "success": True,
+                    "message": self._format_resource_lines(resources, dict(state.get("selected_candidate") or {}), page=next_page, page_size=page_size, total_resources=len(resources)),
+                    "data": self._assistant_response_data(session=session, data={
+                        "action": "hdhive_resources_next_page",
+                        "ok": True,
+                        "selected_candidate": dict(state.get("selected_candidate") or {}),
+                        "resources": resources,
+                        "page": next_page,
+                        "page_size": page_size,
+                        "total_pages": total_pages,
+                        "score_summary": self._score_summary(resources, limit=5),
+                        "decision_summary": self._assistant_hdhive_resource_entry_summary(resources),
+                    }),
+                })
             if action == "best":
                 best = self._best_scored_source_item(resources)
                 if not best:
@@ -25274,7 +25367,7 @@ class AgentResourceOfficer(_PluginBase):
             )
             if not resource_ok:
                 return {"success": False, "message": resource_message, "data": resource_result}
-            preview = self._group_resource_preview(resource_result.get("data") or [], per_group=6)
+            preview = self._group_resource_preview(resource_result.get("data") or [], per_group=None)
             self._save_session(
                 session_id,
                 {
@@ -25282,6 +25375,8 @@ class AgentResourceOfficer(_PluginBase):
                     "stage": "resource",
                     "selected_candidate": candidate,
                     "resources": preview,
+                    "page": 1,
+                    "page_size": 10,
                     "target_path": target_path or session.get("target_path") or "",
                 },
             )
@@ -25289,11 +25384,13 @@ class AgentResourceOfficer(_PluginBase):
                 "success": True,
                 "message": "success",
                 "data": {
-                    "text": self._format_resource_lines(preview, candidate),
+                    "text": self._format_resource_lines(preview, candidate, page=1, page_size=10, total_resources=len(preview)),
                     "session_id": session_id,
                     "stage": "resource",
                     "selected_candidate": candidate,
                     "resources": preview,
+                    "page": 1,
+                    "page_size": 10,
                     "meta": {
                         "total": len(preview),
                         "count_115": len([x for x in preview if str(x.get("pan_type") or "").lower() == "115"]),
@@ -25304,6 +25401,25 @@ class AgentResourceOfficer(_PluginBase):
 
         if stage == "resource":
             resources = session.get("resources") or []
+            page_size = max(1, self._safe_int(session.get("page_size"), 10))
+            current_page = max(1, self._safe_int(session.get("page"), 1))
+            if action == "next_page":
+                total_pages = max(1, (len(resources) + page_size - 1) // page_size) if resources else 1
+                if current_page >= total_pages:
+                    return {"success": False, "message": "已经是最后一页了，可以直接回复编号继续选择。"}
+                next_page = current_page + 1
+                self._save_session(session_id, {**session, "page": next_page, "page_size": page_size, "target_path": target_path or session.get("target_path") or ""})
+                return {
+                    "success": True,
+                    "message": "success",
+                    "data": {
+                        "text": self._format_resource_lines(resources, dict(session.get("selected_candidate") or {}), page=next_page, page_size=page_size, total_resources=len(resources)),
+                        "session_id": session_id,
+                        "stage": "resource",
+                        "page": next_page,
+                        "total_pages": total_pages,
+                    },
+                }
             if index > len(resources):
                 return {"success": False, "message": "资源编号超出范围"}
             resource = dict(resources[index - 1])
