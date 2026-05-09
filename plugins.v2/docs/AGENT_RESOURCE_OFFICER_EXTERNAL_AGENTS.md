@@ -82,42 +82,26 @@ ARO_BASE_URL=http://127.0.0.1:3000
 
 ---
 
-## 手动安装
+## 手动添加 MCP
 
-如果智能体不能自动安装，在智能体所在机器执行：
+有些智能体不会自动读取或启用 MoviePilot MCP，需要你在智能体的 MCP 设置里手动添加。
 
-```bash
-git clone https://github.com/liuyuexi1987/MoviePilot-Plugins.git
-cd MoviePilot-Plugins
-bash skills/agent-resource-officer/install.sh --dry-run
-bash skills/agent-resource-officer/install.sh
+填写：
+
+```text
+MCP 地址：http://你的MP地址:3000/api/v1/mcp
+认证头：X-API-KEY=你的 MoviePilot API_TOKEN
 ```
 
-然后创建配置：
+如果 MoviePilot 在 NAS，地址要写 NAS 的实际地址：
 
-```bash
-mkdir -p ~/.config/agent-resource-officer
-cat > ~/.config/agent-resource-officer/config <<'EOF'
-ARO_BASE_URL=http://你的MoviePilot地址:3000
-ARO_API_KEY=你的MoviePilot_API_TOKEN
-EOF
+```text
+MCP 地址：http://你的NAS地址:3000/api/v1/mcp
 ```
 
-验证连接：
+添加后，需要在智能体里确认 MCP 已启用，并且当前会话能看到类似 `mcp__moviepilot__*` 的工具。
 
-```bash
-python3 ~/.codex/skills/agent-resource-officer/scripts/aro_request.py readiness
-```
-
-如果你的 Skill 不在 `~/.codex`，把路径换成实际安装位置。
-
-常见位置：
-
-| 环境 | 常见位置 |
-|---|---|
-| Codex / 类 Codex | `~/.codex/skills/agent-resource-officer/` |
-| WorkBuddy / 类 Claw | `~/.workbuddy/skills/agent-resource-officer/` |
-| 仓库内调试 | `skills/agent-resource-officer/` |
+如果看不到这些工具，就说明 MCP 没有真正加载成功。此时不要让智能体假装在用 MCP，资源流继续走 `agent-resource-officer skill / helper`。
 
 ---
 
