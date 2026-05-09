@@ -156,11 +156,11 @@ MoviePilot 整理文件时，会先识别文件名里的片名、年份、季、
 
 | 旧插件 | 主要用途 | 现在的建议 |
 |---|---|---|
-| `FeishuCommandBridgeLong` | 旧飞书入口 | 新环境优先用 Agent影视助手内置飞书入口 |
-| `HdhiveOpenApi` | 影巢独立能力 | 已被 Agent影视助手主线吸收 |
-| `QuarkShareSaver` | 夸克独立转存 | 已被 Agent影视助手主线吸收 |
+| `FeishuCommandBridgeLong` | 单独把飞书作为命令 Channel | 只想要飞书入口、不需要 Agent影视助手整套资源流时可以用 |
+| `HdhiveOpenApi` | 影巢搜索、账号、签到等独立能力 | 只想单独使用影巢能力或签到时可以用 |
+| `QuarkShareSaver` | 夸克分享链接转存 | 只想单独做夸克分享转存时可以用 |
 
-如果你是老环境兼容，可以继续保留；如果是新装，优先直接用 `Agent影视助手`。
+如果你想把盘搜、影巢、115、夸克、PT 下载、飞书和外部智能体统一到一个入口，优先直接用 `Agent影视助手`。
 
 ---
 
