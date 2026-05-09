@@ -23,6 +23,15 @@ https://github.com/liuyuexi1987/MoviePilot-Plugins
 ARO_BASE_URL=http://MoviePilot地址:3000
 ARO_API_KEY=你的 MoviePilot API_TOKEN
 
+如果你的客户端支持 MoviePilot 官方 MCP，也请同时接入：
+MCP 地址：http://MoviePilot地址:3000/api/v1/mcp
+认证头：X-API-KEY=你的 MoviePilot API_TOKEN
+
+分工规则：
+1. 插件列表、下载器状态、站点状态、历史记录、工作流、调度器等 MoviePilot 管理查询，可以优先用 MCP。
+2. 云盘搜索、盘搜、影巢、转存、夸克转存、115转存、下载、更新检查、编号选择、翻页、详情、Cookie 修复，继续优先用 agent-resource-officer skill / helper。
+3. 只有当前会话真的加载出 mcp__moviepilot__* 工具，才算 MCP 已接通；没接通时不要假装在用 MCP。
+
 请把配置写入 ~/.config/agent-resource-officer/config。
 然后运行 readiness 验证连接，成功后按文档规则接入。
 ```
