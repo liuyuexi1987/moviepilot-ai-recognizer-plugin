@@ -2354,7 +2354,7 @@ class AgentResourceOfficer(_PluginBase):
                         },
                         "content": [
                             text_line(
-                                "Agent影视助手支持四种接入模式：飞书直接发命令、外部智能体直连官方 MCP、外部智能体调用 skill/helper、MP 内置智能体调用 Agent Tool。",
+                                "Agent影视助手支持三种接入模式：飞书直接发命令、外部智能体调用 skill/helper、MP 内置智能体调用 Agent Tool。",
                                 "text-body-2 mb-3",
                             ),
                             text_line(
@@ -2383,12 +2383,13 @@ class AgentResourceOfficer(_PluginBase):
                                     "style": "white-space: pre-line; line-height: 1.7; background: rgba(255,255,255,.55);",
                                 },
                                 "text": (
-                                    "插件页面不再内置长提示词，避免后续文档更新后这里变旧。\n"
-                                    "如果要接 WorkBuddy、Hermes、OpenClaw 或其他外部智能体，请直接访问快速开始主页：\n"
+                                    "插件页不再直接放大段接入提示词，避免复制到旧配置。\n"
+                                    "请按快速开始主页和外部智能体接入文档配置：\n"
                                     "https://github.com/liuyuexi1987/MoviePilot-Plugins\n\n"
                                     "外部智能体接入文档：\n"
                                     "https://github.com/liuyuexi1987/MoviePilot-Plugins/blob/main/docs/AGENT_RESOURCE_OFFICER_EXTERNAL_AGENTS.md\n\n"
-                                    "文档里会说明同机 / NAS 跨机器部署、ARO_BASE_URL、ARO_API_KEY、skill/helper 和 MCP 的选择。"
+                                    "如果客户端支持 MoviePilot 官方 MCP，也请按文档里的分工接入；资源流仍优先使用 agent-resource-officer skill/helper。\n"
+                                    "长会话跑偏时，可以直接对智能体说：校准影视技能。"
                                 ),
                             },
                         ],
