@@ -1,5 +1,9 @@
 # 外部智能体接入 Agent影视助手
 
+当前插件版本：`Agent影视助手 0.2.68`
+
+当前 helper 版本：`agent-resource-officer 0.1.46`
+
 让 `OpenClaw`、`Hermes`、`WorkBuddy` 或其他外部智能体，也能稳定调用 MoviePilot 的搜片、转存、下载、签到和修复能力。
 
 核心思路很简单：外部智能体负责理解你说的话、调用 `Agent影视助手`、展示结果；真正的资源搜索、转存、下载和账号操作，都交给 MoviePilot 里的插件执行。

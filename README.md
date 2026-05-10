@@ -214,9 +214,24 @@ MoviePilot 整理文件时，会先识别文件名里的片名、年份、季、
 - [全部命令](./docs/ALL_COMMANDS.md)
 - [文档索引](./docs/INDEX.md)
 - [插件安装说明](./docs/PLUGIN_INSTALL.md)
+- [维护命令](./docs/MAINTENANCE_COMMANDS.md)
 - [Cookie 导出工具](./tools/README.md)
 - [Agent影视助手详细说明](./AgentResourceOfficer/README.md)
 - [AI识别增强详细说明](./AIRecognizerEnhancer/README.md)
+
+---
+
+## 维护信息
+
+当前发布版本：`0.2.68`
+
+当前 Skill helper 版本：`0.1.46`
+
+当前版本：
+
+- `0.2.68`
+
+当前 Release：https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.68
 
 ---
 

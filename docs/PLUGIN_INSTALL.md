@@ -173,8 +173,15 @@ MCP 地址：http://你的MP地址:3000/api/v1/mcp
 
 如果你只是普通用户，到这里就够了。
 
+资源主线：`Agent影视助手 / AgentResourceOfficer 0.2.68`
+
+当前 Skill helper：`agent-resource-officer 0.1.46`
+
+当前 Release：https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.68
+
 如果你要打包、发布或维护仓库，再看：
 
+- [维护命令](docs/MAINTENANCE_COMMANDS.md)
 - [维护命令](./MAINTENANCE_COMMANDS.md)
 - [发布检查](./RELEASE_CHECKLIST.md)
 - [打包说明](./PACKAGING.md)
