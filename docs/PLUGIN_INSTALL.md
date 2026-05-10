@@ -50,11 +50,19 @@ AI识别增强
 普通用户只需要优先认这两个包：
 
 ```text
-AgentResourceOfficer-版本号.zip
-AIRecognizerEnhancer-版本号.zip
+AgentResourceOfficer-0.2.68.zip
+AIRecognizerEnhancer-0.1.12.zip
 ```
 
 其他旧插件包只用于兼容旧链路，新装一般不用优先安装。
+
+当前 Release 里还可能看到这些旧插件包：
+
+```text
+FeishuCommandBridgeLong-0.5.26.zip
+HdhiveOpenApi-0.3.0.zip
+QuarkShareSaver-0.1.0.zip
+```
 
 ---
 
