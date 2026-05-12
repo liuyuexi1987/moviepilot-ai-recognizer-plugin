@@ -15,7 +15,7 @@ SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO_ROOT = os.path.dirname(os.path.dirname(SKILL_DIR))
 EXTERNAL_AGENT_GUIDE_PATH = os.path.join(SKILL_DIR, "EXTERNAL_AGENTS.md")
 WORKBUDDY_GUIDE_PATH = EXTERNAL_AGENT_GUIDE_PATH
-HELPER_VERSION = "0.1.43"
+HELPER_VERSION = "0.1.44"
 HELPER_COMMANDS = [
     "auto",
     "calibrate",
@@ -1346,20 +1346,118 @@ def is_calibration_text(text):
     return normalized in CALIBRATION_COMMANDS
 
 
-def calibration_payload():
+def run_git(args, cwd, timeout=30):
+    try:
+        proc = subprocess.run(
+            ["git"] + list(args),
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "returncode": None,
+            "stdout": "",
+            "stderr": str(exc),
+        }
+    return {
+        "ok": proc.returncode == 0,
+        "returncode": proc.returncode,
+        "stdout": (proc.stdout or "").strip(),
+        "stderr": (proc.stderr or "").strip(),
+    }
+
+
+def git_repo_update_payload():
+    repo = run_git(["rev-parse", "--show-toplevel"], REPO_ROOT)
+    if not repo.get("ok"):
+        return {
+            "attempted": False,
+            "status": "not_git_checkout",
+            "message": "未检测到 MoviePilot-Plugins Git 仓库，跳过仓库更新检查。",
+            "repo_root": REPO_ROOT,
+        }
+
+    repo_root = (repo.get("stdout") or REPO_ROOT).splitlines()[-1].strip()
+    branch = run_git(["branch", "--show-current"], repo_root)
+    branch_name = branch.get("stdout") or "main"
+    status = run_git(["status", "--porcelain=v1"], repo_root)
+    if not status.get("ok"):
+        return {
+            "attempted": True,
+            "status": "status_failed",
+            "message": "仓库状态检查失败，已跳过拉取。",
+            "repo_root": repo_root,
+            "branch": branch_name,
+            "stderr": status.get("stderr") or "",
+        }
+    if (status.get("stdout") or "").strip():
+        return {
+            "attempted": True,
+            "status": "dirty_worktree",
+            "message": "检测到本地未提交改动，已跳过自动拉取以避免覆盖本地工作。",
+            "repo_root": repo_root,
+            "branch": branch_name,
+        }
+
+    fetch = run_git(["fetch", "origin", "--prune"], repo_root, timeout=90)
+    if not fetch.get("ok"):
+        return {
+            "attempted": True,
+            "status": "fetch_failed",
+            "message": "检查 GitHub 更新失败，已继续执行影视技能校准。",
+            "repo_root": repo_root,
+            "branch": branch_name,
+            "stderr": fetch.get("stderr") or "",
+        }
+
+    pull = run_git(["pull", "--ff-only", "origin", branch_name], repo_root, timeout=90)
+    head = run_git(["rev-parse", "--short", "HEAD"], repo_root)
+    latest = run_git(["log", "-1", "--oneline", "--decorate"], repo_root)
+    if not pull.get("ok"):
+        return {
+            "attempted": True,
+            "status": "pull_failed",
+            "message": "仓库已检查更新，但无法快进拉取；请人工处理分叉或冲突后再校准。",
+            "repo_root": repo_root,
+            "branch": branch_name,
+            "head": head.get("stdout") or "",
+            "stderr": pull.get("stderr") or "",
+        }
+
+    pull_text = "\n".join(part for part in [pull.get("stdout") or "", pull.get("stderr") or ""] if part).strip()
+    already_current = "Already up to date." in pull_text or "Already up-to-date." in pull_text
+    return {
+        "attempted": True,
+        "status": "up_to_date" if already_current else "updated",
+        "message": "仓库已是最新版。" if already_current else "仓库已拉取到 GitHub 最新版。",
+        "repo_root": repo_root,
+        "branch": branch_name,
+        "head": head.get("stdout") or "",
+        "latest_commit": latest.get("stdout") or "",
+        "pull_output": pull_text,
+    }
+
+
+def calibration_payload(include_repo_update=False):
+    repo_update = git_repo_update_payload() if include_repo_update else None
     return {
         "success": True,
         "action": "calibrate_media_skill",
         "helper_version": HELPER_VERSION,
         "message": "影视技能已校准。",
+        "repository_update": repo_update or {},
         "read_files": [
             "skills/agent-resource-officer/SKILL.md",
             "skills/agent-resource-officer/EXTERNAL_AGENTS.md",
         ],
         "recommended_command": "python3 scripts/aro_request.py calibrate",
         "route_alias": "python3 scripts/aro_request.py route '校准影视技能'",
-        "agent_instruction": "重新加载 agent-resource-officer skill 的资源流语义；日常执行不必每次完整读文件，但会话压缩、行为漂移、命令边界不确定时必须重新校准。",
+        "agent_instruction": "用户说“校准影视技能”时，先检查 MoviePilot-Plugins 仓库更新并用 git pull --ff-only 拉取最新版；然后重新加载 agent-resource-officer skill 的资源流语义。",
         "hard_rules": [
+            "每次用户说 校准影视技能 / 影视技能校准，都先在 MoviePilot-Plugins 仓库执行 git fetch origin --prune，然后在工作区干净时执行 git pull --ff-only origin <当前分支>；若有本地未提交改动或无法快进，只报告原因并继续校准，不要强行覆盖。",
             "资源流必须走 agent-resource-officer skill/helper，不要自己改写成 MCP、curl、TMDB 或底层网盘 API。",
             "下载 <片名> = MoviePilot 原生 MP/PT；片名不明确先选影片，片名明确后直接生成最多 3 个最佳 PT 候选的待确认下载方案，不展示完整 PT 列表、不走云盘、不自动提交真实下载。",
             "下载候选影片列表出来后，必须保持同一个 helper session，把用户回复的候选编号原样 route 回去；不要改写成 下载 <候选标题 年份>。",
@@ -1376,16 +1474,27 @@ def calibration_payload():
             "n / 下一页 = 继续当前会话翻页；不要重新搜索导致编号变化。",
             "不确定时先问或先看详情，不要凭记忆改路由。",
         ],
-        "response_contract": "校准完成后，对用户只需回复：影视技能已校准。",
+        "response_contract": "校准完成后，对用户回复仓库更新状态和：影视技能已校准。",
     }
 
 
 def format_calibration_text(payload):
     lines = [
         payload.get("message") or "影视技能已校准。",
+    ]
+    repo_update = payload.get("repository_update") or {}
+    if repo_update:
+        repo_line = repo_update.get("message") or ""
+        branch = repo_update.get("branch") or ""
+        head = repo_update.get("head") or ""
+        if branch or head:
+            repo_line = f"{repo_line}（{branch or 'unknown'} {head or ''}）".strip()
+        if repo_line:
+            lines.extend(["", repo_line])
+    lines.extend([
         "",
         "请立即按 agent-resource-officer skill 的固定语义执行资源流：",
-    ]
+    ])
     for rule in payload.get("hard_rules") or []:
         lines.append(f"- {rule}")
     lines.extend([
@@ -1394,7 +1503,7 @@ def format_calibration_text(payload):
         "1. skills/agent-resource-officer/SKILL.md",
         "2. skills/agent-resource-officer/EXTERNAL_AGENTS.md",
         "",
-        payload.get("response_contract") or "校准完成后，对用户只需回复：影视技能已校准。",
+        payload.get("response_contract") or "校准完成后，对用户回复仓库更新状态和：影视技能已校准。",
     ])
     return "\n".join(lines)
 
@@ -1936,6 +2045,7 @@ def selftest_result():
     check("external_agent_payload_has_deprecated_aliases", "workbuddy" in (external_agent.get("deprecated_aliases") or []))
     calibration = calibration_payload()
     check("calibration_payload_success", calibration.get("success") is True)
+    check("calibration_has_repo_update_contract", any("git fetch" in str(rule) and "git pull" in str(rule) for rule in calibration.get("hard_rules") or []))
     check("calibration_mentions_download_rule", any("下载 <片名>" in str(rule) and "MP/PT" in str(rule) for rule in calibration.get("hard_rules") or []))
     check("calibration_text_alias", is_calibration_text("校准影视技能"))
 
@@ -1947,6 +2057,8 @@ def selftest_result():
     check("commands_catalog_includes_version", "version" in catalog_names)
     check("commands_catalog_includes_external_agent", "external-agent" in catalog_names)
     check("commands_catalog_includes_calibrate", "calibrate" in catalog_names)
+    calibrate_entry = next((item for item in catalog_commands if item.get("name") == "calibrate"), {})
+    check("commands_catalog_marks_calibrate_update", calibrate_entry.get("network") is True and calibrate_entry.get("writes") is True)
     check("commands_catalog_includes_workbuddy_alias", "workbuddy" in catalog_names)
     workbuddy_entry = next((item for item in catalog_commands if item.get("name") == "workbuddy"), {})
     check("commands_catalog_marks_workbuddy_deprecated", workbuddy_entry.get("deprecated") is True)
@@ -1982,7 +2094,7 @@ def commands_catalog():
         "recommended_start": "python3 scripts/aro_request.py decide --summary-only",
         "commands": [
             {"name": "version", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper version"},
-            {"name": "calibrate", "network": False, "writes": False, "write_condition": "", "purpose": "print a compact media-skill calibration card for long-lived external-agent sessions"},
+            {"name": "calibrate", "network": True, "writes": True, "write_condition": "checks GitHub updates and fast-forwards the local MoviePilot-Plugins checkout when the working tree is clean", "purpose": "update the local skill checkout, then print a compact media-skill calibration card for long-lived external-agent sessions"},
             {"name": "external-agent", "network": False, "writes": False, "write_condition": "", "purpose": "print external agent connection prompt and minimal tool contract"},
             {"name": "workbuddy", "network": False, "writes": False, "write_condition": "", "purpose": "compatibility alias for external-agent", "deprecated": True},
             {"name": "commands", "network": False, "writes": False, "write_condition": "", "purpose": "print local helper command catalog"},
@@ -2097,14 +2209,14 @@ def main():
         print_json({"success": True, "helper_version": HELPER_VERSION})
         return 0
     if args.command == "calibrate":
-        payload = calibration_payload()
+        payload = calibration_payload(include_repo_update=True)
         if args.json_output or args.full:
             print_json(payload)
         else:
             print(format_calibration_text(payload))
         return 0
     if args.command == "route" and is_calibration_text(args.text or " ".join(args.extra)):
-        payload = calibration_payload()
+        payload = calibration_payload(include_repo_update=True)
         if args.json_output or args.full:
             print_json(payload)
         else:

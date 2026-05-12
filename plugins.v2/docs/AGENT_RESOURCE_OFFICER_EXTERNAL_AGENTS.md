@@ -2,7 +2,7 @@
 
 当前插件版本：`Agent影视助手 0.2.69`
 
-当前 helper 版本：`agent-resource-officer 0.1.43`
+当前 helper 版本：`agent-resource-officer 0.1.44`
 
 让 `OpenClaw`、`Hermes`、`WorkBuddy` 或其他外部智能体，也能稳定调用 MoviePilot 的搜片、转存、下载、签到和修复能力。
 
@@ -216,7 +216,7 @@ X-API-KEY=你的 MoviePilot API_TOKEN
 校准影视技能
 ```
 
-这条命令会让智能体重新加载影视助手的关键规则。不要在普通 `搜索 / 更新检查 / 检查` 前主动清会话，否则会破坏正常编号续接。
+这条命令会让智能体先检查并拉取 `MoviePilot-Plugins` 仓库最新版，再重新加载影视助手的关键规则。不要在普通 `搜索 / 更新检查 / 检查` 前主动清会话，否则会破坏正常编号续接。
 
 ---
 

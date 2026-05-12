@@ -190,7 +190,7 @@
 ```
 
 ```text
-使用 agent-resource-officer skill，用户说“校准影视技能”时，运行 python3 scripts/aro_request.py calibrate 或 route "校准影视技能"，把返回的硬规则应用到当前会话，然后只回复“影视技能已校准。”。这个命令用于长线程、微信线程或会话压缩后重新校准资源流语义，避免把“下载”改成云盘转存、把“详情”改成执行。
+使用 agent-resource-officer skill，用户说“校准影视技能”时，先检查 MoviePilot-Plugins 仓库更新：执行 git fetch origin --prune；如果工作区干净，再执行 git pull --ff-only origin 当前分支。若有本地未提交改动或无法快进，只报告原因并继续校准，不要覆盖本地改动。随后运行 python3 scripts/aro_request.py calibrate 或 route "校准影视技能"，把返回的硬规则应用到当前会话，然后回复仓库更新状态和“影视技能已校准。”。这个命令用于长线程、微信线程或会话压缩后重新校准资源流语义，避免把“下载”改成云盘转存、把“详情”改成执行。
 ```
 
 ```text

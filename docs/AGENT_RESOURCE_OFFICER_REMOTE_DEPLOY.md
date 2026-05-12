@@ -1,8 +1,8 @@
 # Agent影视助手跨机器部署
 
-当前插件版本：`Agent影视助手 0.2.68`
+当前插件版本：`Agent影视助手 0.2.69`
 
-当前 helper 版本：`agent-resource-officer 0.1.46`
+当前 helper 版本：`agent-resource-officer 0.1.44`
 
 这份文档只讲一种常见情况：
 
@@ -169,6 +169,8 @@ python3 scripts/aro_request.py route "115状态"
 ```text
 校准影视技能
 ```
+
+这条校准命令会先检查并拉取 `MoviePilot-Plugins` 仓库最新版，再重新加载影视助手规则；如果当前工作区有本地未提交改动，智能体应跳过自动拉取并说明原因。
 
 不要在普通搜索前固定清会话，否则会破坏正常编号续接。
 

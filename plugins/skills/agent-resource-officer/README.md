@@ -2,7 +2,7 @@
 
 公开版 AgentResourceOfficer Skill 模板，用来让外部智能体通过 MoviePilot 插件接口控制盘搜、影巢、115、夸克、MP/PT 搜索、下载、更新检查、编号选择和 Cookie 修复等资源工作流。插件是服务端执行层；Skill/helper 是客户端调度层。
 
-当前 helper 版本：`0.1.43`
+当前 helper 版本：`0.1.44`
 
 ## 当前状态
 

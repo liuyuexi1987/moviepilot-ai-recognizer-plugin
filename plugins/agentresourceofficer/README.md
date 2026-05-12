@@ -6,7 +6,7 @@
 
 当前版本：`0.2.69`
 
-当前 helper 版本：`0.1.43`
+当前 helper 版本：`0.1.44`
 
 当前 Release：https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.69
 
@@ -197,6 +197,8 @@ Cookie 修复会用到本机浏览器登录态。如果 MoviePilot 在 NAS、智
 ```text
 校准影视技能
 ```
+
+外部智能体收到这句时，应先检查并拉取 `MoviePilot-Plugins` 仓库最新版，再重新加载影视技能规则；如果工作区有本地改动，就跳过自动拉取并说明原因。
 
 ### 跨机器地址填错
 

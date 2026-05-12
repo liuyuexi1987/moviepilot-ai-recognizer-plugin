@@ -1,5 +1,9 @@
 # agent-resource-officer changelog
 
+## 0.1.44
+
+- `校准影视技能` now checks GitHub updates and fast-forwards the local `MoviePilot-Plugins` checkout before applying calibration rules when the working tree is clean.
+
 ## 0.1.46
 
 - Added calibration guidance for long-running external-agent sessions with `校准影视技能`.

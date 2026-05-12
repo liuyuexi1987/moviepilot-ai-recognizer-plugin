@@ -83,7 +83,7 @@ Core rules:
 - In PT result lists, plain `1` / `选择 1` directly downloads the selected PT result. Do not turn it into a detail/review step.
 - Cloud-drive and HDHive resource lists still support read-only detail cards via `选择 1 详情` or `详情 1`.
 - Before confirming PT download execution, make sure the connected MoviePilot is the real download instance, not a cloud-drive/STRM-only instance.
-- If the user says `校准影视技能`, run `python3 scripts/aro_request.py calibrate` or `python3 scripts/aro_request.py route "校准影视技能"` first, apply the returned hard rules to the current session, then reply only `影视技能已校准。`.
+- If the user says `校准影视技能`, first check the local `MoviePilot-Plugins` checkout for GitHub updates: run `git fetch origin --prune`, then run `git pull --ff-only origin <current-branch>` only when the working tree is clean. If local changes or a non-fast-forward state block the pull, report that and continue calibration without overwriting anything. Then run `python3 scripts/aro_request.py calibrate` or `python3 scripts/aro_request.py route "校准影视技能"`, apply the returned hard rules to the current session, and reply with the repository update status plus `影视技能已校准。`.
 - For explicit title searches such as `MP 搜索 罪无可逃`, the first and only initial action is helper `route "<原话>" --session <session>`. Do not pre-call TMDB, MCP search, raw MoviePilot API, or torrent search before that helper route.
 
 Environment overrides:
