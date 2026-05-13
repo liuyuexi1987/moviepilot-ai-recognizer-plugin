@@ -19341,6 +19341,16 @@ class AgentResourceOfficer(_PluginBase):
                     continue
             if item.startswith("/") and not options["path"]:
                 options["path"] = AgentResourceOfficer._resolve_pan_path_value(item)
+        if share_url and (
+            AgentResourceOfficer._is_quark_url(share_url)
+            or AgentResourceOfficer._is_115_url(share_url)
+        ):
+            if options.get("action") in {"cloud_transfer_removed", "command_alias_removed"}:
+                options["action"] = ""
+                options["mode"] = ""
+                options["keyword"] = AgentResourceOfficer._clean_text(remain)
+                options["cloud_provider"] = ""
+                options["type"] = ""
         if not options.get("action") and not options.get("mode"):
             check_match = re.match(r"^\s*检查\s*(.+)$", raw)
             if check_match:

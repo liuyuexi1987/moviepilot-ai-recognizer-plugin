@@ -247,6 +247,10 @@
 
 ```text
 使用 agent-resource-officer skill，把这个夸克链接转存到 /飞书：链接 https://pan.quark.cn/s/xxxx path=/飞书
+
+---
+
+如果用户直接发来夸克或 115 分享链接，不要改写成“夸克转存 关键词”或“盘搜搜索 关键词”。这是直链转存场景，不是影视标题搜索场景。请直接使用 agent-resource-officer skill，原样 route 这条带链接的话，或直接走 share-link 路由。
 ```
 
 ## Continue Choice

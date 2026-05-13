@@ -13,12 +13,14 @@
 ## 当前核心版本
 
 - `AIRecognizerEnhancer`: `0.1.12`
-- `AgentResourceOfficer`: `0.2.68`
+- `AgentResourceOfficer`: `0.2.70`
 - `FeishuCommandBridgeLong`: `0.5.26`
 - `HdhiveOpenApi`: `0.3.0`
 - `QuarkShareSaver`: `0.1.0`
 
 ## 近期基础设施更新
+
+- `AgentResourceOfficer 0.2.70`：最后一轮主线收口；取消标题级云盘转存/云盘搜索公开入口，统一保留前缀搜索与编号续接；补齐直链 115/夸克分享转存优先级，修复 PT 指定集/最新集筛选、下载路径透传、分页、旧别名拦截与外部智能体 Skill/命令文档同步。
 
 - `AgentResourceOfficer 0.2.68`：收口云盘搜索/转存/影巢签到恢复链；固定“搜索/云盘搜索/转存/下载/更新检查”口径，补齐 `清空115转存目录`、`清空夸克转存目录`、插件页“立即影巢签到”、影巢 Cookie 一键刷新/签到修复 helper，以及主页/Skill 文档同步。
 
