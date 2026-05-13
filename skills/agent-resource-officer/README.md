@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 当前插件版本：`Agent影视助手 0.2.69`
+- 当前插件版本：`Agent影视助手 0.2.70`
 - 当前最小循环：`startup -> decide --summary-only -> route --summary-only -> followup --summary-only`
 - 当前优先读取字段：`recommended_agent_behavior`、`auto_run_command`、`confirm_command`、`display_command`
 - 当前 AI 失败样本只读诊断入口：
