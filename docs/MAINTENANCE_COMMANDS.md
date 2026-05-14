@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前插件版本：`AgentResourceOfficer 0.2.69`
-- 当前 Skill helper 版本：`0.1.49`
-- 当前 Release：<https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.69>
+- 当前插件版本：`AgentResourceOfficer 0.2.70`
+- 当前 Skill helper 版本：`0.1.51`
+- 当前 Release：<https://github.com/liuyuexi1987/MoviePilot-Plugins/releases/tag/v0.2.70>
 
 ## 最常用入口
 

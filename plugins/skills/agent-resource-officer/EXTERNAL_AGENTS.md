@@ -1,6 +1,6 @@
 # 外部智能体接入 Agent影视助手
 
-当前插件版本：`Agent影视助手 0.2.69`
+当前插件版本：`Agent影视助手 0.2.70`
 
 当前 helper 版本：`agent-resource-officer 0.1.51`
 
